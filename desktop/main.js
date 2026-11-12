@@ -18,6 +18,9 @@ app.on("second-instance", () => { if (win) { if (win.isMinimized()) win.restore(
 
 const data = () => app.getPath("userData");
 const res = (...p) => app.isPackaged ? path.join(process.resourcesPath, ...p) : path.join(__dirname, "payload", ...p);
+function startupLog(message) {
+  try { fs.appendFileSync(path.join(data(), "startup.log"), `${new Date().toISOString()} ${message}\r\n`, { mode: 0o600 }); } catch {}
+}
 
 function loadEnv(file) {
   const env = {};
@@ -112,22 +115,29 @@ async function startDatabase() {
 }
 
 async function start() {
+  startupLog(`startup begin packaged=${app.isPackaged} userData=${data()}`);
   const cfg = ensureConfig(); const env = loadEnv(cfg);
+  startupLog(`config loaded file=${cfg} adminPassword=${Boolean(env.ADMIN_PASSWORD)} adminPasswordHash=${Boolean(env.ADMIN_PASSWORD_HASH)}`);
   if (!env.ADMIN_PASSWORD && !env.ADMIN_PASSWORD_HASH) {
+    startupLog("administrator credentials missing; opening setup config");
     await shell.openPath(cfg);
     await dialog.showMessageBox({ type: "info", title: "AFIT ClassDesk setup", message: "First-time setup", detail: "Your API keys file opened in Notepad.\n\nType your login password between the quotes after ADMIN_PASSWORD=. Add your MISTRAL_API_KEY (chat + voice listening) and, if you like, ELEVENLABS_API_KEY (Ava\'s voice). Save, then start ClassDesk again." });
     app.quit(); return;
   }
+  startupLog("starting embedded PostgreSQL");
   const databaseUrl = await startDatabase();
+  startupLog("embedded PostgreSQL ready and migrations applied");
   const port = await desktopPort();
   const dir = res("server");
   fs.mkdirSync(path.join(data(), "files"), { recursive: true });
   server = fork(path.join(dir, "server.js"), [], { cwd: dir, silent: true, env: { ...process.env, ...env, DATABASE_URL: databaseUrl, SESSION_SECRET: sessionSecret(), LOCAL_STORAGE_DIR: path.join(data(), "files"), ELECTRON_RUN_AS_NODE: "1", NODE_ENV: "production", PORT: String(port), HOSTNAME: "127.0.0.1" } });
+  startupLog(`local server child started pid=${server.pid} port=${port}`);
   const logFile = path.join(data(), "server.log"); const log = fs.createWriteStream(logFile, { flags: "a" });
   server.stdout.pipe(log); server.stderr.pipe(log);
   server.on("exit", (code) => { if (!quitting && code) dialog.showErrorBox("ClassDesk stopped", `The local server exited (code ${code}).\nLog: ${logFile}`); });
   await waitPort(port);
   url = `http://127.0.0.1:${port}`;
+  startupLog(`local server ready url=${url}`);
   win = new BrowserWindow({ width: 1280, height: 820, minWidth: 420, title: "AFIT ClassDesk", icon: path.join(__dirname, "build", "icon.png"), backgroundColor: "#07111f", webPreferences: { contextIsolation: true, sandbox: true, devTools: !app.isPackaged } });
   win.webContents.setWindowOpenHandler(({ url: u }) => { if (!u.startsWith(url)) { shell.openExternal(u); return { action: "deny" }; } return { action: "allow" }; });
   win.webContents.session.setPermissionRequestHandler((_wc, perm, cb) => cb(["media", "notifications"].includes(perm)));
@@ -163,7 +173,7 @@ app.whenReady().then(async () => {
       { type: "separator" }, { role: "reload" }, { role: "quit" } ] },
     { label: "Edit", submenu: [{ role: "copy" }, { role: "paste" }, { role: "selectAll" }] }
   ]));
-  try { await start(); } catch (e) { dialog.showErrorBox("ClassDesk failed to start", String((e && e.message) || e)); quitting = true; try { await stopServices(); } catch {} app.exit(1); }
+  try { await start(); } catch (e) { startupLog(`startup failed: ${e && e.stack || e}`); dialog.showErrorBox("ClassDesk failed to start", String((e && e.message) || e)); quitting = true; try { await stopServices(); } catch {} app.exit(1); }
 });
 app.on("before-quit", async (e) => {
   if (quitting) return; quitting = true;

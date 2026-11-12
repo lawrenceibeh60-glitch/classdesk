@@ -65,8 +65,10 @@ const client = new Client({ host: "127.0.0.1", port: Number(process.env.CLASSDES
   } while ((Get-Date) -lt $deadline)
   $logFile = Join-Path $appData "server.log"
   $log = if (Test-Path $logFile) { Get-Content $logFile -Raw } else { "<server.log not created>" }
+  $startupFile = Join-Path $appData "startup.log"
+  $startup = if (Test-Path $startupFile) { Get-Content $startupFile -Raw } else { "<startup.log not created>" }
   $contents = if (Test-Path $appData) { (Get-ChildItem $appData -Force | Select-Object Name, Length | Out-String) } else { "<app data directory not created>" }
-  throw "ClassDesk did not initialize PostgreSQL and the local server before timeout. Data: $contents`nServer log: $log"
+  throw "ClassDesk did not initialize PostgreSQL and the local server before timeout. Data: $contents`nStartup log: $startup`nServer log: $log"
 }
 
 $firstRun = Start-ClassDesk "seed"
