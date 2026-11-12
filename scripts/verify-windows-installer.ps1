@@ -28,19 +28,16 @@ function Start-ClassDesk([string]$databaseMode) {
   do {
     Start-Sleep -Milliseconds 500
     if ($process.HasExited) { throw "ClassDesk exited during startup with code $($process.ExitCode)." }
-    if ((Test-Path (Join-Path $appData "pgdata\PG_VERSION")) -and (Test-Path (Join-Path $appData "server.log"))) {
-      $log = Get-Content (Join-Path $appData "server.log") -Raw
-      $match = [regex]::Match($log, "http://(?:localhost|127\.0\.0\.1):(?<port>\d+)")
-      if ($match.Success) {
-        $port = [int]$match.Groups["port"].Value
-        try { $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 2 } catch { $health = $null }
-        if ($health -and $health.ok) {
-          $postmaster = Get-Content (Join-Path $appData "pgdata\postmaster.pid")
-          $env:CLASSDESK_TEST_PORT = [string][int]$postmaster[3]
-          $env:CLASSDESK_TEST_MARKER = $marker
-          $env:CLASSDESK_EXPECTED_MIGRATIONS = [string]$expectedMigrations
-          $env:CLASSDESK_DB_MODE = $databaseMode
-          $nodeScript = @'
+    if ((Test-Path (Join-Path $appData "pgdata\PG_VERSION")) -and (Test-Path $serverPortFile)) {
+      $port = [int](Get-Content $serverPortFile -Raw).Trim()
+      try { $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 2 } catch { $health = $null }
+      if ($health -and $health.ok) {
+        $postmaster = Get-Content (Join-Path $appData "pgdata\postmaster.pid")
+        $env:CLASSDESK_TEST_PORT = [string][int]$postmaster[3]
+        $env:CLASSDESK_TEST_MARKER = $marker
+        $env:CLASSDESK_EXPECTED_MIGRATIONS = [string]$expectedMigrations
+        $env:CLASSDESK_DB_MODE = $databaseMode
+        $nodeScript = @'
 const { Client } = require("pg");
 const client = new Client({ host: "127.0.0.1", port: Number(process.env.CLASSDESK_TEST_PORT), user: "classdesk", password: "classdesk-local", database: "classdesk" });
 (async () => {
@@ -56,15 +53,20 @@ const client = new Client({ host: "127.0.0.1", port: Number(process.env.CLASSDES
   await client.end();
 })().catch(async error => { console.error(error); await client.end().catch(() => {}); process.exitCode = 1; });
 '@
-          node -e $nodeScript
-          if ($LASTEXITCODE -ne 0) { throw "Database migrations or persistence check failed." }
-          return $process
-        }
+        node -e $nodeScript
+        if ($LASTEXITCODE -ne 0) { throw "Database migrations or persistence check failed." }
+        return $process
       }
-      if ($log -match "Error:|failed to start|Database setup failed") { throw "Startup log reports an error: $log" }
+      if (Test-Path (Join-Path $appData "server.log")) {
+        $log = Get-Content (Join-Path $appData "server.log") -Raw
+        if ($log -match "Error:|failed to start|Database setup failed") { throw "Startup log reports an error: $log" }
+      }
     }
   } while ((Get-Date) -lt $deadline)
-  throw "ClassDesk did not initialize PostgreSQL and the local server before timeout."
+  $logFile = Join-Path $appData "server.log"
+  $log = if (Test-Path $logFile) { Get-Content $logFile -Raw } else { "<server.log not created>" }
+  $contents = if (Test-Path $appData) { (Get-ChildItem $appData -Force | Select-Object Name, Length | Out-String) } else { "<app data directory not created>" }
+  throw "ClassDesk did not initialize PostgreSQL and the local server before timeout. Data: $contents`nServer log: $log"
 }
 
 $firstRun = Start-ClassDesk "seed"
