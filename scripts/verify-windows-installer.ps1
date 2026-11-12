@@ -35,7 +35,8 @@ function Start-ClassDesk([string]$databaseMode) {
         $port = [int]$match.Groups["port"].Value
         try { $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -TimeoutSec 2 } catch { $health = $null }
         if ($health -and $health.ok) {
-          $env:CLASSDESK_TEST_PORT = [string]$port
+          $postmaster = Get-Content (Join-Path $appData "pgdata\postmaster.pid")
+          $env:CLASSDESK_TEST_PORT = [string][int]$postmaster[3]
           $env:CLASSDESK_TEST_MARKER = $marker
           $env:CLASSDESK_EXPECTED_MIGRATIONS = [string]$expectedMigrations
           $env:CLASSDESK_DB_MODE = $databaseMode
