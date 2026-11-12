@@ -1,0 +1,26 @@
+name: Windows desktop release
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+jobs:
+  build-and-smoke-test:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      DATABASE_URL: postgresql://classdesk:classdesk@127.0.0.1:5432/classdesk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm run desktop:build
+      - name: Install, launch, persist, and uninstall
+        shell: pwsh
+        run: ./scripts/verify-windows-installer.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AFIT-ClassDesk-Setup
+          path: dist-desktop/AFIT-ClassDesk-Setup.exe
+          if-no-files-found: error

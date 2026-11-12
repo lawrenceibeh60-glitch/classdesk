@@ -1,0 +1,18 @@
+CREATE TYPE "RecordType" AS ENUM ('COURSE','LECTURE','ANNOUNCEMENT','TASK','STUDENT','CONCERN');
+CREATE TYPE "DocumentStatus" AS ENUM ('PROCESSING','READY','FAILED');
+CREATE TYPE "AnnouncementStatus" AS ENUM ('DRAFT','APPROVED','PUBLISHED','ARCHIVED');
+CREATE TYPE "TaskStatus" AS ENUM ('TODO','IN_PROGRESS','DONE');
+CREATE TABLE "AcademicRecord" ("id" TEXT NOT NULL,"type" "RecordType" NOT NULL,"title" TEXT NOT NULL,"content" TEXT NOT NULL DEFAULT '',"metadata" JSONB NOT NULL DEFAULT '{}',"eventDate" TIMESTAMP(3),"status" TEXT NOT NULL DEFAULT 'ACTIVE',"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP(3) NOT NULL,CONSTRAINT "AcademicRecord_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "Document" ("id" TEXT NOT NULL,"title" TEXT NOT NULL,"filename" TEXT NOT NULL,"mimeType" TEXT NOT NULL,"sizeBytes" INTEGER NOT NULL,"storageKey" TEXT,"extractedText" TEXT NOT NULL DEFAULT '',"courseCode" TEXT,"courseName" TEXT,"lectureDate" TIMESTAMP(3),"topic" TEXT,"status" "DocumentStatus" NOT NULL DEFAULT 'PROCESSING',"errorMessage" TEXT,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP(3) NOT NULL,CONSTRAINT "Document_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "DocumentChunk" ("id" TEXT NOT NULL,"documentId" TEXT NOT NULL,"chunkIndex" INTEGER NOT NULL,"content" TEXT NOT NULL,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT "DocumentChunk_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "Announcement" ("id" TEXT NOT NULL,"title" TEXT NOT NULL,"body" TEXT NOT NULL,"category" TEXT NOT NULL DEFAULT 'GENERAL',"source" TEXT,"status" "AnnouncementStatus" NOT NULL DEFAULT 'DRAFT',"scheduledFor" TIMESTAMP(3),"publishedAt" TIMESTAMP(3),"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" TIMESTAMP(3) NOT NULL,CONSTRAINT "Announcement_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "SyncMutation" ("id" TEXT NOT NULL,"entityType" TEXT NOT NULL,"entityId" TEXT NOT NULL,"operation" TEXT NOT NULL,"payload" JSONB NOT NULL,"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"appliedAt" TIMESTAMP(3),CONSTRAINT "SyncMutation_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "DocumentChunk_documentId_chunkIndex_key" ON "DocumentChunk"("documentId","chunkIndex");
+CREATE INDEX "AcademicRecord_type_updatedAt_idx" ON "AcademicRecord"("type","updatedAt");
+CREATE INDEX "AcademicRecord_eventDate_idx" ON "AcademicRecord"("eventDate");
+CREATE INDEX "Document_courseCode_lectureDate_idx" ON "Document"("courseCode","lectureDate");
+CREATE INDEX "Document_status_createdAt_idx" ON "Document"("status","createdAt");
+CREATE INDEX "DocumentChunk_documentId_idx" ON "DocumentChunk"("documentId");
+CREATE INDEX "Announcement_status_updatedAt_idx" ON "Announcement"("status","updatedAt");
+CREATE INDEX "SyncMutation_appliedAt_createdAt_idx" ON "SyncMutation"("appliedAt","createdAt");
+ALTER TABLE "DocumentChunk" ADD CONSTRAINT "DocumentChunk_documentId_fkey" FOREIGN KEY ("documentId") REFERENCES "Document"("id") ON DELETE CASCADE ON UPDATE CASCADE;

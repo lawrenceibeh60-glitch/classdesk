@@ -1,0 +1,1 @@
+ALTER TABLE "Document" ADD COLUMN "securityScanStatus" TEXT NOT NULL DEFAULT 'UNSCANNED';

@@ -1,0 +1,73 @@
+{
+  "name": "afit-classdesk-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AFIT ClassDesk",
+  "author": "AFIT ClassDesk",
+  "main": "main.js",
+  "scripts": {
+    "build:win": "electron-builder --win nsis --x64"
+  },
+  "dependencies": {
+    "embedded-postgres": "^17.5.0-beta.15",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "electron": "^37.2.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "ng.afit.classdesk",
+    "productName": "AFIT ClassDesk",
+    "directories": {
+      "output": "../dist-desktop",
+      "buildResources": "build"
+    },
+    "artifactName": "AFIT-ClassDesk-Setup.${ext}",
+    "files": [
+      "main.js",
+      "build/icon.png",
+      "build/icon.ico",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/@embedded-postgres/**",
+      "node_modules/embedded-postgres/**"
+    ],
+    "extraResources": [
+      {
+        "from": "payload/server",
+        "to": "server"
+      },
+      {
+        "from": "payload/migrations",
+        "to": "migrations"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AFIT ClassDesk",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
+    }
+  },
+  "allowScripts": {
+    "electron@37.10.3": true,
+    "@embedded-postgres/linux-x64@17.5.0-beta.15": true,
+    "electron-winstaller@5.4.0": true
+  }
+}

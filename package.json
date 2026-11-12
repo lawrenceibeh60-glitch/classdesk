@@ -1,0 +1,59 @@
+{
+  "name": "afit-classdesk",
+  "version": "0.3.0",
+  "private": true,
+  "scripts": {
+    "postinstall": "prisma generate",
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "check": "npm run typecheck && npm run lint",
+    "verify:source": "node scripts/verify-source.mjs",
+    "desktop:build": "npm run build && node scripts/prepare-desktop.mjs && npm --prefix desktop install --no-audit --no-fund && npm --prefix desktop run build:win",
+    "desktop:dev": "npm run build && node scripts/prepare-desktop.mjs && npm --prefix desktop install && npm --prefix desktop exec electron ."
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.850.0",
+    "@prisma/adapter-pg": "^6.16.0",
+    "@prisma/client": "^6.16.0",
+    "bcryptjs": "^3.0.2",
+    "dexie": "^4.2.0",
+    "docx": "^9.8.1",
+    "jose": "^6.0.12",
+    "jszip": "^3.10.1",
+    "mammoth": "^1.10.0",
+    "next": "^15.5.0",
+    "pdf-parse": "^2.4.5",
+    "pg": "^8.16.3",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "tesseract.js": "^6.0.1",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^5.4.296",
+    "@napi-rs/canvas": "^0.1.80"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "@types/pg": "^8.15.5",
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "eslint": "^9.34.0",
+    "eslint-config-next": "^15.5.0",
+    "typescript": "^5.9.2",
+    "@eslint/eslintrc": "^3.3.1",
+    "prisma": "^6.16.0"
+  },
+  "engines": {
+    "node": ">=20.11.0",
+    "npm": ">=10.0.0"
+  },
+  "packageManager": "npm@10.9.2",
+  "description": "AFIT ClassDesk",
+  "author": "AFIT ClassDesk"
+}

@@ -1,0 +1,42 @@
+name: ClassDesk CI
+on:
+  push:
+    branches: [main, work/**]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: postgresql://classdesk:classdesk@localhost:5432/classdesk
+      SESSION_SECRET: ci-only-session-secret-with-more-than-32-characters
+      ADMIN_PASSWORD: ci-only-password
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: classdesk
+          POSTGRES_PASSWORD: classdesk
+          POSTGRES_DB: classdesk
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U classdesk -d classdesk"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm run verify:source
+      - run: npx prisma validate
+      - run: npx prisma generate
+      - run: npx prisma migrate deploy
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
