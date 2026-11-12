@@ -27,6 +27,11 @@ jobs:
           node-version: 22
       - run: npm install --no-audit --no-fund
       - run: npm run desktop:build
+      - name: Verify PostgreSQL runtime is unpacked
+        shell: pwsh
+        run: |
+          $postgres = "dist-desktop/win-unpacked/resources/app.asar.unpacked/node_modules/@embedded-postgres/windows-x64/native/bin/postgres.exe"
+          if (!(Test-Path $postgres)) { throw "Embedded PostgreSQL executable was not unpacked: $postgres" }
       - uses: actions/upload-artifact@v4
         with:
           name: AFIT-ClassDesk-Setup
