@@ -31,7 +31,9 @@ jobs:
         shell: pwsh
         run: |
           $postgres = "dist-desktop/win-unpacked/resources/app.asar.unpacked/node_modules/@embedded-postgres/windows-x64/native/bin/postgres.exe"
+          $module = "dist-desktop/win-unpacked/resources/app.asar.unpacked/node_modules/@embedded-postgres/windows-x64/dist/index.js"
           if (!(Test-Path $postgres)) { throw "Embedded PostgreSQL executable was not unpacked: $postgres" }
+          if (!(Test-Path $module)) { throw "Embedded PostgreSQL Windows module was not unpacked: $module" }
       - uses: actions/upload-artifact@v4
         with:
           name: AFIT-ClassDesk-Setup

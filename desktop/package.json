@@ -32,6 +32,7 @@
     ],
     "asarUnpack": [
       "node_modules/@embedded-postgres/**",
+      "node_modules/@embedded-postgres/windows-x64/**",
       "node_modules/@embedded-postgres/windows-x64/native/**",
       "node_modules/embedded-postgres/**"
     ],
