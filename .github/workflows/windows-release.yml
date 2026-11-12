@@ -2,7 +2,18 @@ name: Windows desktop release
 on:
   workflow_dispatch:
   push:
-    tags: ["v*"]
+    branches: [main]
+    paths:
+      - ".github/workflows/windows-release.yml"
+      - "desktop/**"
+      - "app/**"
+      - "components/**"
+      - "lib/**"
+      - "prisma/**"
+      - "scripts/**"
+      - "package.json"
+      - "package-lock.json"
+      - "next.config.ts"
 jobs:
   build-and-smoke-test:
     runs-on: windows-latest
