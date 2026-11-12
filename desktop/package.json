@@ -24,17 +24,12 @@
       "buildResources": "build"
     },
     "artifactName": "AFIT-ClassDesk-Setup.${ext}",
+    "asar": false,
     "files": [
       "main.js",
       "build/icon.png",
       "build/icon.ico",
       "package.json"
-    ],
-    "asarUnpack": [
-      "node_modules/@embedded-postgres/**",
-      "node_modules/@embedded-postgres/windows-x64/**",
-      "node_modules/@embedded-postgres/windows-x64/native/**",
-      "node_modules/embedded-postgres/**"
     ],
     "extraResources": [
       {

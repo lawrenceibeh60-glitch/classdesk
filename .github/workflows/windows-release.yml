@@ -30,10 +30,13 @@ jobs:
       - name: Verify PostgreSQL runtime is unpacked
         shell: pwsh
         run: |
-          $postgres = "dist-desktop/win-unpacked/resources/app.asar.unpacked/node_modules/@embedded-postgres/windows-x64/native/bin/postgres.exe"
-          $module = "dist-desktop/win-unpacked/resources/app.asar.unpacked/node_modules/@embedded-postgres/windows-x64/dist/index.js"
-          if (!(Test-Path $postgres)) { throw "Embedded PostgreSQL executable was not unpacked: $postgres" }
-          if (!(Test-Path $module)) { throw "Embedded PostgreSQL Windows module was not unpacked: $module" }
+          $app = "dist-desktop/win-unpacked/resources/app"
+          $archive = "dist-desktop/win-unpacked/resources/app.asar"
+          $postgres = "$app/node_modules/@embedded-postgres/windows-x64/native/bin/postgres.exe"
+          $module = "$app/node_modules/@embedded-postgres/windows-x64/dist/index.js"
+          if (Test-Path $archive) { throw "ASAR must be disabled for embedded PostgreSQL native binaries." }
+          if (!(Test-Path $postgres)) { throw "Embedded PostgreSQL executable is missing from the filesystem app: $postgres" }
+          if (!(Test-Path $module)) { throw "Embedded PostgreSQL Windows module is missing from the filesystem app: $module" }
       - uses: actions/upload-artifact@v4
         with:
           name: AFIT-ClassDesk-Setup
