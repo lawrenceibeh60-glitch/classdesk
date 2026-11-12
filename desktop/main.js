@@ -12,7 +12,7 @@ if (path.resolve(legacyDataPath) !== path.resolve(appDataPath)) {
   app.setPath("userData", appDataPath);
 }
 
-let win = null, server = null, pgInstance = null, url = "", quitting = false;
+let win = null, server = null, pgInstance = null, pgProcess = null, pgPort = null, url = "", quitting = false;
 if (!app.requestSingleInstanceLock()) app.quit();
 app.on("second-instance", () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
 
@@ -87,13 +87,91 @@ function sessionSecret() {
 }
 
 /* ---- Offline database: a real PostgreSQL running from this app, data kept on this PC ---- */
+function runNativeCommand(command, args, label) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { env: { ...process.env }, windowsHide: true });
+    let output = "";
+    const collect = chunk => {
+      const text = chunk.toString("utf8");
+      output = `${output}${text}`.slice(-20000);
+      startupLog(`${label}: ${text.trim()}`);
+    };
+    child.stdout?.on("data", collect);
+    child.stderr?.on("data", collect);
+    child.once("error", error => reject(new Error(`${label} could not start: ${error.message}`)));
+    child.once("close", (code, signal) => code === 0
+      ? resolve()
+      : reject(new Error(`${label} exited with code ${code}, signal ${signal || "none"}. ${output.trim()}`)));
+  });
+}
+
+async function startWindowsPostgres(dir, port, password) {
+  const { initdb, postgres } = await import("@embedded-postgres/windows-x64");
+  if (!fs.existsSync(path.join(dir, "PG_VERSION"))) {
+    const passwordFile = path.join(data(), "pg-password.tmp");
+    fs.writeFileSync(passwordFile, `${password}\n`, { mode: 0o600 });
+    try {
+      await runNativeCommand(initdb, [
+        `--pgdata=${dir}`,
+        "--auth=password",
+        "--username=classdesk",
+        `--pwfile=${passwordFile}`
+      ], "initdb");
+    } finally {
+      fs.rmSync(passwordFile, { force: true });
+    }
+  }
+
+  pgPort = port;
+  pgProcess = spawn(postgres, ["-D", dir, "-p", String(port)], {
+    cwd: data(),
+    env: { ...process.env },
+    windowsHide: true,
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  startupLog(`postgres process started pid=${pgProcess.pid} port=${port} executable=${postgres}`);
+
+  await new Promise((resolve, reject) => {
+    let ready = false;
+    let output = "";
+    const timeout = setTimeout(() => {
+      if (!ready) reject(new Error(`PostgreSQL did not become ready within 60 seconds. ${output.trim()}`));
+    }, 60000);
+    const collect = chunk => {
+      const text = chunk.toString("utf8");
+      output = `${output}${text}`.slice(-20000);
+      startupLog(`postgres: ${text.trim()}`);
+      if (!ready && text.includes("database system is ready to accept connections")) {
+        ready = true;
+        clearTimeout(timeout);
+        resolve();
+      }
+    };
+    pgProcess.stdout.on("data", collect);
+    pgProcess.stderr.on("data", collect);
+    pgProcess.once("error", error => {
+      clearTimeout(timeout);
+      reject(new Error(`PostgreSQL could not start: ${error.message}`));
+    });
+    pgProcess.once("close", (code, signal) => {
+      clearTimeout(timeout);
+      if (!ready) reject(new Error(`PostgreSQL exited before becoming ready (code ${code}, signal ${signal || "none"}). ${output.trim()}`));
+    });
+  });
+}
+
 async function startDatabase() {
-  const { default: EmbeddedPostgres } = await import("embedded-postgres");
   const { Client } = require("pg");
   const dir = path.join(data(), "pgdata"), port = await freePort(), pass = "classdesk-local";
-  pgInstance = new EmbeddedPostgres({ databaseDir: dir, user: "classdesk", password: pass, port, persistent: true, onLog: () => {}, onError: () => {} });
-  if (!fs.existsSync(path.join(dir, "PG_VERSION"))) await pgInstance.initialise();
-  await pgInstance.start();
+  fs.mkdirSync(path.dirname(dir), { recursive: true });
+  if (process.platform === "win32") {
+    await startWindowsPostgres(dir, port, pass);
+  } else {
+    const { default: EmbeddedPostgres } = await import("embedded-postgres");
+    pgInstance = new EmbeddedPostgres({ databaseDir: dir, user: "classdesk", password: pass, port, persistent: true, onLog: message => startupLog(`postgres: ${String(message).trim()}`), onError: error => startupLog(`postgres error: ${error && error.stack || error}`) });
+    if (!fs.existsSync(path.join(dir, "PG_VERSION"))) await pgInstance.initialise();
+    await pgInstance.start();
+  }
   const admin = new Client({ host: "127.0.0.1", port, user: "classdesk", password: pass, database: "postgres" });
   await admin.connect();
   const exists = await admin.query("SELECT 1 FROM pg_database WHERE datname='classdesk'");
@@ -162,6 +240,22 @@ async function stopServices() {
     pgInstance = null;
     await database.stop();
   }
+  if (pgProcess) {
+    const child = pgProcess;
+    pgProcess = null;
+    const { pg_ctl } = await import("@embedded-postgres/windows-x64");
+    try {
+      await runNativeCommand(pg_ctl, ["stop", "-D", path.join(data(), "pgdata"), "-m", "fast", "-w"], "pg_ctl stop");
+    } catch (error) {
+      startupLog(`graceful PostgreSQL shutdown failed: ${error && error.stack || error}`);
+      await new Promise(resolve => {
+        if (child.exitCode !== null || child.signalCode !== null) return resolve();
+        const timeout = setTimeout(() => { child.kill(); resolve(); }, 5000);
+        child.once("exit", () => { clearTimeout(timeout); resolve(); });
+        child.kill();
+      });
+    }
+  }
 }
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
@@ -177,6 +271,6 @@ app.whenReady().then(async () => {
 });
 app.on("before-quit", async (e) => {
   if (quitting) return; quitting = true;
-  if (server || pgInstance) { e.preventDefault(); try { await stopServices(); } catch (error) { dialog.showErrorBox("ClassDesk shutdown warning", String(error)); } app.exit(0); }
+  if (server || pgInstance || pgProcess) { e.preventDefault(); try { await stopServices(); } catch (error) { dialog.showErrorBox("ClassDesk shutdown warning", String(error)); } app.exit(0); }
 });
 app.on("window-all-closed", () => app.quit());
