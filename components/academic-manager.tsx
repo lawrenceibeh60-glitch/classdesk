@@ -139,6 +139,7 @@ export default function AcademicManager({ mode, isPrimaryAdmin }: { mode: Mode; 
     catch (error) { if (error instanceof TypeError) { await queueOffline("PATCH", payload); await load(); setMessage("Network unavailable. Change queued for sync."); } else setMessage(error instanceof Error ? error.message : "Update failed"); }
   }
   async function remove(id: string) {
+    if (!isPrimaryAdmin) { setMessage("Only the Class Representative can delete academic items."); return; }
     if (!confirm("Delete this item permanently?")) return;
     if (!navigator.onLine) { await queueOffline("DELETE", { resource: mode, id }); await load(); setMessage("Deletion queued on this device."); return; }
     try { const response = await fetch(`/api/academic?resource=${mode}&id=${encodeURIComponent(id)}`, { method: "DELETE" }); if (!response.ok && response.status !== 404) throw new Error("Could not delete this item."); await load(); }
