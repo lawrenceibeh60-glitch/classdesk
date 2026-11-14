@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.kyro.classdesk.data.ChatRequest
+import com.kyro.classdesk.data.AvaActionConfirmationDto
 import com.kyro.classdesk.data.ChatHistoryItem
 import com.kyro.classdesk.data.ClassDeskApi
 import kotlinx.coroutines.launch
@@ -60,6 +61,7 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
     var response by remember { mutableStateOf("Ava's response will appear here.") }
     var conversationHistory by remember { mutableStateOf<List<ChatHistoryItem>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
+    var pendingDelete by remember { mutableStateOf<AvaActionConfirmationDto?>(null) }
 
     fun stopSession() {
         sessionActive = false
@@ -152,6 +154,7 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
                                 if (!sessionActive) return@launch
                                 if (result.isSuccessful && !answer.isNullOrBlank()) {
                                     response = answer
+                                    pendingDelete = result.body()?.actionConfirmation
                                     conversationHistory = (conversationHistory + listOf(ChatHistoryItem("user", spoken), ChatHistoryItem("assistant", answer))).takeLast(6)
                                     processing = false
                                     try {
@@ -287,5 +290,44 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
             Text("END VOICE SESSION", color = Color(0xFFF2C94C))
         }
         Text("MICROPHONE IS ONLY USED AFTER YOU TAP ACTIVATE. NO BACKGROUND LISTENING.", color = Color(0xFF91A4B8), fontSize = 9.sp, letterSpacing = 0.6.sp)
+    }
+    pendingDelete?.let { action ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("Confirm permanent deletion") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(action.title, fontWeight = FontWeight.Bold)
+                    Text(action.filename, color = Color(0xFF91A4B8))
+                    Text("This will delete the database record, extracted text, indexed chunks" + if (action.originalInSharedStorage) " and original shared-storage file." else ".")
+                    Text("This action cannot be undone.", color = Color(0xFFFF7D78))
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        try {
+                            val result = api.avaTool(mapOf(
+                                "action" to "delete_document",
+                                "documentId" to action.documentId,
+                                "confirmPermanent" to true,
+                                "confirmTitle" to action.title
+                            ))
+                            if (!result.isSuccessful) throw IllegalStateException(result.body()?.get("error")?.toString() ?: "Deletion failed (HTTP " + result.code() + ").")
+                            val deleted = result.body()?.get("deleted") as? Map<*, *>
+                                ?: throw IllegalStateException("The server did not return a deletion verification result.")
+                            if (deleted["databaseRecord"] != true || (action.originalInSharedStorage && deleted["sharedStorageObject"] != true)) {
+                                throw IllegalStateException("Deletion was not fully verified. Check the audit log.")
+                            }
+                            response = "Verified: " + action.title + " was deleted from the ClassDesk database" + if (action.originalInSharedStorage) " and shared storage." else "."
+                            pendingDelete = null
+                        } catch (e: Exception) {
+                            error = e.message ?: "Permanent deletion failed."
+                        }
+                    }
+                }) { Text("DELETE PERMANENTLY", color = Color(0xFFFF7D78)) }
+            },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("CANCEL") } }
+        )
     }
 }
