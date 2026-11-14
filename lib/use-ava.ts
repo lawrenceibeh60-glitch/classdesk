@@ -6,8 +6,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 type Rec = { lang: string; continuous: boolean; interimResults: boolean; onresult: ((e: any) => void) | null; onend: (() => void) | null; onerror: ((e: { error: string }) => void) | null; start(): void; stop(): void; abort(): void };
 type RecCtor = new () => Rec;
 
-const WAKE = /\b(ava|eva|aver|ava's)\b[\s,.:!?-]*/i;
-const AWAKE_MS = 8000;
 
 export function cleanForSpeech(text: string) {
   return text
@@ -137,16 +135,14 @@ export function useAva(handlers: AvaHandlers) {
   const shutUp = useCallback(() => { stopSpeaking(); mutedUntil.current = Date.now() + 500; }, [stopSpeaking]);
 
   const handleFinal = useCallback((raw: string) => {
-    const text = raw.trim(); if (!text || Date.now() < mutedUntil.current) return;
+    const text = raw.trim();
+    if (!text || Date.now() < mutedUntil.current) return;
     setHeard(text);
-    const match = text.match(WAKE);
-    const isAwake = Date.now() < awakeUntil.current;
-    if (!match && !isAwake) return; // not addressed to Ava: ignore completely
-    const command = (match ? text.slice((match.index ?? 0) + match[0].length) : text).replace(/^(please|hey|ok|okay)\s+/i, "").trim();
-    if (!command) { awakeUntil.current = Date.now() + AWAKE_MS; setAwake(true); setTimeout(() => setAwake(Date.now() < awakeUntil.current), AWAKE_MS + 50); speak("Yes, boss?"); return; }
-    awakeUntil.current = 0; setAwake(false);
-    void handlersRef.current.onCommand(command);
-  }, [speak]);
+    // The microphone button explicitly starts voice mode; no wake word is required.
+    awakeUntil.current = 0;
+    setAwake(false);
+    void handlersRef.current.onCommand(text);
+  }, []);
 
   /** Listening with Mistral Voxtral: detect speech locally, send each phrase for transcription. */
   const startCloud = useCallback(async () => {
@@ -198,10 +194,10 @@ export function useAva(handlers: AvaHandlers) {
   const start = useCallback(async () => {
     setVoiceError(""); wantRef.current = true;
     if (cloudRef.current.stt && navigator.onLine) {
-      try { await startCloud(); setListening(true); setTimeout(() => speak("Ava online. What can I do for you, boss?"), 300); return; }
+      try { await startCloud(); setListening(true); setTimeout(() => speak("Ava is ready. Go ahead."), 300); return; }
       catch { wantRef.current = false; setVoiceError("Microphone unavailable or permission denied."); return; }
     }
-    if (startBrowserRec()) { setListening(true); setTimeout(() => speak("Ava online. What can I do for you, boss?"), 300); }
+    if (startBrowserRec()) { setListening(true); setTimeout(() => speak("Ava is ready. Go ahead."), 300); }
   }, [startCloud, startBrowserRec, speak]);
 
   const stop = useCallback(() => {
