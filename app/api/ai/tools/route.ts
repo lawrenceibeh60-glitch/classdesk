@@ -93,7 +93,10 @@ export async function POST(req: NextRequest) {
       }
     });
     try {
-      if (document.storageKey) await deleteObject(document.storageKey);
+      if (document.storageKey) {
+        await deleteObject(document.storageKey);
+        await db.document.update({ where: { id }, data: { storageKey: null } });
+      }
       await db.document.delete({ where: { id } });
       await db.auditLog.create({
         data: {
