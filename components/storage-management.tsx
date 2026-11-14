@@ -91,7 +91,7 @@ export default function StorageManagement() {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "SQL cleanup failed");
-      setMessage(`Cleanup complete — expired rate-limit entries: ${result.deleted.expiredRateLimitBuckets}; old sync history: ${result.deleted.oldAppliedSyncMutations}; old AI receipts: ${result.deleted.oldAiRequestReceipts}. Class content was not deleted.`);
+      setMessage(`Cleanup complete — expired rate-limit entries: ${result.deleted.expiredRateLimitBuckets}; old non-deletion sync receipts: ${result.deleted.oldAppliedSyncMutations}; old AI receipts: ${result.deleted.oldAiRequestReceipts}. Class content was not deleted.`);
       setConfirmation("");
       await refresh();
     } catch (error) {
@@ -139,7 +139,7 @@ export default function StorageManagement() {
     </div>
     <div style={{ borderTop: "1px solid var(--border, #333)", marginTop: 18, paddingTop: 16 }}>
       <h3>Clean temporary SQL data</h3>
-      <p className="sub">Removes expired rate-limit counters, applied sync history older than your selected retention period, and old AI idempotency receipts. Pending sync changes are never removed. Academic records, documents, extracted text, announcements and accounts are not touched.</p>
+      <p className="sub">Removes expired rate-limit counters, old applied non-deletion sync receipts, and old AI idempotency receipts. Offline deletion tombstones are retained so devices that reconnect late still receive deletions. Pending sync changes are never removed. Academic records, documents, extracted text, announcements and accounts are not touched.</p>
       <div className="field">
         <label htmlFor="sql-retention-days">KEEP APPLIED SYNC HISTORY AND AI RECEIPTS FOR</label>
         <select id="sql-retention-days" value={days} onChange={(event) => setDays(event.target.value)}>
