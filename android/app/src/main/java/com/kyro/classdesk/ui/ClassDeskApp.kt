@@ -165,6 +165,19 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
     var assignmentTitle by remember { mutableStateOf("") }
     var assignmentDetails by remember { mutableStateOf("") }
     var assignmentDueAt by remember { mutableStateOf("") }
+    var showLectureDialog by remember { mutableStateOf(false) }
+    var lectureTopic by remember { mutableStateOf("") }
+    var lectureSummary by remember { mutableStateOf("") }
+    var lectureDate by remember { mutableStateOf("") }
+    var lectureVenue by remember { mutableStateOf("") }
+    var showAttendanceDialog by remember { mutableStateOf(false) }
+    var attendanceDate by remember { mutableStateOf("") }
+    var attendancePresent by remember { mutableStateOf("") }
+    var attendanceAbsent by remember { mutableStateOf("") }
+    var showConcernDialog by remember { mutableStateOf(false) }
+    var concernTitle by remember { mutableStateOf("") }
+    var concernDetails by remember { mutableStateOf("") }
+    var concernCategory by remember { mutableStateOf("GENERAL") }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val secureStore = remember { ApiClient.cookies(context) }
@@ -388,6 +401,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                 Text("More modules will be added here as their native workflows are completed.", color = Muted, fontSize = 12.sp)
             } else if (selected == "Lectures") {
                 Text("LECTURE REGISTER", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
+                Button(onClick = { showLectureDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD LECTURE") }
                 if (moduleLoading) CircularProgressIndicator(color = Cyan)
                 moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
                 if (!moduleLoading && lectures.isEmpty()) Text("No lectures have been recorded.", color = Muted)
@@ -409,6 +423,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                 }
             } else if (selected == "Attendance") {
                 Text("ATTENDANCE SUMMARIES", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
+                Button(onClick = { showAttendanceDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD SUMMARY") }
                 if (moduleLoading) CircularProgressIndicator(color = Cyan)
                 moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
                 if (!moduleLoading && attendance.isEmpty()) Text("No attendance summaries have been recorded.", color = Muted)
@@ -431,6 +446,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                 }
             } else if (selected == "Concerns") {
                 Text("CLASS CONCERNS", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
+                Button(onClick = { showConcernDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD CONCERN") }
                 if (moduleLoading) CircularProgressIndicator(color = Cyan)
                 moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
                 if (!moduleLoading && concerns.isEmpty()) Text("No class concerns have been recorded.", color = Muted)
@@ -451,6 +467,63 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                         }
                     }
                 }
+                if (showLectureDialog) AlertDialog(
+                    onDismissRequest = { showLectureDialog = false },
+                    title = { Text("Add lecture") },
+                    text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(lectureTopic, { lectureTopic = it }, label = { Text("Topic") }, singleLine = true)
+                        OutlinedTextField(lectureSummary, { lectureSummary = it }, label = { Text("Summary") }, minLines = 2)
+                        OutlinedTextField(lectureDate, { lectureDate = it }, label = { Text("Held date/time (ISO, optional)") }, singleLine = true)
+                        OutlinedTextField(lectureVenue, { lectureVenue = it }, label = { Text("Venue (optional)") }, singleLine = true)
+                    } },
+                    confirmButton = { TextButton(onClick = { scope.launch {
+                        val saved = api.createAcademic(mapOf("resource" to "lectures", "topic" to lectureTopic.trim(), "summary" to lectureSummary.trim(), "heldAt" to lectureDate.trim(), "venue" to lectureVenue.trim()))
+                        if (saved.isSuccessful) {
+                            lectures = api.lectures().body()?.items.orEmpty()
+                            lectureTopic = ""; lectureSummary = ""; lectureDate = ""; lectureVenue = ""
+                            showLectureDialog = false
+                        } else moduleError = "Lecture could not be saved (${saved.code()}). Check the date format."
+                    } }, enabled = lectureTopic.isNotBlank()) { Text("SAVE") } },
+                    dismissButton = { TextButton(onClick = { showLectureDialog = false }) { Text("CANCEL") } }
+                )
+            } else if (selected == "Attendance") {
+                if (showAttendanceDialog) AlertDialog(
+                    onDismissRequest = { showAttendanceDialog = false },
+                    title = { Text("Add attendance summary") },
+                    text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(attendanceDate, { attendanceDate = it }, label = { Text("Session date (YYYY-MM-DD)") }, singleLine = true)
+                        OutlinedTextField(attendancePresent, { attendancePresent = it }, label = { Text("Present count") }, singleLine = true)
+                        OutlinedTextField(attendanceAbsent, { attendanceAbsent = it }, label = { Text("Absent count") }, singleLine = true)
+                    } },
+                    confirmButton = { TextButton(onClick = { scope.launch {
+                        val saved = api.createAcademic(mapOf("resource" to "attendance", "sessionDate" to attendanceDate.trim(), "presentCount" to attendancePresent.trim(), "absentCount" to attendanceAbsent.trim()))
+                        if (saved.isSuccessful) {
+                            attendance = api.attendance().body()?.items.orEmpty()
+                            attendanceDate = ""; attendancePresent = ""; attendanceAbsent = ""
+                            showAttendanceDialog = false
+                        } else moduleError = "Attendance could not be saved. Check date and whole-number counts."
+                    } }, enabled = attendanceDate.isNotBlank() && attendancePresent.toIntOrNull() != null && attendanceAbsent.toIntOrNull() != null) { Text("SAVE") } },
+                    dismissButton = { TextButton(onClick = { showAttendanceDialog = false }) { Text("CANCEL") } }
+                )
+            } else if (selected == "Concerns") {
+                if (showConcernDialog) AlertDialog(
+                    onDismissRequest = { showConcernDialog = false },
+                    title = { Text("Add class concern") },
+                    text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(concernCategory, { concernCategory = it }, label = { Text("Category") }, singleLine = true)
+                        OutlinedTextField(concernTitle, { concernTitle = it }, label = { Text("Title") }, singleLine = true)
+                        OutlinedTextField(concernDetails, { concernDetails = it }, label = { Text("Details") }, minLines = 3)
+                    } },
+                    confirmButton = { TextButton(onClick = { scope.launch {
+                        val saved = api.createAcademic(mapOf("resource" to "concerns", "category" to concernCategory.trim(), "title" to concernTitle.trim(), "details" to concernDetails.trim()))
+                        if (saved.isSuccessful) {
+                            concerns = api.concerns().body()?.items.orEmpty()
+                            concernCategory = "GENERAL"; concernTitle = ""; concernDetails = ""
+                            showConcernDialog = false
+                        } else moduleError = "Concern could not be saved (${saved.code()})."
+                    } }, enabled = concernTitle.isNotBlank() && concernDetails.isNotBlank()) { Text("SAVE") } },
+                    dismissButton = { TextButton(onClick = { showConcernDialog = false }) { Text("CANCEL") } }
+                )
             } else {
                 AvaVoiceScreen(api)
             }
