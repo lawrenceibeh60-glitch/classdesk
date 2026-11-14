@@ -7,10 +7,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.graphics.Color
 import com.kyro.classdesk.ui.ClassDeskApp
+import com.kyro.classdesk.data.ClassDeskNotifications
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ClassDeskNotifications.createChannels(this)
         window.statusBarColor = android.graphics.Color.rgb(10, 16, 25)
         window.navigationBarColor = android.graphics.Color.rgb(10, 16, 25)
         setContent {
