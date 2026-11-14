@@ -40,12 +40,23 @@ export default function AcademicManager({ mode }: { mode: Mode }) {
       const response = await fetch(`/api/academic?resource=${mode}`, { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not load records");
-      const serverItems = data.items || []; setItems(serverItems);
+      const serverItems = data.items || [];
       if (offlineDB) {
-        const cachedItems = await offlineDB.academicItems.where("resource").equals(mode).toArray();
+        const [cachedItems, pendingMutations] = await Promise.all([
+          offlineDB.academicItems.where("resource").equals(mode).toArray(),
+          offlineDB.academicQueue.where("resource").equals(mode).toArray(),
+        ]);
+        const pendingDeletes = new Set(pendingMutations.filter(item => item.method === "DELETE").map(item => String(item.payload.id || "")));
+        const pendingWrites = new Set(pendingMutations.filter(item => item.method !== "DELETE").map(item => String(item.payload.id || "")));
         const currentIds = new Set(serverItems.map((item: any) => item.id));
-        await offlineDB.academicItems.bulkDelete(cachedItems.filter(item => !currentIds.has(item.id)).map(item => item.key));
-        await offlineDB.academicItems.bulkPut(serverItems.map((item: any) => ({ key: `${mode}:${item.id}`, resource: mode, id: item.id, payload: item, updatedAt: new Date().toISOString() })));
+        const pendingCached = cachedItems.filter(item => pendingWrites.has(item.id));
+        const pendingCachedIds = new Set(pendingCached.map(item => item.id));
+        await offlineDB.academicItems.bulkDelete(cachedItems.filter(item => !currentIds.has(item.id) && !pendingWrites.has(item.id)).map(item => item.key));
+        await offlineDB.academicItems.bulkPut(serverItems.filter((item: any) => !pendingWrites.has(item.id)).map((item: any) => ({ key: `${mode}:${item.id}`, resource: mode, id: item.id, payload: item, updatedAt: new Date().toISOString() })));
+        const visibleServer = serverItems.filter((item: any) => !pendingDeletes.has(item.id) && !pendingCachedIds.has(item.id));
+        setItems([...visibleServer, ...pendingCached.map(item => item.payload)]);
+      } else {
+        setItems(serverItems);
       }
       if (mode !== "courses") {
         const courseResponse = await fetch("/api/academic?resource=courses", { cache: "no-store" });
