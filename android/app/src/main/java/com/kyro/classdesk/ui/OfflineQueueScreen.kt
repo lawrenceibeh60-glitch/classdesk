@@ -44,7 +44,7 @@ fun OfflineQueueScreen(user: UserDto) {
             QueueMetric("NEEDS REVIEW", rejected, Modifier.weight(1f))
         }
         OutlinedButton(onClick = { refresh() }, modifier = Modifier.fillMaxWidth()) { Text("REFRESH QUEUE", color = Color(0xFF42D9F5)) }
-        Text("Offline edits currently supported here: calendar and timetable records. Queued changes are encrypted on this device and synchronised only under the account that created them.", color = Color(0xFF91A4B8), fontSize = 11.sp)
+        Text("Queued calendar, timetable, academic and announcement changes are encrypted on this device and synchronised only under the account that created them. Conflicts and rejected changes remain available for review.", color = Color(0xFF91A4B8), fontSize = 11.sp)
         if (entries.isEmpty()) Text("No offline changes are waiting.", color = Color(0xFF91A4B8))
         entries.forEach { entry ->
             Surface(color = Color(0xFF111B28), shape = RoundedCornerShape(6.dp), modifier = Modifier.fillMaxWidth()) {
