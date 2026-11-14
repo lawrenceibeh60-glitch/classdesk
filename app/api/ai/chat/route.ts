@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {  const originDenied = assertSameO
       }
       const task = await db.aiTask.create({
         data: {
-          id: randomUUID(),
+          id: requestId || randomUUID(),
           ownerId: user.id,
           ownerUsername: user.username,
           kind: "assignment_pdf",
