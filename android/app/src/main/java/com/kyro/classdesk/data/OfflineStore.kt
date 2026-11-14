@@ -39,7 +39,7 @@ class OfflineStore(context: Context) : SQLiteOpenHelper(context, "classdesk-offl
             put("entity_id", mutation.entityId)
             put("operation", mutation.operation)
             put("base_version", mutation.baseVersion)
-            put("payload_json", mutation.payloadJson)
+            put("payload_json", OfflineCrypto.encrypt(mutation.payloadJson))
             put("status", "PENDING")
             put("created_at", System.currentTimeMillis())
         }
@@ -57,10 +57,17 @@ class OfflineStore(context: Context) : SQLiteOpenHelper(context, "classdesk-offl
             arrayOf("PENDING"),
             null, null, "created_at ASC", limit.toString()
         ).use { cursor ->
-            while (cursor.moveToNext()) result += PendingMutation(
-                cursor.getString(0), cursor.getString(1), cursor.getString(2),
-                cursor.getInt(3), cursor.getString(4)
-            )
+            while (cursor.moveToNext()) {
+                val id = cursor.getString(0)
+                try {
+                    result += PendingMutation(
+                        id, cursor.getString(1), cursor.getString(2),
+                        cursor.getInt(3), OfflineCrypto.decrypt(cursor.getString(4))
+                    )
+                } catch (_: Exception) {
+                    mark(id, "CORRUPT", "Offline payload could not be decrypted; retained for recovery.")
+                }
+            }
         }
         return result
     }
