@@ -274,7 +274,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
         bottomBar = {
             NavigationBar(containerColor = Panel, contentColor = Cyan) {
                 listOf("Overview", "Courses", "Tasks", "More", "Ava").forEach { item ->
-                    NavigationBarItem(selected = selected == item || (item == "More" && selected in listOf("Lectures", "Attendance", "Concerns", "Announcements")), onClick = { selected = item },
+                    NavigationBarItem(selected = selected == item || (item == "More" && selected in listOf("Lectures", "Attendance", "Concerns", "Announcements", "Documents")), onClick = { selected = item },
                         icon = { Icon(when (item) {
                             "Courses" -> Icons.Default.MenuBook
                             "Tasks" -> Icons.Default.CheckCircle
@@ -409,7 +409,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                 )
             } else if (selected == "More") {
                 Text("CLASS OPERATIONS", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
-                listOf("Lectures", "Attendance", "Concerns", "Announcements").forEach { module ->
+                listOf("Lectures", "Attendance", "Concerns", "Announcements", "Documents").forEach { module ->
                     OutlinedButton(onClick = { selected = module }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(6.dp)) {
                         Text(module.uppercase(), color = Cyan, modifier = Modifier.fillMaxWidth())
                     }
@@ -538,6 +538,8 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                     } }, enabled = concernTitle.isNotBlank() && concernDetails.isNotBlank()) { Text("SAVE") } },
                     dismissButton = { TextButton(onClick = { showConcernDialog = false }) { Text("CANCEL") } }
                 )
+            } else if (selected == "Documents") {
+                DocumentLibraryScreen(api, user.role == "CLASS_REP")
             } else if (selected == "Announcements") {
                 Text("ANNOUNCEMENT STUDIO", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
                 Button(onClick = { showAnnouncementDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ NEW DRAFT") }
