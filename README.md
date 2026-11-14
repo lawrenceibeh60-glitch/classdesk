@@ -29,11 +29,7 @@ Hybrid PWA: online application with local offline drafts/queue. PostgreSQL is th
 
 ## Release status
 
-The feature branch contains the website and native Android implementation work. The latest GitHub Actions checks passed for the production web build, TypeScript, ESLint, Android Kotlin compilation, and Android unit tests. The Android APK workflow remains manual-only and has not been run.
-
-Ava's separate Render background-worker Blueprint is included in `render.yaml`; it is intentionally configured with auto-deploy disabled. Its production credentials must be entered privately in Render when the Blueprint is reviewed. See [docs/AVA_BACKGROUND_WORKER.md](docs/AVA_BACKGROUND_WORKER.md).
-
-The release branch is awaiting the final merge, website deployment, and manual Android APK build. No deployment or APK packaging is triggered by the source-verification workflow. Desktop/EXE packaging is out of scope.
+The feature branch contains the completed website and native Android workflow work. Web CI and Android source/unit-test verification are being checked on the final commit. The production website is deployed through the existing Vercel project `afit-classdesk`; the intended production domain is `https://afit-classdesk.vercel.app/`. Android packaging remains a separate manual step and is not triggered by web deployment. Desktop/EXE packaging is out of scope.
 
 ## Local setup
 
