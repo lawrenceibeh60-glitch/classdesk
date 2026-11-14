@@ -36,6 +36,7 @@ jobs:
           node-version: 22
       - run: npm install --no-audit --no-fund
       - run: npm run verify:source
+      - run: node --check scripts/ava-task-worker.mjs
       - run: npx prisma validate
       - run: npx prisma generate
       - run: npx prisma migrate deploy
