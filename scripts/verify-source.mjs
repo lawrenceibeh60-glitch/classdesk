@@ -183,3 +183,6 @@ assert.match(androidAppShell, /EDIT COURSE[\s\S]*EDIT[\s\S]*EDIT EVENT/, "Androi
 assert.match(androidAppShell, /RESOLVE[\s\S]*EDIT class concern|EDIT[\s\S]*RESOLVE/, "Android concern management must support editing and resolution");
 assert.match(androidApi, /updateRecord\(@Body body: Map<String, String>\)/, "Android calendar must support record updates");
 assert.match(read("app/api/academic/route.ts"), /body\.active === "false"/, "Native course deactivation must be parsed as a boolean by the API");
+
+assert.match(androidAppShell, /CoursePicker\(courses, assignmentCourseId\)[\s\S]*CoursePicker\(courses, lectureCourseId\)[\s\S]*CoursePicker\(courses, attendanceCourseId\)/, "Android assignments, lectures and attendance must link to courses");
+assert.match(androidAppShell, /scheduledAt" to lectureScheduledDate[\s\S]*heldAt" to lectureDate/, "Android lecture records must preserve scheduled and actually-held dates separately");
