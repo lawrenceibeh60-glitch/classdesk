@@ -11,7 +11,7 @@ type Message = { role: "user" | "assistant"; content: string; sources?: Source[]
 type AvaTask = { id: string; kind: string; status: string; progress: number; currentStep: string; errorMessage?: string | null; resultDocumentId?: string | null; createdAt: string };
 const suggestions: [string, string][] = [["Explain a topic from my uploaded Electrical Principles notes.", "💡"], ["Create a catch-up plan from verified lecture records.", "🗓"], ["Draft a clear WhatsApp class announcement.", "✎"], ["Summarise the latest uploaded lecture material.", "📄"]];
 export default function AIWorkspace({ initialKind = "announcement" }: { initialKind?: string } = {}) {
-  const [prompt, setPrompt] = useState(""); const [messages, setMessages] = useState<Message[]>([]); const [busy, setBusy] = useState(false); const [status, setStatus] = useState(""); const [error, setError] = useState(""); const [kind, setKind] = useState(initialKind); const [queued, setQueued] = useState(0); const [voicePanelOpen, setVoicePanelOpen] = useState(false); const [tasks, setTasks] = useState<AvaTask[]>([]); const processingRef = useRef(false);
+  const [prompt, setPrompt] = useState(""); const [messages, setMessages] = useState<Message[]>([]); const [busy, setBusy] = useState(false); const [status, setStatus] = useState(""); const [error, setError] = useState(""); const [kind, setKind] = useState(initialKind); const [queued, setQueued] = useState(0); const [voicePanelOpen, setVoicePanelOpen] = useState(false); const [tasks, setTasks] = useState<AvaTask[]>([]); const [workerOnline, setWorkerOnline] = useState(false); const processingRef = useRef(false);
 
   const queueRequest = useCallback(async (item: Omit<QueuedAIRequest, "id" | "createdAt">, requestId = crypto.randomUUID()) => {
     if (!offlineDB) throw new Error("Offline request storage is unavailable in this browser.");
@@ -22,7 +22,7 @@ export default function AIWorkspace({ initialKind = "announcement" }: { initialK
   const refreshTasks = useCallback(async () => {
     try {
       const response = await fetch("/api/ai/tasks", { cache: "no-store" });
-      if (response.ok) { const data = await response.json(); setTasks(data.tasks || []); }
+      if (response.ok) { const data = await response.json(); setTasks(data.tasks || []); setWorkerOnline(Boolean(data.workerOnline)); }
     } catch { /* Task status is refreshed on the next poll. */ }
   }, []);
 
@@ -201,7 +201,7 @@ export default function AIWorkspace({ initialKind = "announcement" }: { initialK
   return <SectionShell bare title="AI Workspace" description="A document-aware assistant for academic coordination, class communication and study support."><div className="workspace">
     <div className="workspace-head"><div><div className="workspace-title">ClassDesk Intelligence</div><div className="workspace-meta">AFIT · ND1 Electrical &amp; Electronics · Private session</div></div><div className="actions"><span className="tag">{busy ? "Processing" : queued ? `${queued} QUEUED` : "Ready"}</span><Link className="btn ghost" href="/api/export/catch-up">Catch-up DOCX</Link><Link className="btn ghost" href="/api/export/catch-up/pdf">Catch-up PDF</Link><Link className="btn ghost" href="/api/export/weekly/pdf">Weekly PDF</Link></div></div>
     {tasks.length > 0 && <section className="task-panel" aria-label="Ava background tasks" style={{ margin: "14px 0", padding: 14, border: "1px solid #26384B", background: "#0D1723" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 10 }}><strong style={{ color: "#42D9F5", letterSpacing: 1 }}>AVA TASK ACTIVITY</strong><button type="button" className="btn ghost" onClick={() => void refreshTasks()}>Refresh</button></div>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 10 }}><strong style={{ color: "#42D9F5", letterSpacing: 1 }}>AVA TASK ACTIVITY</strong><span style={{ color: workerOnline ? "#7DD3A7" : "#F2C94C", fontSize: 11 }}>{workerOnline ? "WORKER ONLINE" : "WORKER OFFLINE"}</span><button type="button" className="btn ghost" onClick={() => void refreshTasks()}>Refresh</button></div>
       {tasks.map(task => <div key={task.id} style={{ padding: "10px 0", borderTop: "1px solid #26384B" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}><strong>{task.kind === "assignment_pdf" ? "Assignment worked solutions" : "Study summary"}</strong><span>{task.status}</span></div>
         <div style={{ color: "#91A4B8", fontSize: 12, margin: "5px 0" }}>{task.currentStep} · {task.progress}%</div>
