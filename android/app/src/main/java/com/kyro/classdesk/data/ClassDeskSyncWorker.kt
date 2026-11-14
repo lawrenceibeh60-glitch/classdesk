@@ -31,8 +31,8 @@ class ClassDeskSyncWorker(context: Context, params: WorkerParameters) : Coroutin
                         runCatching { Gson().fromJson(it, Array<AnnouncementDto>::class.java)?.toList() }.getOrNull()
                     }
                     if (previous != null && ClassDeskNotifications.canPost(applicationContext)) {
-                        val knownIds = previous.map { it.id }.toSet()
-                        latest.filter { it.status.equals("PUBLISHED", true) && it.id !in knownIds }
+                        val previousById = previous.associateBy { it.id }
+                        latest.filter { it.status.equals("PUBLISHED", true) && previousById[it.id]?.status?.equals("PUBLISHED", true) != true }
                             .forEach { ClassDeskNotifications.announcement(applicationContext, it.id, it.title) }
                     }
                     cookies.saveSnapshot("announcements", Gson().toJson(latest))
