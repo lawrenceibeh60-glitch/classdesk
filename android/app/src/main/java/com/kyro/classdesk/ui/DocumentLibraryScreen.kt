@@ -39,6 +39,7 @@ fun DocumentLibraryScreen(api: ClassDeskApi, isPrimaryAdmin: Boolean) {
     var courseName by remember { mutableStateOf("") }
     var topic by remember { mutableStateOf("") }
     var lectureDate by remember { mutableStateOf("") }
+    var deleteTarget by remember { mutableStateOf<DocumentDto?>(null) }
 
     suspend fun reload() {
         loading = true
@@ -97,6 +98,27 @@ fun DocumentLibraryScreen(api: ClassDeskApi, isPrimaryAdmin: Boolean) {
         }
     }
 
+    deleteTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text("Permanently delete document?") },
+            text = { Text("This will remove ${target.title} from ClassDesk's database and shared object storage. This action cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        val result = api.deleteDocument(target.id)
+                        if (result.isSuccessful) {
+                            documents = documents.filterNot { it.id == target.id }
+                            error = null
+                        } else error = "Document deletion failed (HTTP ${result.code()})."
+                        deleteTarget = null
+                    }
+                }) { Text("DELETE PERMANENTLY", color = Color(0xFFFF7D78)) }
+            },
+            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("CANCEL") } }
+        )
+    }
+
     Column(
         Modifier.fillMaxWidth().background(Color(0xFF0A1019)).padding(18.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -121,13 +143,9 @@ fun DocumentLibraryScreen(api: ClassDeskApi, isPrimaryAdmin: Boolean) {
                     Text("\${document.status} / \${document.securityScanStatus} / \${(document.sizeBytes / 1024).coerceAtLeast(1)} KB", color = Color(0xFF42D9F5), fontSize = 10.sp)
                     listOfNotNull(document.courseCode, document.topic).takeIf { it.isNotEmpty() }?.let { Text(it.joinToString(" / "), color = Color(0xFF91A4B8), fontSize = 11.sp) }
                     TextButton(onClick = { downloadId = document.id; downloadName = document.filename; saveDownload.launch(document.filename) }) { Text("DOWNLOAD / OPEN", color = Color(0xFF42D9F5), fontSize = 10.sp) }
-                    if (isPrimaryAdmin) TextButton(onClick = {
-                        scope.launch {
-                            val result = api.deleteDocument(document.id)
-                            if (result.isSuccessful) documents = api.documents().body()?.documents.orEmpty()
-                            else error = "Document deletion failed (\${result.code()})."
-                        }
-                    }) { Text("DELETE PERMANENTLY", color = Color(0xFFFF7D78), fontSize = 10.sp) }
+                    if (isPrimaryAdmin) TextButton(onClick = { deleteTarget = document }) {
+                        Text("DELETE PERMANENTLY", color = Color(0xFFFF7D78), fontSize = 10.sp)
+                    }
                 }
             }
         }
