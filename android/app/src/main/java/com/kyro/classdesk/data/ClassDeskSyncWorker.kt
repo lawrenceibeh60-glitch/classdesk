@@ -45,6 +45,11 @@ class ClassDeskSyncWorker(context: Context, params: WorkerParameters) : Coroutin
 }
 
 object ClassDeskSyncScheduler {
+    fun cancel(context: Context) {
+        WorkManager.getInstance(context).cancelUniqueWork("classdesk-offline-sync-now")
+        WorkManager.getInstance(context).cancelUniqueWork("classdesk-offline-sync")
+    }
+
     fun scheduleNow(context: Context) {
         val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
         val request = OneTimeWorkRequestBuilder<ClassDeskSyncWorker>().setConstraints(constraints).build()
