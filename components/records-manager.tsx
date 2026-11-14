@@ -184,8 +184,10 @@ export default function RecordsManager({ mode, isPrimaryAdmin }: { mode: Mode; i
     } catch { await queueDelete(id); setMessage("Deletion queued on this device and will sync when you reconnect."); await load(); }
   }
   async function removeDoc(id: string) {
+    const queuedUpload = offlineDB ? await offlineDB.uploads.get(id) : undefined;
+    if (!queuedUpload && !isPrimaryAdmin) { setMessage("Only the Class Representative can delete stored documents."); return; }
     if (!confirm("Delete this document or queued upload?")) return;
-    if (offlineDB && await offlineDB.uploads.get(id)) { await offlineDB.uploads.delete(id); await load(); setMessage("Queued upload removed from this device."); return; }
+    if (queuedUpload && offlineDB) { await offlineDB.uploads.delete(id); await load(); setMessage("Queued upload removed from this device."); return; }
     const r = await fetch(`/api/documents?id=${encodeURIComponent(id)}`, { method: "DELETE" });
     if (!r.ok) { setMessage("Could not delete document."); return; }
     await load();
