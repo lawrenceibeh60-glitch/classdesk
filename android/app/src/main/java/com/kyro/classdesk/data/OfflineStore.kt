@@ -7,16 +7,18 @@ import android.database.sqlite.SQLiteOpenHelper
 
 data class PendingMutation(
     val id: String,
+    val ownerUsername: String,
     val entityId: String,
     val operation: String,
     val baseVersion: Int,
     val payloadJson: String
 )
 
-class OfflineStore(context: Context) : SQLiteOpenHelper(context, "classdesk-offline.db", null, 1) {
+class OfflineStore(context: Context) : SQLiteOpenHelper(context, "classdesk-offline.db", null, 2) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("""CREATE TABLE pending_mutations (
             id TEXT PRIMARY KEY NOT NULL,
+            owner_username TEXT NOT NULL,
             entity_id TEXT NOT NULL,
             operation TEXT NOT NULL,
             base_version INTEGER NOT NULL,
@@ -29,6 +31,7 @@ class OfflineStore(context: Context) : SQLiteOpenHelper(context, "classdesk-offl
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) db.execSQL("ALTER TABLE pending_mutations ADD COLUMN owner_username TEXT NOT NULL DEFAULT ''")
         // Schema migrations are additive; never drop queued offline work.
     }
 
@@ -36,6 +39,7 @@ class OfflineStore(context: Context) : SQLiteOpenHelper(context, "classdesk-offl
     fun enqueue(mutation: PendingMutation) {
         val values = ContentValues().apply {
             put("id", mutation.id)
+            put("owner_username", mutation.ownerUsername)
             put("entity_id", mutation.entityId)
             put("operation", mutation.operation)
             put("base_version", mutation.baseVersion)
@@ -48,21 +52,21 @@ class OfflineStore(context: Context) : SQLiteOpenHelper(context, "classdesk-offl
     }
 
     @Synchronized
-    fun pending(limit: Int = 100): List<PendingMutation> {
+    fun pending(ownerUsername: String, limit: Int = 100): List<PendingMutation> {
         val result = mutableListOf<PendingMutation>()
         readableDatabase.query(
             "pending_mutations",
-            arrayOf("id", "entity_id", "operation", "base_version", "payload_json"),
-            "status = ?",
-            arrayOf("PENDING"),
+            arrayOf("id", "owner_username", "entity_id", "operation", "base_version", "payload_json"),
+            "status = ? AND owner_username = ?",
+            arrayOf("PENDING", ownerUsername),
             null, null, "created_at ASC", limit.toString()
         ).use { cursor ->
             while (cursor.moveToNext()) {
                 val id = cursor.getString(0)
                 try {
                     result += PendingMutation(
-                        id, cursor.getString(1), cursor.getString(2),
-                        cursor.getInt(3), OfflineCrypto.decrypt(cursor.getString(4))
+                        id, cursor.getString(1), cursor.getString(2), cursor.getString(3),
+                        cursor.getInt(4), OfflineCrypto.decrypt(cursor.getString(5))
                     )
                 } catch (_: Exception) {
                     mark(id, "CORRUPT", "Offline payload could not be decrypted; retained for recovery.")
