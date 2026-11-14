@@ -24,6 +24,15 @@ interface ClassDeskApi {
     @GET("api/auth/me")
     suspend fun session(): Response<SessionResponse>
 
+    @GET("api/health")
+    suspend fun health(): Response<Map<String, Any>>
+
+    @GET("api/admin/storage")
+    suspend fun storageStats(): Response<Map<String, Any>>
+
+    @POST("api/admin/storage")
+    suspend fun cleanupStorage(@Body body: Map<String, Any>): Response<Map<String, Any>>
+
     @GET("api/academic")
     suspend fun summary(@Query("resource") resource: String = "summary"): Response<SummaryEnvelope>
 
