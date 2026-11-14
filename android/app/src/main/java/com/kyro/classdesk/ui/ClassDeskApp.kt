@@ -36,9 +36,6 @@ import com.google.gson.Gson
 import kotlinx.coroutines.launch
 import java.util.UUID
 import java.time.Instant
-import java.time.LocalDate
-import java.time.OffsetDateTime
-import java.time.ZoneOffset
 import com.google.gson.JsonObject
 
 private val Canvas = Color(0xFF0A1019)
@@ -685,9 +682,7 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                         OutlinedTextField(calendarContent, { calendarContent = it }, label = { Text("Details / venue") }, minLines = 2)
                     } },
                     confirmButton = { TextButton(onClick = { scope.launch {
-                        val normalizedDate = runCatching { Instant.parse(calendarDate.trim()).toString() }.getOrNull()
-                            ?: runCatching { OffsetDateTime.parse(calendarDate.trim()).toInstant().toString() }.getOrNull()
-                            ?: runCatching { LocalDate.parse(calendarDate.trim()).atStartOfDay(ZoneOffset.UTC).toInstant().toString() }.getOrNull()
+                        val normalizedDate = normalizeCalendarDate(calendarDate)
                         if (normalizedDate == null) {
                             moduleError = "Enter a valid date such as YYYY-MM-DD or an ISO date/time."
                             return@launch
