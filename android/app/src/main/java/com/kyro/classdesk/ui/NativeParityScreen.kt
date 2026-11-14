@@ -93,7 +93,6 @@ fun NativeParityScreen(section: String, api: ClassDeskApi, user: UserDto) {
                             Text(course.name, color = Color.White, fontWeight = FontWeight.SemiBold)
                             Text("${related.size} lecture session(s) recorded", color = NativeGold, fontSize = 12.sp)
                             Text("Latest activity: ${latest}", color = NativeMuted, fontSize = 11.sp)
-                            LinearProgressIndicator(progress = { if (lectures.isEmpty()) 0f else (related.size.toFloat() / lectures.size.toFloat()).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth(), color = NativeCyan, trackColor = Color(0xFF26384B))
                         }
                     }
                 }
