@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { getSession } from "@/lib/auth";
 import { Prisma } from "@prisma/client";
-import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 import { requireStaff, requirePrimaryAdmin, assertSameOrigin, rateLimit, clientIp } from "@/lib/http";
 import { extractText, splitIntoChunks } from "@/lib/ingest";
