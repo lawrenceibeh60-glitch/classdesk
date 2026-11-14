@@ -12,7 +12,7 @@ export async function GET() {
     } catch { databaseReachable = false; }
   }
   const storageConfigured = Boolean(
-    process.env.LOCAL_STORAGE_DIR ||
+    (process.env.NODE_ENV !== "production" && process.env.LOCAL_STORAGE_DIR) ||
     (process.env.S3_BUCKET &&
       (process.env.AWS_ACCESS_KEY_ID || process.env.S3_ACCESS_KEY_ID) &&
       (process.env.AWS_SECRET_ACCESS_KEY || process.env.S3_SECRET_ACCESS_KEY) &&
