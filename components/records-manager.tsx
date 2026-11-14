@@ -57,7 +57,7 @@ export default function RecordsManager({ mode, isPrimaryAdmin }: { mode: Mode; i
     }
     const queuedDocs = offlineDB ? (await offlineDB.uploads.toArray()).map(item => ({ id: item.id, title: item.title, filename: item.filename, status: "QUEUED" })) : [];
     setDocs([...queuedDocs, ...serverDocs]);
-  }
+  }, []);
 
   useEffect(() => {
     void load();
