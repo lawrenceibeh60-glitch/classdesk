@@ -4,8 +4,21 @@ import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { assertSameOrigin, rateLimit, clientIp } from "@/lib/http";
+import { start } from "workflow/api";
+import { processAvaTaskWorkflow } from "@/lib/ava/workflows";
 
 export const runtime = "nodejs";
+
+function avaWorkflowConfigured() {
+  return Boolean(
+    (process.env.DATABASE_URL_POOLED || process.env.DATABASE_URL) &&
+    process.env.AI_BASE_URL && process.env.AI_API_KEY && process.env.AI_MODEL &&
+    process.env.S3_BUCKET &&
+    (process.env.AWS_ENDPOINT_URL_S3 || process.env.S3_ENDPOINT) &&
+    (process.env.AWS_ACCESS_KEY_ID || process.env.S3_ACCESS_KEY_ID) &&
+    (process.env.AWS_SECRET_ACCESS_KEY || process.env.S3_SECRET_ACCESS_KEY)
+  );
+}
 
 export async function GET() {
   const user = await getSession();
@@ -16,8 +29,9 @@ export async function GET() {
     take: 30,
     select: { id: true, kind: true, status: true, progress: true, currentStep: true, errorMessage: true, resultDocumentId: true, createdAt: true, startedAt: true, completedAt: true, updatedAt: true }
   });
-  const workerOnline = await db.aiWorkerState.count({ where: { lastSeenAt: { gt: new Date(Date.now() - 90_000) } } }) > 0;
-  return NextResponse.json({ tasks, workerOnline });
+  // Workflow runs are managed by Vercel; no separate heartbeat process is required.
+  const processingAvailable = avaWorkflowConfigured();
+  return NextResponse.json({ tasks, workerOnline: processingAvailable, processingAvailable, processingMode: "vercel-workflows" });
 }
 
 export async function POST(req: NextRequest) {
@@ -27,10 +41,10 @@ export async function POST(req: NextRequest) {
   if (!(await rateLimit(`ava-task:${user.id}:${clientIp(req)}`, 10, 60 * 60 * 1000))) {
     return NextResponse.json({ error: "Ava task limit reached. Try again later." }, { status: 429 });
   }
-  const workerOnline = await db.aiWorkerState.count({ where: { lastSeenAt: { gt: new Date(Date.now() - 90_000) } } }) > 0;
-  if (!workerOnline) {
-    return NextResponse.json({ error: "Ava's background worker is not online yet. Your task was not queued; the worker must be started before background processing is available." }, { status: 503 });
+  if (!avaWorkflowConfigured()) {
+    return NextResponse.json({ error: "Ava document processing is not fully configured. No task was queued." }, { status: 503 });
   }
+
   const body = await req.json().catch(() => null);
   const kind = String(body?.kind || "");
   if (!["assignment_pdf", "study_summary_pdf"].includes(kind)) {
@@ -53,13 +67,25 @@ export async function POST(req: NextRequest) {
   if (clientRequestId && !/^[a-f0-9-]{36}$/i.test(clientRequestId)) {
     return NextResponse.json({ error: "Invalid task request ID." }, { status: 400 });
   }
+
   if (clientRequestId) {
     const existing = await db.aiTask.findFirst({
       where: { id: clientRequestId, ownerId: user.id },
       select: { id: true, kind: true, status: true, progress: true, currentStep: true, createdAt: true }
     });
-    if (existing) return NextResponse.json({ task: existing, duplicate: true }, { status: 200 });
+    if (existing) {
+      // Safe recovery for a task row created just before a request was interrupted.
+      if (existing.status === "QUEUED") {
+        try { await start(processAvaTaskWorkflow, [existing.id, user.id]); }
+        catch (error) {
+          console.error("[Ava] Could not enqueue existing task", existing.id, error);
+          return NextResponse.json({ error: "Ava could not accept the task yet. Please retry shortly." }, { status: 503 });
+        }
+      }
+      return NextResponse.json({ task: existing, duplicate: true }, { status: 200 });
+    }
   }
+
   const task = await db.aiTask.create({
     data: {
       id: clientRequestId || randomUUID(),
@@ -68,9 +94,24 @@ export async function POST(req: NextRequest) {
       kind,
       status: "QUEUED",
       input: { documentIds, prompt } as Prisma.InputJsonValue,
-      currentStep: "Waiting for an Ava worker",
+      currentStep: "Submitting to Vercel background processing"
     },
     select: { id: true, kind: true, status: true, progress: true, currentStep: true, createdAt: true }
   });
-  return NextResponse.json({ task, message: "Ava task queued. It will continue even if the voice panel is closed." }, { status: 202 });
+
+  try {
+    const run = await start(processAvaTaskWorkflow, [task.id, user.id]);
+    await db.aiTask.updateMany({
+      where: { id: task.id, ownerId: user.id, status: "QUEUED" },
+      data: { currentStep: "Queued on Vercel durable processing" }
+    });
+    return NextResponse.json({ task, workflowRunId: run.runId, message: "Ava task queued. It will continue even if the voice panel is closed." }, { status: 202 });
+  } catch (error) {
+    console.error("[Ava] Workflow enqueue failed", task.id, error);
+    await db.aiTask.updateMany({
+      where: { id: task.id, ownerId: user.id, status: "QUEUED" },
+      data: { status: "FAILED", currentStep: "Could not enqueue task", errorMessage: "Vercel background processing could not accept this task. Please retry.", completedAt: new Date() }
+    });
+    return NextResponse.json({ error: "Ava background processing is temporarily unavailable. Your task was not left queued." }, { status: 503 });
+  }
 }
