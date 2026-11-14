@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withWorkflow } from "workflow/next";
 import { existsSync, readFileSync } from "node:fs";
 // Development conveniences only; production credentials must arrive at runtime.
 if (process.env.NODE_ENV !== "production") {
@@ -28,4 +29,4 @@ const nextConfig: NextConfig = {
     ];
   }
 };
-export default nextConfig;
+export default withWorkflow(nextConfig);
