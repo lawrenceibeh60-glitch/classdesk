@@ -170,5 +170,14 @@ export async function GET(req: NextRequest) {
     db.academicRecord.findMany({ where: { updatedAt: { gte: since, lte: watermark } }, orderBy: { updatedAt: "asc" } }),
     db.syncMutation.findMany({ where: { entityType: "record", operation: "delete", appliedAt: { gte: since, lte: watermark } }, orderBy: { appliedAt: "asc" }, select: { entityId: true, appliedAt: true } }),
   ]);
-  return NextResponse.json({ records, deletedIds: [...new Set(tombstones.map((item) => item.entityId))], serverTime: watermark.toISOString() });
+  // If an ID was restored/recreated after an older deletion, the newer
+  // live record wins. Do not let an older tombstone erase it on the client.
+  const liveUpdatedAt = new Map(records.map((record) => [record.id, record.updatedAt.getTime()]));
+  const deletedIds = [...new Set(tombstones
+    .filter((item) => {
+      const recreatedAt = liveUpdatedAt.get(item.entityId);
+      return recreatedAt === undefined || item.appliedAt!.getTime() > recreatedAt;
+    })
+    .map((item) => item.entityId))];
+  return NextResponse.json({ records, deletedIds, serverTime: watermark.toISOString() });
 }
