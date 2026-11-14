@@ -22,6 +22,7 @@ class ClassDeskSyncWorker(context: Context, params: WorkerParameters) : Coroutin
             val owner = ApiClient.cookies(applicationContext).loadUser() ?: return Result.success()
             val queued = store.pending(owner.username, 100)
             if (queued.isEmpty()) return Result.success()
+            var appliedCount = 0
             val moduleRows = queued.filter { it.operation.startsWith("academic:") || it.operation.startsWith("announcement:") }
             for (row in moduleRows) {
                 val parts = row.operation.split(":")
@@ -47,6 +48,7 @@ class ClassDeskSyncWorker(context: Context, params: WorkerParameters) : Coroutin
                 }
                 if (response.isSuccessful || (parts.getOrNull(1) == "DELETE" && response.code() == 404)) {
                     store.removeApplied(listOf(row.id))
+                    appliedCount += 1
                 } else if (response.code() == 401) {
                     return Result.success()
                 } else if (response.code() >= 500 || response.code() == 429) {
@@ -56,7 +58,10 @@ class ClassDeskSyncWorker(context: Context, params: WorkerParameters) : Coroutin
                 }
             }
             val recordRows = queued.filterNot { it.operation.startsWith("academic:") || it.operation.startsWith("announcement:") }
-            if (recordRows.isEmpty()) return Result.success()
+            if (recordRows.isEmpty()) {
+                ClassDeskNotifications.syncCompleted(applicationContext, appliedCount)
+                return Result.success()
+            }
             val mutations = recordRows.map { row ->
                 SyncMutationDto(
                     id = row.id,
@@ -75,9 +80,11 @@ class ClassDeskSyncWorker(context: Context, params: WorkerParameters) : Coroutin
             }
             val body = response.body() ?: return Result.retry()
             store.removeApplied(body.appliedIds.orEmpty())
+            appliedCount += body.appliedIds.orEmpty().size
             body.conflicts.orEmpty().forEach { store.mark(it.id, "CONFLICT", it.reason) }
             body.rejected.orEmpty().forEach { store.mark(it.id, "REJECTED", it.reason) }
-            return if (body.appliedIds.orEmpty().size == recordRows.size) Result.success() else Result.success()
+            ClassDeskNotifications.syncCompleted(applicationContext, appliedCount)
+            return Result.success()
         } catch (_: Exception) {
             return Result.retry()
         } finally { store.closeStore() }
