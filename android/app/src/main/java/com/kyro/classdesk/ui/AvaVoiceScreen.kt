@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Build
 import android.media.MediaPlayer
 import java.io.File
 import android.speech.RecognitionListener
@@ -113,7 +114,14 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
 
     DisposableEffect(Unit) {
         if (SpeechRecognizer.isRecognitionAvailable(context)) {
-            recognizer = SpeechRecognizer.createSpeechRecognizer(context).also { engine ->
+            // Prefer Android's on-device engine when the OS and installed language pack support it.
+            // Fall back to the platform recognition service on older or unsupported devices.
+            val speechEngine = if (
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+            ) SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+            else SpeechRecognizer.createSpeechRecognizer(context)
+            recognizer = speechEngine.also { engine ->
                 engine.setRecognitionListener(object : RecognitionListener {
                     override fun onReadyForSpeech(params: Bundle?) { listening = true }
                     override fun onBeginningOfSpeech() { listening = true }
