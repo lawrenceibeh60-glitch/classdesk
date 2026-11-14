@@ -1,0 +1,34 @@
+# Ava runs as a separate, always-on worker because Vercel serverless
+# functions are not the right execution model for a long-running poller.
+# This Blueprint intentionally defines only the worker; it does not replace
+# or redeploy the existing ClassDesk website.
+services:
+  - type: worker
+    name: afit-classdesk-ava-worker
+    runtime: node
+    region: frankfurt
+    plan: starter
+    buildCommand: npm ci --include=dev
+    startCommand: npm run db:migrate && npm run worker:ava
+    autoDeployTrigger: off
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: AI_BASE_URL
+        sync: false
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_MODEL
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: AWS_ENDPOINT_URL_S3
+        sync: false
+      - key: AWS_REGION
+        value: us-east-2
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AVA_WORKER_POLL_MS
+        value: "5000"
