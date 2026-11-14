@@ -41,6 +41,7 @@ assert.ok(read("components/records-manager.tsx").includes("isPrimaryAdmin &&"), 
 assert.ok(read("components/academic-manager.tsx").includes("isPrimaryAdmin &&"), "Primary-only academic delete controls must be hidden from the assistant");
 assert.ok(read("components/announcement-studio.tsx").includes("isPrimaryAdmin &&"), "Primary-only announcement actions must be hidden from the assistant");
 assert.match(read("components/academic-manager.tsx"), /pendingWrites/, "Online refresh must preserve queued offline academic writes");
+assert.match(read("public/sw.js"), /explicitlyPublic/, "Offline cache must exclude account-specific/private pages");
 
 assert.ok(sourceText.includes("UNTRUSTED_CLASS_MATERIAL") && sourceText.includes("UNTRUSTED_CLASS_SOURCES"), "AI retrieval boundaries are missing");
 console.log(`Source structure checks passed. ${requiredModels.length} models, ${migrationDirs.length} migrations, academic APIs and pages present.`);
