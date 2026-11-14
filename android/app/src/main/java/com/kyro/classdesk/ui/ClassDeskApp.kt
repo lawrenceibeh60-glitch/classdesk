@@ -333,8 +333,8 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                             runCatching { Gson().fromJson(it, Array<AnnouncementDto>::class.java)?.toList() }.getOrNull()
                         }
                         if (previousAnnouncements != null && ClassDeskNotifications.canPost(context)) {
-                            val oldIds = previousAnnouncements.map { it.id }.toSet()
-                            fetchedAnnouncements.filter { it.status.equals("PUBLISHED", true) && it.id !in oldIds }
+                            val previousById = previousAnnouncements.associateBy { it.id }
+                            fetchedAnnouncements.filter { it.status.equals("PUBLISHED", true) && previousById[it.id]?.status?.equals("PUBLISHED", true) != true }
                                 .forEach { ClassDeskNotifications.announcement(context, it.id, it.title) }
                         }
                         announcements = fetchedAnnouncements
