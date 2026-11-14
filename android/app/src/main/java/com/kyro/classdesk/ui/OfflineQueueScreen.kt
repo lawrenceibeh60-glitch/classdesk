@@ -76,7 +76,7 @@ fun OfflineQueueScreen(user: UserDto) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             Button(
                 onClick = { ClassDeskSyncScheduler.scheduleNow(context); actionMessage = "Sync requested. It will run when a network connection is available." },
-                enabled = !busy && pending > 0,
+                enabled = pending > 0,
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF42D9F5), contentColor = Color(0xFF0A1019)),
                 shape = RoundedCornerShape(6.dp)
@@ -105,31 +105,36 @@ fun OfflineQueueScreen(user: UserDto) {
 
                     if (entry.status == "CONFLICT") {
                         Text(
-                            if (cloudRecord == null) "The cloud record no longer exists." else
-                                "Cloud version: ${cloudRecord.title} / ${cloudRecord.status} / version ${cloudRecord.version}",
+                            if (entry.serverRecordPresent && cloudRecord == null) "The saved cloud snapshot could not be decrypted. Do not retry against an unknown version."
+                            else if (cloudRecord == null) "The cloud record no longer exists."
+                            else "Cloud version: ${cloudRecord.title} / ${cloudRecord.status} / version ${cloudRecord.version}",
                             color = Color(0xFFF2C94C), fontSize = 11.sp
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            OutlinedButton(
-                                onClick = { acceptCloud(entry) },
-                                enabled = !busy,
-                                modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(6.dp)
-                            ) { Text(if (entry.operation == "delete" && cloudRecord == null) "ACCEPT DELETION" else "USE CLOUD", color = Color(0xFF42D9F5), fontSize = 10.sp) }
-                            Button(
-                                onClick = {
-                                    if (entry.operation == "delete" && cloudRecord == null) acceptCloud(entry)
-                                    else keepLocal(entry, cloudRecord)
-                                },
-                                enabled = !busy,
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF2C94C), contentColor = Color(0xFF0A1019)),
-                                shape = RoundedCornerShape(6.dp)
-                            ) { Text(if (entry.operation == "delete" && cloudRecord == null) "ALREADY DELETED" else "KEEP LOCAL", fontSize = 10.sp) }
+                        if (entry.serverRecordPresent && cloudRecord == null) {
+                            TextButton(onClick = { discardTarget = entry }) {
+                                Text("DISCARD LOCAL CHANGE", color = Color(0xFFFF7D78), fontSize = 10.sp)
+                            }
+                        } else {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                OutlinedButton(
+                                    onClick = { acceptCloud(entry) },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) { Text(if (entry.operation == "delete" && cloudRecord == null) "ACCEPT DELETION" else "USE CLOUD", color = Color(0xFF42D9F5), fontSize = 10.sp) }
+                                Button(
+                                    onClick = {
+                                        if (entry.operation == "delete" && cloudRecord == null) acceptCloud(entry)
+                                        else keepLocal(entry, cloudRecord)
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF2C94C), contentColor = Color(0xFF0A1019)),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) { Text(if (entry.operation == "delete" && cloudRecord == null) "ALREADY DELETED" else "KEEP LOCAL", fontSize = 10.sp) }
+                            }
                         }
                     } else if (entry.status == "REJECTED" || entry.status == "CORRUPT") {
                         Text("This item will not retry automatically. Review the error above before discarding it.", color = Color(0xFF91A4B8), fontSize = 10.sp)
-                        TextButton(onClick = { discardTarget = entry }, enabled = !busy) {
+                        TextButton(onClick = { discardTarget = entry }) {
                             Text("DISCARD LOCAL CHANGE", color = Color(0xFFFF7D78), fontSize = 10.sp)
                         }
                     }
