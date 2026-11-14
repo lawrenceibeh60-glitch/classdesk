@@ -4,6 +4,8 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.media.MediaPlayer
+import java.io.File
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -45,6 +47,7 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
     val scope = rememberCoroutineScope()
     var recognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
     var speech by remember { mutableStateOf<TextToSpeech?>(null) }
+    var audioPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
     var ttsReady by remember { mutableStateOf(false) }
     var sessionActive by remember { mutableStateOf(false) }
     var listening by remember { mutableStateOf(false) }
@@ -60,11 +63,23 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
         userStopped = true
         recognizer?.cancel()
         speech?.stop()
+        runCatching { audioPlayer?.stop() }
+        runCatching { audioPlayer?.release() }
+        audioPlayer = null
         listening = false
         processing = false
         speaking = false
     }
 
+    fun speakOnDevice(text: String) {
+        if (ttsReady) {
+            speaking = true
+            speech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "classdesk-ava-fallback")
+        } else {
+            speaking = false
+            error = "Ava voice service is unavailable and device speech output is not ready."
+        }
+    }
     fun startRecognition() {
         val engine = recognizer
         if (engine == null) {
@@ -128,10 +143,31 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
                                 if (result.isSuccessful && !answer.isNullOrBlank()) {
                                     response = answer
                                     processing = false
-                                    if (ttsReady) {
-                                        speaking = true
-                                        speech?.speak(answer, TextToSpeech.QUEUE_FLUSH, null, "classdesk-ava-response")
-                                    } else error = "Ava replied, but text-to-speech is not ready on this device."
+                                    try {
+                                        val voiceResult = api.speak(mapOf("text" to answer))
+                                        val audioBytes = if (voiceResult.isSuccessful) voiceResult.body()?.bytes() else null
+                                        if (audioBytes != null && audioBytes.isNotEmpty()) {
+                                            val audioFile = File.createTempFile("classdesk-ava-", ".mp3", context.cacheDir)
+                                            audioFile.writeBytes(audioBytes)
+                                            val player = MediaPlayer()
+                                            audioPlayer = player
+                                            player.setDataSource(audioFile.absolutePath)
+                                            player.setOnPreparedListener { prepared ->
+                                                if (sessionActive) { speaking = true; prepared.start() }
+                                                else { prepared.release(); audioPlayer = null; audioFile.delete() }
+                                            }
+                                            player.setOnCompletionListener { completed ->
+                                                speaking = false; completed.release(); audioPlayer = null; audioFile.delete()
+                                                if (sessionActive) startRecognition()
+                                            }
+                                            player.setOnErrorListener { failed, _, _ ->
+                                                speaking = false; failed.release(); audioPlayer = null; audioFile.delete()
+                                                if (sessionActive) speakOnDevice(answer)
+                                                true
+                                            }
+                                            player.prepareAsync()
+                                        } else speakOnDevice(answer)
+                                    } catch (_: Exception) { speakOnDevice(answer) }
                                 } else {
                                     processing = false
                                     error = result.body()?.error ?: "Ava could not complete that request."
@@ -150,7 +186,14 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
         }
         val engine = TextToSpeech(context) { status ->
             ttsReady = status == TextToSpeech.SUCCESS
-            if (status == TextToSpeech.SUCCESS) speech?.language = Locale.UK
+            if (status == TextToSpeech.SUCCESS) {
+                speech?.language = Locale.UK
+                val britishVoices = engine.voices?.filter { it.locale.language == "en" && it.locale.country == "GB" }.orEmpty()
+                val preferredVoice = britishVoices.firstOrNull { it.name.contains("female", ignoreCase = true) }
+                    ?: britishVoices.firstOrNull { !it.isNetworkConnectionRequired }
+                    ?: britishVoices.firstOrNull()
+                if (preferredVoice != null) speech?.voice = preferredVoice
+            }
         }
         speech = engine
         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
@@ -169,6 +212,9 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
             speech?.stop()
             speech?.shutdown()
             speech = null
+            runCatching { audioPlayer?.stop() }
+            runCatching { audioPlayer?.release() }
+            audioPlayer = null
         }
     }
 
