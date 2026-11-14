@@ -133,6 +133,26 @@ export default function AIWorkspace({ initialKind = "announcement" }: { initialK
       else setError(e instanceof Error ? e.message : "Generation failed");
     } finally { setBusy(false); setStatus(""); }
   }
+  async function confirmDocumentDelete(action: AvaActionConfirmation, messageIndex: number) {
+    setBusy(true); setStatus("Verifying permanent deletion…"); setError("");
+    try {
+      const response = await fetch("/api/ai/tools", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete_document", documentId: action.documentId, confirmPermanent: true, confirmTitle: action.title })
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Permanent deletion failed.");
+      if (!result.deleted?.databaseRecord || (action.originalInSharedStorage && !result.deleted?.sharedStorageObject)) {
+        throw new Error("The deletion result was incomplete. Check the privileged-action audit log before retrying.");
+      }
+      setMessages(current => current.map((message, index) => index === messageIndex
+        ? { ...message, content: "Verified: " + action.title + " was deleted from the ClassDesk database" + (action.originalInSharedStorage ? " and shared object storage." : "."), actionConfirmation: undefined }
+        : message));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Permanent deletion failed.");
+    } finally { setBusy(false); setStatus(""); }
+  }
+
   const router = useRouter(); const voiceReply = useRef(false); const spokenCount = useRef(0);
   const PAGES: Record<string, string> = { dashboard: "/", home: "/", records: "/records", notes: "/notes", upload: "/notes", announcements: "/announcements", assistant: "/assistant", "catch up": "/catch-up", "catch-up": "/catch-up", courses: "/courses", lectures: "/lectures", assignments: "/assignments", attendance: "/attendance", concerns: "/concerns", settings: "/settings", coverage: "/coverage", calendar: "/calendar", timetable: "/calendar" };
   const avaRef = useRef<ReturnType<typeof useAva> | null>(null);
