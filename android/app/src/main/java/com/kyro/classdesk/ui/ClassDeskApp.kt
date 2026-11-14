@@ -212,6 +212,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
     val secureStore = remember { ApiClient.cookies(context) }
     val connectivity = remember { ClassDeskConnectivity(context) }
     var online by remember { mutableStateOf(connectivity.isOnline()) }
+    val currentOnline = rememberUpdatedState(online)
     var connectionToast by remember { mutableStateOf<String?>(null) }
     var notificationPermissionNeeded by remember {
         mutableStateOf(Build.VERSION.SDK_INT >= 33 &&
@@ -222,10 +223,10 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
     }
     DisposableEffect(connectivity) {
         val callback = connectivity.register { connected ->
-            if (online != connected) {
+            if (currentOnline.value != connected) {
                 online = connected
                 connectionToast = if (connected) "You're back online. ClassDesk is reconnecting."
-                    else "Still got you, boss. You're offline; saved data remains available."
+                    else "Still got you, boss. You're offline; ClassDesk will reconnect when your internet returns."
             }
         }
         onDispose { connectivity.unregister(callback) }
