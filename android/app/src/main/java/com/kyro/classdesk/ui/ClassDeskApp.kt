@@ -442,6 +442,15 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                             }) { Text("EDIT COURSE", color = Cyan, fontSize = 10.sp) }
                             if (user.role == "CLASS_REP") TextButton(onClick = {
                                 scope.launch {
+                                    val changed = mutateAcademic("courses", "PATCH", mapOf("id" to course.id, "active" to (!course.active).toString()))
+                                    if (changed.isSuccessful) {
+                                        if (!changed.queued) courses = api.courses().body()?.items.orEmpty()
+                                        else courses = courses.map { if (it.id == course.id) it.copy(active = !course.active) else it }
+                                    } else moduleError = "Course status could not be changed."
+                                }
+                            }) { Text(if (course.active) "DEACTIVATE" else "ACTIVATE", color = Gold, fontSize = 10.sp) }
+                            if (user.role == "CLASS_REP") TextButton(onClick = {
+                                scope.launch {
                                     val deleted = mutateAcademic("courses", "DELETE", mapOf("id" to course.id))
                                     if (deleted.isSuccessful) { if (deleted.queued) courses = courses.filterNot { it.id == course.id } else courses = api.courses().body()?.items.orEmpty() }
                                     else moduleError = "Could not delete this course (${deleted.code()})."
@@ -496,12 +505,18 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                                 }) { Text("EDIT", color = Cyan, fontSize = 10.sp) }
                                 TextButton(onClick = {
                                     scope.launch {
-                                        val next = if (item.status == "DONE") "TODO" else "DONE"
+                                        val next = when (item.status) {
+                                            "TODO" -> "IN_PROGRESS"
+                                            "IN_PROGRESS" -> "DONE"
+                                            else -> "TODO"
+                                        }
                                         val saved = mutateAcademic("assignments", "PATCH", mapOf("id" to item.id, "status" to next))
-                                        if (saved.isSuccessful) { if (saved.queued) moduleError = saved.message else assignments = api.assignments().body()?.items.orEmpty() }
-                                        else moduleError = "Assignment status could not be updated (${saved.code()})."
+                                        if (saved.isSuccessful) {
+                                            if (saved.queued) assignments = assignments.map { if (it.id == item.id) it.copy(status = next) else it }
+                                            else assignments = api.assignments().body()?.items.orEmpty()
+                                        } else moduleError = "Assignment status could not be updated (${saved.code()})."
                                     }
-                                }) { Text(if (item.status == "DONE") "REOPEN" else "MARK DONE", color = Cyan, fontSize = 10.sp) }
+                                }) { Text(when (item.status) { "TODO" -> "START"; "IN_PROGRESS" -> "MARK DONE"; else -> "REOPEN" }, color = Cyan, fontSize = 10.sp) }
                                 if (user.role == "CLASS_REP") TextButton(onClick = {
                                     scope.launch {
                                         val deleted = mutateAcademic("assignments", "DELETE", mapOf("id" to item.id))
