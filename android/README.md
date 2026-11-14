@@ -13,24 +13,24 @@ Native Android client workspace for the existing ClassDesk service.
 
 ## Configure the API
 
-Set this Gradle property in local \`android/gradle.properties\` (do not commit private configuration):
+Set this Gradle property in local `android/gradle.properties` (do not commit private configuration):
 
-\`\`\`properties
+```properties
 CLASSDESK_API_BASE_URL=https://YOUR-CLASSDESK-HOST/
-\`\`\`
+```
 
-You can also set the \`CLASSDESK_API_BASE_URL\` environment variable. The default example host is deliberately non-production; sign-in will not work until a real HTTPS origin is configured.
+You can also set the `CLASSDESK_API_BASE_URL` environment variable. The default example host is deliberately non-production; sign-in will not work until a real HTTPS origin is configured.
 
 ## Build
 
 Requirements: Android Studio with Android SDK 35 and JDK 17.
 
-Open the \`android/\` folder in Android Studio, allow Gradle sync, install the SDK components, and run on an emulator or physical Android device. From a machine with Gradle installed, run \`gradle assembleDebug\` inside this folder.
+Open the `android/` folder in Android Studio, allow Gradle sync, install the SDK components, and run on an emulator or physical Android device. From a machine with Gradle installed, run `gradle assembleDebug` inside this folder.
 
 ## Implemented first slice
 
-- Native sign-in against \`POST /api/auth/login\`.
-- Session restoration against \`GET /api/auth/me\`.
+- Native sign-in against `POST /api/auth/login`.
+- Session restoration against `GET /api/auth/me`.
 - Encrypted persistence of the server session cookie and last authenticated profile.
 - Native command-centre overview with live summary and upcoming assignments.
 - Native course register with list, add and primary-admin delete.
@@ -39,14 +39,14 @@ Open the \`android/\` folder in Android Studio, allow Gradle sync, install the S
 - Native announcement studio with draft creation and Class Representative-only approve/publish actions.
 - Native calendar/timetable entries with create, list and primary-admin delete.
 - Native document library with Android system file picker, server-side upload/indexing and primary-admin permanent deletion.
-- Encrypted local snapshots for overview, courses and assignments; cached data is read-only while offline.
-- SQLite mutation outbox, AES-GCM payload encryption using Android Keystore, account-bound queue ownership, and WorkManager sync against the existing versioned \`/api/sync\` endpoint.
+- Encrypted local snapshots for the overview, courses, assignments, lectures, attendance, concerns, announcements and calendar; cached data is read-only while offline.
+- SQLite mutation outbox, AES-GCM payload encryption using Android Keystore, account-bound queue ownership, and WorkManager sync against the existing versioned `/api/sync` endpoint.
 - Ava graphical voice panel using Android speech recognition, ClassDesk AI chat and device text-to-speech. It does not request microphone access until Activate is tapped.
 - Custom ClassDesk launcher icon and HTTPS-only network policy.
 
 ## Remaining implementation slices
 
-1. Add offline mutation creation to each editable screen and a review/recovery screen for queued, rejected and conflicted changes.
+1. Extend offline mutation creation to the remaining editable screens and add safe retry/recovery controls for rejected and conflicted changes.
 2. Add document downloads, sharing, preview and export flows.
 3. Add edit/update workflows for lectures, attendance, concerns and announcements, plus calendar filters.
 4. Improve Ava lifecycle recovery, speech-service fallbacks, voice selection and accessibility.
