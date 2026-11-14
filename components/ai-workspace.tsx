@@ -134,7 +134,7 @@ export default function AIWorkspace({ initialKind = "announcement" }: { initialK
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages]);
   useEffect(() => { if (error && voiceReply.current) { voiceReply.current = false; if (ava.listening) ava.speak(error); } }, [error]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { const h = (e: KeyboardEvent) => { if (e.altKey && e.key.toLowerCase() === "a") { e.preventDefault(); if (voicePanelOpen) { avaRef.current?.stop(); setVoicePanelOpen(false); } else { setVoicePanelOpen(true); avaRef.current?.toggle(); } } }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, [voicePanelOpen]);
+  // Voice activation is intentionally microphone-button-only; no keyboard shortcut starts the microphone.
   const send = () => void ask();
   return <SectionShell bare title="AI Workspace" description="A document-aware assistant for academic coordination, class communication and study support."><div className="workspace">
     <div className="workspace-head"><div><div className="workspace-title">ClassDesk Intelligence</div><div className="workspace-meta">AFIT · ND1 Electrical &amp; Electronics · Private session</div></div><div className="actions"><span className="tag">{busy ? "Processing" : queued ? `${queued} QUEUED` : "Ready"}</span><Link className="btn ghost" href="/api/export/catch-up">Catch-up DOCX</Link><Link className="btn ghost" href="/api/export/catch-up/pdf">Catch-up PDF</Link><Link className="btn ghost" href="/api/export/weekly/pdf">Weekly PDF</Link></div></div>
