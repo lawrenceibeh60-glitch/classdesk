@@ -20,7 +20,8 @@ data class SyncPushResponse(val appliedIds: List<String>?, val conflicts: List<S
 
 data class ChatRequest(val message: String, val voice: Boolean = true, val history: List<ChatHistoryItem> = emptyList())
 data class ChatHistoryItem(val role: String, val content: String)
-data class ChatResponse(val answer: String?, val error: String?)
+data class AvaActionConfirmationDto(val type: String, val documentId: String, val title: String, val filename: String, val sizeBytes: Int, val originalInSharedStorage: Boolean)
+data class ChatResponse(val answer: String?, val error: String?, val actionConfirmation: AvaActionConfirmationDto? = null)
 
 data class LectureDto(val id: String, val topic: String, val summary: String?, val scheduledAt: String?, val heldAt: String?, val venue: String?, val lecturer: String?, val course: CourseRef?)
 data class LecturesEnvelope(val items: List<LectureDto>?)
