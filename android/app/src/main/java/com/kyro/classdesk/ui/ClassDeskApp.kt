@@ -588,7 +588,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                                     } else if (deleted.isSuccessful) {
                                         calendarItems = calendarItems.filterNot { it.id == item.id }
                                         secureStore.saveSnapshot("calendar", Gson().toJson(calendarItems))
-                                        try { calendarItems = api.records().body()?.records.orEmpty() } catch (_: Exception) { /* local view already reflects the successful delete */ }
+                                        try { val refreshed = api.records(); if (refreshed.isSuccessful) calendarItems = refreshed.body()?.records.orEmpty() } catch (_: Exception) { /* local view already reflects the successful delete */ }
                                     } else moduleError = "Could not delete this calendar item."
                                 }
                             }) { Text("DELETE", color = Color(0xFFFF7D78), fontSize = 10.sp) }
@@ -636,7 +636,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                                 showCalendarDialog = false
                             } finally { store.closeStore() }
                         } else if (saved.isSuccessful) {
-                            calendarItems = try { api.records().body()?.records.orEmpty() } catch (_: Exception) { calendarItems }
+                            try { val refreshed = api.records(); if (refreshed.isSuccessful) calendarItems = refreshed.body()?.records.orEmpty() } catch (_: Exception) { /* retain the current local view */ }
                             secureStore.saveSnapshot("calendar", Gson().toJson(calendarItems))
                             calendarTitle = ""; calendarContent = ""; calendarDate = ""; calendarType = "TIMETABLE"
                             showCalendarDialog = false
