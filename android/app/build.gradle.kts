@@ -44,4 +44,5 @@ dependencies {
     implementation("com.google.code.gson:gson:2.12.1")
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
+    testImplementation("junit:junit:4.13.2")
 }
