@@ -31,3 +31,6 @@ data class ConcernsEnvelope(val items: List<ConcernDto>?)
 
 data class AnnouncementDto(val id: String, val title: String, val body: String, val category: String, val status: String, val publishedAt: String?)
 data class AnnouncementsEnvelope(val announcements: List<AnnouncementDto>?)
+
+data class DocumentDto(val id: String, val title: String, val filename: String, val mimeType: String, val sizeBytes: Int, val courseCode: String?, val topic: String?, val status: String, val securityScanStatus: String, val createdAt: String, val originalAvailable: Boolean)
+data class DocumentsEnvelope(val documents: List<DocumentDto>?)
