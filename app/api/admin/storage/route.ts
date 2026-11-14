@@ -42,7 +42,7 @@ export async function GET() {
   return NextResponse.json({
     counts: { records, documents, chunks, announcements, announcementVersions, courses, assignments, syncPending, syncApplied, rateLimitBuckets, aiReceipts },
     databaseBytes,
-    cleanupPolicy: "Only expired rate-limit buckets and old applied sync/AI idempotency receipts are eligible. Class records, announcements, documents and their extracted text are never bulk-deleted here.",
+    cleanupPolicy: "Only expired rate-limit buckets, old applied non-deletion sync receipts and old AI idempotency receipts are eligible. Deletion tombstones are retained so long-offline devices can still receive deletions. Class records, announcements, documents and extracted text are never bulk-deleted here.",
   }, { headers: { "Cache-Control": "no-store" } });
 }
 
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
   const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
   const [rateLimits, syncHistory, aiReceipts] = await db.$transaction([
     db.rateLimitBucket.deleteMany({ where: { resetAt: { lt: now } } }),
-    db.syncMutation.deleteMany({ where: { appliedAt: { not: null }, createdAt: { lt: cutoff } } }),
+    db.syncMutation.deleteMany({ where: { appliedAt: { not: null }, operation: { not: "delete" }, createdAt: { lt: cutoff } } }),
     db.aiRequestReceipt.deleteMany({ where: { createdAt: { lt: cutoff } } }),
   ]);
 
