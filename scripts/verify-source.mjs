@@ -73,6 +73,7 @@ assert.match(avaSource, /handlersRef\.current\.onCommand\(text\)/, "Ava must pro
 assert.match(avaWorkspace, /voicePanelOpen && <div className="ava-overlay"/, "Tapping the microphone must open the graphical Ava voice interface");
 assert.match(avaWorkspace, /if \(ava\.listening\) ava\.speak\(/, "Ava spoken replies must be limited to an active microphone session");
 assert.match(avaWorkspace, /setVoicePanelOpen\(true\); ava\.toggle\(\)/, "The microphone button must explicitly open and start voice mode");
+assert.ok(!/e\.altKey\s*&&\s*e\.key\.toLowerCase\(\)\s*===\s*"a"/.test(avaWorkspace), "Ava must only activate from the microphone button, not a keyboard shortcut");
 
 const healthRoute = read("app/api/health/route.ts");
 assert.match(healthRoute, /DATABASE_URL_POOLED \|\| process\.env\.DATABASE_URL/, "Health checks must recognise pooled Neon database configuration");
