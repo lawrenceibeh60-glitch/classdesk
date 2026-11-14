@@ -7,14 +7,22 @@ import SectionShell from "@/components/section-shell";
 import { offlineDB, type QueuedAIRequest } from "@/lib/offline-db";
 type Source = { title?: string; filename?: string };
 type Message = { role: "user" | "assistant"; content: string; sources?: Source[] };
+type AvaTask = { id: string; kind: string; status: string; progress: number; currentStep: string; errorMessage?: string | null; resultDocumentId?: string | null; createdAt: string };
 const suggestions: [string, string][] = [["Explain a topic from my uploaded Electrical Principles notes.", "💡"], ["Create a catch-up plan from verified lecture records.", "🗓"], ["Draft a clear WhatsApp class announcement.", "✎"], ["Summarise the latest uploaded lecture material.", "📄"]];
 export default function AIWorkspace({ initialKind = "announcement" }: { initialKind?: string } = {}) {
-  const [prompt, setPrompt] = useState(""); const [messages, setMessages] = useState<Message[]>([]); const [busy, setBusy] = useState(false); const [status, setStatus] = useState(""); const [error, setError] = useState(""); const [kind, setKind] = useState(initialKind); const [queued, setQueued] = useState(0); const [voicePanelOpen, setVoicePanelOpen] = useState(false); const processingRef = useRef(false);
+  const [prompt, setPrompt] = useState(""); const [messages, setMessages] = useState<Message[]>([]); const [busy, setBusy] = useState(false); const [status, setStatus] = useState(""); const [error, setError] = useState(""); const [kind, setKind] = useState(initialKind); const [queued, setQueued] = useState(0); const [voicePanelOpen, setVoicePanelOpen] = useState(false); const [tasks, setTasks] = useState<AvaTask[]>([]); const processingRef = useRef(false);
 
   const queueRequest = useCallback(async (item: Omit<QueuedAIRequest, "id" | "createdAt">, requestId = crypto.randomUUID()) => {
     if (!offlineDB) throw new Error("Offline request storage is unavailable in this browser.");
     await offlineDB.aiQueue.put({ ...item, id: requestId, createdAt: new Date().toISOString() });
     setQueued(await offlineDB.aiQueue.count());
+  }, []);
+
+  const refreshTasks = useCallback(async () => {
+    try {
+      const response = await fetch("/api/ai/tasks", { cache: "no-store" });
+      if (response.ok) { const data = await response.json(); setTasks(data.tasks || []); }
+    } catch { /* Task status is refreshed on the next poll. */ }
   }, []);
 
   const processQueue = useCallback(async () => {
@@ -57,6 +65,12 @@ export default function AIWorkspace({ initialKind = "announcement" }: { initialK
     if (navigator.onLine) void processQueue();
     return () => window.removeEventListener("online", online);
   }, [processQueue]);
+
+  useEffect(() => {
+    void refreshTasks();
+    const timer = window.setInterval(() => void refreshTasks(), 5000);
+    return () => window.clearInterval(timer);
+  }, [refreshTasks]);
 
   async function ask(text = prompt, spoken = false) {
     if (!text.trim() || busy) return;
