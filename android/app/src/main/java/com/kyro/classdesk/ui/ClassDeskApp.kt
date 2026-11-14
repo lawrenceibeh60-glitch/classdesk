@@ -153,6 +153,16 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
     var assignments by remember { mutableStateOf<List<AssignmentDto>>(emptyList()) }
     var moduleLoading by remember { mutableStateOf(false) }
     var moduleError by remember { mutableStateOf<String?>(null) }
+    var showCourseDialog by remember { mutableStateOf(false) }
+    var showAssignmentDialog by remember { mutableStateOf(false) }
+    var courseCode by remember { mutableStateOf("") }
+    var courseName by remember { mutableStateOf("") }
+    var lecturer by remember { mutableStateOf("") }
+    var semester by remember { mutableStateOf("") }
+    var assignmentTitle by remember { mutableStateOf("") }
+    var assignmentDetails by remember { mutableStateOf("") }
+    var assignmentDueAt by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val secureStore = remember { ApiClient.cookies(context) }
     LaunchedEffect(selected) {
@@ -238,6 +248,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                 }
             } else if (selected == "Courses") {
                 Text("COURSE REGISTER", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
+                Button(onClick = { showCourseDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD COURSE") }
                 if (moduleLoading) CircularProgressIndicator(color = Cyan)
                 moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
                 if (!moduleLoading && courses.isEmpty()) Text("No courses have been added yet.", color = Muted)
@@ -247,11 +258,42 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                             Text(course.code, color = Cyan, fontWeight = FontWeight.Bold)
                             Text(course.name, color = Color.White, fontWeight = FontWeight.SemiBold)
                             Text(listOfNotNull(course.lecturer, course.semester).joinToString("  /  "), color = Muted, fontSize = 12.sp)
+                            if (user.role == "CLASS_REP") TextButton(onClick = {
+                                scope.launch {
+                                    val deleted = api.deleteAcademic("courses", course.id)
+                                    if (deleted.isSuccessful) courses = api.courses().body()?.items.orEmpty()
+                                    else moduleError = "Could not delete this course (${deleted.code()})."
+                                }
+                            }) { Text("DELETE COURSE", color = Color(0xFFFF7D78), fontSize = 10.sp) }
                         }
                     }
                 }
+                if (showCourseDialog) AlertDialog(
+                    onDismissRequest = { showCourseDialog = false },
+                    title = { Text("Add course") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(courseCode, { courseCode = it }, label = { Text("Course code") }, singleLine = true)
+                            OutlinedTextField(courseName, { courseName = it }, label = { Text("Course name") }, singleLine = true)
+                            OutlinedTextField(lecturer, { lecturer = it }, label = { Text("Lecturer (optional)") }, singleLine = true)
+                            OutlinedTextField(semester, { semester = it }, label = { Text("Semester (optional)") }, singleLine = true)
+                        }
+                    },
+                    confirmButton = { TextButton(onClick = {
+                        scope.launch {
+                            val saved = api.createAcademic(mapOf("resource" to "courses", "code" to courseCode.trim(), "name" to courseName.trim(), "lecturer" to lecturer.trim(), "semester" to semester.trim()))
+                            if (saved.isSuccessful) {
+                                courses = api.courses().body()?.items.orEmpty()
+                                courseCode = ""; courseName = ""; lecturer = ""; semester = ""
+                                showCourseDialog = false
+                            } else moduleError = "Course could not be saved (${saved.code()})."
+                        }
+                    }, enabled = courseCode.isNotBlank() && courseName.isNotBlank()) { Text("SAVE") } },
+                    dismissButton = { TextButton(onClick = { showCourseDialog = false }) { Text("CANCEL") } }
+                )
             } else if (selected == "Tasks") {
                 Text("ASSIGNMENTS / DEADLINES", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
+                Button(onClick = { showAssignmentDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD ASSIGNMENT") }
                 if (moduleLoading) CircularProgressIndicator(color = Cyan)
                 moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
                 if (!moduleLoading && assignments.isEmpty()) Text("No assignments have been recorded.", color = Muted)
@@ -260,9 +302,48 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                         Column(Modifier.padding(14.dp)) {
                             Text(item.title, color = Color.White, fontWeight = FontWeight.SemiBold)
                             Text(listOfNotNull(item.course?.code, item.dueAt, item.status).joinToString("  /  "), color = Muted, fontSize = 12.sp)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(onClick = {
+                                    scope.launch {
+                                        val next = if (item.status == "DONE") "TODO" else "DONE"
+                                        val saved = api.updateAcademic(mapOf("resource" to "assignments", "id" to item.id, "status" to next))
+                                        if (saved.isSuccessful) assignments = api.assignments().body()?.items.orEmpty()
+                                        else moduleError = "Assignment status could not be updated (${saved.code()})."
+                                    }
+                                }) { Text(if (item.status == "DONE") "REOPEN" else "MARK DONE", color = Cyan, fontSize = 10.sp) }
+                                if (user.role == "CLASS_REP") TextButton(onClick = {
+                                    scope.launch {
+                                        val deleted = api.deleteAcademic("assignments", item.id)
+                                        if (deleted.isSuccessful) assignments = api.assignments().body()?.items.orEmpty()
+                                        else moduleError = "Assignment could not be deleted (${deleted.code()})."
+                                    }
+                                }) { Text("DELETE", color = Color(0xFFFF7D78), fontSize = 10.sp) }
+                            }
                         }
                     }
                 }
+                if (showAssignmentDialog) AlertDialog(
+                    onDismissRequest = { showAssignmentDialog = false },
+                    title = { Text("Add assignment") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(assignmentTitle, { assignmentTitle = it }, label = { Text("Assignment title") }, singleLine = true)
+                            OutlinedTextField(assignmentDetails, { assignmentDetails = it }, label = { Text("Details") }, minLines = 2)
+                            OutlinedTextField(assignmentDueAt, { assignmentDueAt = it }, label = { Text("Due date (ISO date/time, optional)") }, singleLine = true)
+                        }
+                    },
+                    confirmButton = { TextButton(onClick = {
+                        scope.launch {
+                            val saved = api.createAcademic(mapOf("resource" to "assignments", "title" to assignmentTitle.trim(), "details" to assignmentDetails.trim(), "dueAt" to assignmentDueAt.trim()))
+                            if (saved.isSuccessful) {
+                                assignments = api.assignments().body()?.items.orEmpty()
+                                assignmentTitle = ""; assignmentDetails = ""; assignmentDueAt = ""
+                                showAssignmentDialog = false
+                            } else moduleError = "Assignment could not be saved (${saved.code()}). Check the due date format."
+                        }
+                    }, enabled = assignmentTitle.isNotBlank()) { Text("SAVE") } },
+                    dismissButton = { TextButton(onClick = { showAssignmentDialog = false }) { Text("CANCEL") } }
+                )
             } else {
                 AvaVoiceScreen(api)
             }
