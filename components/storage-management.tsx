@@ -69,7 +69,7 @@ export default function StorageManagement() {
     }
   }, []);
 
-  useEffect(() => { void refresh(); void loadAuditEvents(); }, [refresh]);
+  useEffect(() => { void refresh(); void loadAuditEvents(); }, [refresh, loadAuditEvents]);
 
   async function deleteDocument(document: StoredDocument) {
     setBusy(true);
@@ -124,7 +124,7 @@ export default function StorageManagement() {
     } finally { setSqlBusy(false); }
   }
 
-  async function loadAuditEvents() {
+  const loadAuditEvents = useCallback(async () => {
     try {
       const response = await fetch("/api/ai/tools", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -133,7 +133,7 @@ export default function StorageManagement() {
       const result = await response.json();
       if (response.ok) setAuditEvents(result.events || []);
     } catch { /* The audit history can be refreshed separately. */ }
-  }
+  }, []);
 
   async function cleanup() {
     if (confirmation !== "CLEANUP_CLASSDESK_SQL") return;
