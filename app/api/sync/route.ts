@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { assertSameOrigin } from "@/lib/http";
+import { assertSameOrigin, requireStaff } from "@/lib/http";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
