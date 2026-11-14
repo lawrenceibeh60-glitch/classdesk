@@ -23,5 +23,16 @@ const sourceFiles = readdirSync(root, { recursive: true }).filter((file) => type
 const sourceText = sourceFiles.map((file) => read(file)).join("\n");
 assert.ok(!/NEXT_PUBLIC_(?:AI_API_KEY|OPENAI_API_KEY|SESSION_SECRET|S3_SECRET_ACCESS_KEY)/.test(sourceText), "A server secret appears to be exposed through a NEXT_PUBLIC variable");
 assert.ok(sourceText.includes("assertSameOrigin") && sourceText.includes("rateLimit"), "Mutation origin checks or rate limiting are missing");
+const authSource = read("lib/auth.ts");
+assert.match(authSource, /CLASS_REP_PASSWORD_HASH/, "Primary account credential configuration is missing");
+assert.match(authSource, /ASSISTANT_REP_PASSWORD_HASH/, "Assistant account credential configuration is missing");
+assert.match(authSource, /ASSISTANT_REP/, "Assistant role identity is missing");
+assert.match(read("app/api/auth/login/route.ts"), /authenticateCredentials/, "Two-account login handler is missing");
+assert.match(read("app/api/auth/me/route.ts"), /getSession/, "Current account identity endpoint is missing");
+assert.ok(!existsSync(join(root, "app/api/auth/register/route.ts")), "Public account registration must remain disabled");
+assert.match(read("app/api/backup/restore/route.ts"), /requirePrimaryAdmin/, "Backup restore must be restricted to the primary account");
+assert.match(read("app/api/announcements/route.ts"), /requirePrimaryAdmin/, "Announcement approval and publication must be restricted to the primary account");
+assert.match(read("app/api/academic/route.ts"), /requirePrimaryAdmin/, "Academic record deletion must be restricted to the primary account");
+
 assert.ok(sourceText.includes("UNTRUSTED_CLASS_MATERIAL") && sourceText.includes("UNTRUSTED_CLASS_SOURCES"), "AI retrieval boundaries are missing");
 console.log(`Source structure checks passed. ${requiredModels.length} models, ${migrationDirs.length} migrations, academic APIs and pages present.`);
