@@ -33,7 +33,7 @@ export async function GET() {
     // Some hosted Postgres roles restrict database-size introspection.
   }
   try {
-    const sizes = await db.$queryRaw<Array<{ table: string; bytes: bigint | string }>>`SELECT relname AS table, pg_total_relation_size(relid) AS bytes FROM pg_catalog.pg_statio_user_tables ORDER BY pg_total_relation_size(relid) DESC LIMIT 10`;
+    const sizes = await db.$queryRaw<Array<{ table: string; bytes: bigint | string }>>`SELECT relname AS "table", pg_total_relation_size(relid) AS bytes FROM pg_catalog.pg_statio_user_tables ORDER BY pg_total_relation_size(relid) DESC LIMIT 10`;
     tableSizes = sizes.map((row) => ({ table: row.table, bytes: Number(row.bytes) }));
   } catch {
     // Table-level size details are optional; row counts and total size remain available.
