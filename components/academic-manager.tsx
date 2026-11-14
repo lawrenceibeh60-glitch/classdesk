@@ -132,6 +132,7 @@ export default function AcademicManager({ mode, isPrimaryAdmin }: { mode: Mode; 
     finally { setBusy(false); }
   }
   async function update(id: string, changes: Record<string, unknown>) {
+    if (mode === "courses" && changes.active === false && !isPrimaryAdmin) { setMessage("Only the Class Representative can deactivate a course."); return; }
     const payload = { resource: mode, id, ...changes };
     if (!navigator.onLine) { await queueOffline("PATCH", payload); await load(); setMessage("Change saved offline; sync will resume when online."); return; }
     try { const response = await fetch("/api/academic", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || "Update failed"); await load(); }
@@ -168,7 +169,7 @@ export default function AcademicManager({ mode, isPrimaryAdmin }: { mode: Mode; 
           <div className="actions"><button className="btn ghost" onClick={() => edit(item)}>Edit</button>
             {mode === "assignments" && <button className="btn" onClick={() => { const next = item.status === "TODO" ? "IN_PROGRESS" : item.status === "IN_PROGRESS" ? "DONE" : "TODO"; void update(item.id, { status: next }); }}>{item.status === "TODO" ? "Start" : item.status === "IN_PROGRESS" ? "Mark done" : "Reopen"}</button>}
             {mode === "concerns" && <button className="btn" onClick={() => void update(item.id, { status: item.status === "RESOLVED" ? "OPEN" : "RESOLVED" })}>{item.status === "RESOLVED" ? "Reopen" : "Resolve"}</button>}
-            {mode === "courses" && <button className="btn" onClick={() => void update(item.id, { active: !item.active })}>{item.active ? "Deactivate" : "Activate"}</button>}
+            {mode === "courses" && (!item.active || isPrimaryAdmin) && <button className="btn" onClick={() => void update(item.id, { active: !item.active })}>{item.active ? "Deactivate" : "Activate"}</button>}
             {isPrimaryAdmin && <button className="btn ghost" onClick={() => void remove(item.id)}>Delete</button>}</div>
         </div>) : <div className="empty">No items yet. Add your first entry here.</div>}
       </div>
