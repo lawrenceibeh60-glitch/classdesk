@@ -264,4 +264,5 @@ model AiWorkerState {
   id String @id
   startedAt DateTime @default(now())
   lastSeenAt DateTime @updatedAt
+  @@index([lastSeenAt])
 }
