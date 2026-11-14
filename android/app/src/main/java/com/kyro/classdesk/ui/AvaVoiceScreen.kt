@@ -187,17 +187,7 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
                 })
             }
         }
-        val engine = TextToSpeech(context) { status ->
-            ttsReady = status == TextToSpeech.SUCCESS
-            if (status == TextToSpeech.SUCCESS) {
-                speech?.language = Locale.UK
-                val britishVoices = speech?.voices?.filter { it.locale.language == "en" && it.locale.country == "GB" }.orEmpty()
-                val preferredVoice = britishVoices.firstOrNull { it.name.contains("female", ignoreCase = true) }
-                    ?: britishVoices.firstOrNull { !it.isNetworkConnectionRequired }
-                    ?: britishVoices.firstOrNull()
-                if (preferredVoice != null) speech?.voice = preferredVoice
-            }
-        }
+        val engine = TextToSpeech(context) { status -> ttsReady = status == TextToSpeech.SUCCESS }
         speech = engine
         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) { speaking = true }
@@ -218,6 +208,17 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
             runCatching { audioPlayer?.stop() }
             runCatching { audioPlayer?.release() }
             audioPlayer = null
+        }
+    }
+
+    LaunchedEffect(ttsReady) {
+        if (ttsReady) {
+            speech?.language = Locale.UK
+            val britishVoices = speech?.voices?.filter { it.locale.language == "en" && it.locale.country == "GB" }.orEmpty()
+            val preferredVoice = britishVoices.firstOrNull { it.name.contains("female", ignoreCase = true) }
+                ?: britishVoices.firstOrNull { !it.isNetworkConnectionRequired }
+                ?: britishVoices.firstOrNull()
+            if (preferredVoice != null) speech?.voice = preferredVoice
         }
     }
 
