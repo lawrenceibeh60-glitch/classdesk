@@ -16,7 +16,7 @@ assert.match(schema, /CALENDAR\s+TIMETABLE/, "Calendar and timetable record type
 assert.match(migrationSql, /ALTER TYPE "RecordType" ADD VALUE IF NOT EXISTS 'CALENDAR'/, "Calendar record migration is missing");
 assert.match(read("components/dashboard.tsx"), /resolveConflict/, "User conflict resolution controls are missing");
 for (const route of ["app/api/academic/route.ts", "app/api/announcements/route.ts", "app/api/sync/route.ts", "app/api/backup/restore/route.ts", "app/api/export/catch-up/route.ts", "app/api/export/weekly/route.ts", "app/api/export/calendar/route.ts"]) assert.ok(existsSync(join(root, route)), `Missing route: ${route}`);
-for (const page of ["courses", "lectures", "assignments", "attendance", "concerns", "calendar"]) assert.ok(existsSync(join(root, `app/${page}/page.tsx`)), `Missing page: ${page}`);
+for (const page of ["courses", "lectures", "assignments", "attendance", "concerns", "calendar", "coverage"]) assert.ok(existsSync(join(root, `app/${page}/page.tsx`)), `Missing page: ${page}`);
 assert.ok(pkg.dependencies?.next && pkg.dependencies?.react && pkg.dependencies?.["@prisma/client"], "Core runtime dependencies are missing");
 assert.ok(pkg.scripts?.build?.includes("prisma generate") && pkg.scripts?.typecheck, "Build/typecheck scripts are missing");
 const sourceFiles = readdirSync(root, { recursive: true }).filter((file) => typeof file === "string" && /\.(?:ts|tsx|js|jsx)$/.test(file) && !file.startsWith("node_modules/") && !file.startsWith(".next/") && !file.startsWith("desktop/node_modules/") && !file.startsWith("desktop/payload/") && !file.startsWith("dist-desktop/"));
