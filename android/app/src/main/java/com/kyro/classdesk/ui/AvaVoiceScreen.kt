@@ -192,7 +192,7 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
                                                 audioPlayer = null
                                                 runCatching { outputFile.delete() }
                                                 audioFile = null
-                                                if (sessionActive && pendingDelete == null) startRecognition()
+                                                sessionActive = false
                                             }
                                             player.setOnErrorListener { failed, _, _ ->
                                                 speaking = false
@@ -227,12 +227,15 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) { speaking = true }
             override fun onDone(utteranceId: String?) {
+                // One tap authorizes one spoken request. The next request requires another tap.
                 speaking = false
-                // Continue the user-started voice session after Ava finishes speaking.
-                // stopSession() clears sessionActive, so this can never reopen the mic after End.
-                if (sessionActive) startRecognition()
+                sessionActive = false
             }
-            override fun onError(utteranceId: String?) { speaking = false; error = "Ava's speech output failed." }
+            override fun onError(utteranceId: String?) {
+                speaking = false
+                sessionActive = false
+                error = "Ava's speech output failed."
+            }
         })
         onDispose {
             // Leaving the voice screen always ends the user-started session. Never let a late
@@ -323,11 +326,11 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
         OutlinedButton(onClick = { stopSession(); error = null }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(6.dp)) {
             Text("END VOICE SESSION", color = Color(0xFFF2C94C))
         }
-        Text("MICROPHONE IS ONLY USED AFTER YOU TAP ACTIVATE. NO BACKGROUND LISTENING.", color = Color(0xFF91A4B8), fontSize = 9.sp, letterSpacing = 0.6.sp)
+        Text("ONE TAP / ONE VOICE REQUEST. TAP ACTIVATE AGAIN FOR YOUR NEXT REQUEST. NO BACKGROUND LISTENING.", color = Color(0xFF91A4B8), fontSize = 9.sp, letterSpacing = 0.6.sp)
     }
     pendingDelete?.let { action ->
         AlertDialog(
-            onDismissRequest = { pendingDelete = null; if (sessionActive) startRecognition() },
+            onDismissRequest = { pendingDelete = null; sessionActive = false },
             title = { Text("Confirm permanent deletion") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -355,14 +358,14 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
                             }
                             response = "Verified: " + action.title + " was deleted from the ClassDesk database" + if (action.originalInSharedStorage) " and shared storage." else "."
                             pendingDelete = null
-                            if (sessionActive) startRecognition()
+                            sessionActive = false
                         } catch (e: Exception) {
                             error = e.message ?: "Permanent deletion failed."
                         }
                     }
                 }) { Text("DELETE PERMANENTLY", color = Color(0xFFFF7D78)) }
             },
-            dismissButton = { TextButton(onClick = { pendingDelete = null; if (sessionActive) startRecognition() }) { Text("CANCEL") } }
+            dismissButton = { TextButton(onClick = { pendingDelete = null; sessionActive = false }) { Text("CANCEL") } }
         )
     }
 }
