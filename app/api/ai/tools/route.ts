@@ -132,8 +132,8 @@ export async function POST(req: NextRequest) {
     if (!query || query.length > 4000 || !/^SELECT\b/i.test(query)) {
       return NextResponse.json({ error: "Only a single SELECT statement of at most 4,000 characters is allowed." }, { status: 400 });
     }
-    if (/[;]|--|\/\*|\*\/|\bFOR\s+UPDATE\b|\bINTO\s+OUTFILE\b|\bINTO\s+DUMPFILE\b/i.test(query) ||
-        /\b(pg_catalog|information_schema|pg_read_file|pg_ls_dir|pg_sleep|dblink|set_config|current_setting|lo_import|lo_export|nextval|setval)\b/i.test(query)) {
+    if (/[;]|--|\/\*|\*\/|\bFOR\s+(?:UPDATE|SHARE|NO\s+KEY\s+UPDATE|KEY\s+SHARE)\b|\bINTO\b/i.test(query) ||
+        /\b(pg_[a-z0-9_]+|information_schema|dblink|set_config|current_setting|lo_import|lo_export|nextval|setval)\b/i.test(query)) {
       return NextResponse.json({ error: "This SQL contains a disallowed statement, comment, system catalogue or side-effect function." }, { status: 400 });
     }
     const tableRefs = [...query.matchAll(/\b(?:FROM|JOIN)\s+"?([A-Za-z_][A-Za-z0-9_]*)"?/gi)].map(match => match[1]);
