@@ -111,3 +111,5 @@ assert.match(academicManagerSource, /if \(!isPrimaryAdmin\).*Only the Class Repr
 assert.match(announcementStudioSource, /if \(!isPrimaryAdmin\).*Only the Class Representative can delete announcements/, "Announcement deletion handler must enforce primary-admin access");
 assert.match(recordsManagerSource, /if \(!isPrimaryAdmin\).*Only the Class Representative can delete records/, "Record deletion handler must enforce primary-admin access");
 assert.match(recordsManagerSource, /if \(!queuedUpload && !isPrimaryAdmin\)/, "Stored document deletion must be restricted to the primary account");
+
+assert.ok(!avaWorkspace.includes("altKey") && !avaWorkspace.includes("Alt+A"), "Only the microphone button may activate Ava voice mode");
