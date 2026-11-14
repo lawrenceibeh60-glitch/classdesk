@@ -660,6 +660,7 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                                         val store = OfflineStore(context)
                                         try {
                                             store.enqueue(PendingMutation(UUID.randomUUID().toString(), user.username, item.id, "delete", item.version, "{}"))
+                                            ClassDeskSyncScheduler.scheduleNow(context)
                                             calendarItems = calendarItems.filterNot { it.id == item.id }
                                             secureStore.saveSnapshot("calendar", Gson().toJson(calendarItems))
                                             moduleError = "Deletion saved on this device and queued for synchronization."
@@ -708,6 +709,7 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                             val store = OfflineStore(context)
                             try {
                                 store.enqueue(PendingMutation(UUID.randomUUID().toString(), user.username, localId, "upsert", 0, Gson().toJson(payload)))
+                                ClassDeskSyncScheduler.scheduleNow(context)
                                 calendarItems = listOf(AcademicRecordDto(localId, calendarType, calendarTitle.trim(), calendarContent.trim(), normalizedDate, "ACTIVE", 1)) + calendarItems
                                 secureStore.saveSnapshot("calendar", Gson().toJson(calendarItems))
                                 moduleError = "Saved on this device. It will sync when the network returns."
