@@ -38,6 +38,7 @@ fun AvaTasksScreen(api: ClassDeskApi) {
     var tasks by remember { mutableStateOf<List<AvaTaskDto>>(emptyList()) }
     var prompt by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
+    var workerOnline by remember { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var kind by remember { mutableStateOf("assignment_pdf") }
@@ -47,7 +48,7 @@ fun AvaTasksScreen(api: ClassDeskApi) {
     suspend fun refresh() {
         try {
             val taskResponse = api.avaTasks()
-            if (taskResponse.isSuccessful) tasks = taskResponse.body()?.tasks.orEmpty()
+            if (taskResponse.isSuccessful) { tasks = taskResponse.body()?.tasks.orEmpty(); workerOnline = taskResponse.body()?.workerOnline == true }
             else error = "Could not refresh Ava tasks (HTTP ${taskResponse.code()})."
         } catch (_: Exception) {
             error = "Ava task service is temporarily unavailable."
@@ -91,6 +92,7 @@ fun AvaTasksScreen(api: ClassDeskApi) {
     ) {
         Text("AVA / BACKGROUND TASKS", color = AvaGold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
         Text("Choose uploaded material and let Ava work on it. Jobs continue on the server after you leave this screen.", color = AvaMuted, fontSize = 12.sp)
+        Text(if (workerOnline) "BACKGROUND WORKER ONLINE" else "BACKGROUND WORKER OFFLINE — background tasks are unavailable until the worker is started.", color = if (workerOnline) Color(0xFF7DD3A7) else AvaGold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         Text("TASK TYPE", color = AvaCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = kind == "assignment_pdf", onClick = { kind = "assignment_pdf" }, label = { Text("Worked assignment PDF") })
@@ -133,7 +135,7 @@ fun AvaTasksScreen(api: ClassDeskApi) {
                     finally { creating = false }
                 }
             },
-            enabled = selectedIds.isNotEmpty() && !creating,
+            enabled = selectedIds.isNotEmpty() && !creating && workerOnline,
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = AvaCyan, contentColor = AvaCanvas),
             shape = RoundedCornerShape(6.dp)
