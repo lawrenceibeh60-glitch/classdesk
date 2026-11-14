@@ -3,13 +3,16 @@
 Native Android client workspace for the existing ClassDesk service.
 
 ## Architecture
-- Kotlin + Jetpack Compose native screens.
+
+- Kotlin + Jetpack Compose native screens and navigation shell.
 - Retrofit + OkHttp for the existing Next.js API.
-- EncryptedSharedPreferences-backed storage for the server session cookie.
-- Room and WorkManager are planned for offline drafts and deferred sync.
-- Microphone permission is declared for Ava; it is not requested at startup.
+- EncryptedSharedPreferences-backed session cookies, offline profile and read-only snapshots.
+- Android Keystore AES-GCM encryption for queued offline mutation payloads.
+- SQLite outbox and WorkManager network-constrained sync foundation.
+- Native SpeechRecognizer and TextToSpeech for Ava; microphone permission is requested only after the user taps Activate.
 
 ## Configure the API
+
 Set this Gradle property in local \`android/gradle.properties\` (do not commit private configuration):
 
 \`\`\`properties
@@ -19,24 +22,32 @@ CLASSDESK_API_BASE_URL=https://YOUR-CLASSDESK-HOST/
 You can also set the \`CLASSDESK_API_BASE_URL\` environment variable. The default example host is deliberately non-production; sign-in will not work until a real HTTPS origin is configured.
 
 ## Build
+
 Requirements: Android Studio with Android SDK 35 and JDK 17.
 
 Open the \`android/\` folder in Android Studio, allow Gradle sync, install the SDK components, and run on an emulator or physical Android device. From a machine with Gradle installed, run \`gradle assembleDebug\` inside this folder.
 
-## First working slice
-- Native Compose app shell and dark ClassDesk visual language.
-- Login via \`POST /api/auth/login\`.
-- Session restoration via \`GET /api/auth/me\`.
-- Encrypted persistence of the server session cookie.
-- Live overview via \`GET /api/academic?resource=summary\`.
-- Sign-out clears locally stored session cookies.
+## Implemented first slice
 
-## Remaining native modules
-1. Courses, lectures, assignments, attendance and concerns.
-2. Room offline cache and mutation outbox with conflict handling.
-3. Document picker, upload, downloads, sharing and exports.
-4. Ava graphical voice interface and explicit microphone permission.
-5. Push notifications, sync scheduling and lifecycle resilience.
-6. Accessibility, instrumentation tests, release signing and APK/AAB packaging.
+- Native sign-in against \`POST /api/auth/login\`.
+- Session restoration against \`GET /api/auth/me\`.
+- Encrypted persistence of the server session cookie and last authenticated profile.
+- Native command-centre overview with live summary and upcoming assignments.
+- Native course register with list, add and primary-admin delete.
+- Native assignments with list, add, mark done/reopen and primary-admin delete.
+- Encrypted local snapshots for overview, courses and assignments; cached data is read-only while offline.
+- SQLite mutation outbox, AES-GCM payload encryption using Android Keystore, and WorkManager sync against the existing versioned \`/api/sync\` endpoint.
+- Ava graphical voice panel using Android speech recognition, ClassDesk AI chat and device text-to-speech. It does not request microphone access until Activate is tapped.
+- Custom ClassDesk launcher icon and HTTPS-only network policy.
 
-No deployment or production database changes are performed by this Android project.
+## Remaining implementation slices
+
+1. Finish native lecture register, attendance, concerns and records workflows.
+2. Add offline mutation creation and a review screen for queued, rejected and conflicted changes.
+3. Add document picker, uploads, downloads, sharing and exports.
+4. Add announcement drafting, approval workflow and calendar/timetable screens.
+5. Improve Ava lifecycle recovery, speech-service fallbacks and accessibility.
+6. Add unit/instrumentation tests, API contract tests and real-device acceptance testing.
+7. Configure the production API origin, generate Gradle wrapper, sign a release build and package APK/AAB.
+
+No deployment or production database changes are performed by this Android project. Do not treat the APK as release-ready until Gradle build, device tests, authentication, offline recovery and API integration tests pass.
