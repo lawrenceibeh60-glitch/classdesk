@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - feature/android-parity-completion
+      - work/**
     paths:
       - "android/**"
       - ".github/workflows/android-verify.yml"
