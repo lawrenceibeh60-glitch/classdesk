@@ -1,4 +1,4 @@
-const CACHE = "classdesk-shell-v4";
+const CACHE = "classdesk-shell-v5";
 const SHELL = ["/login", "/manifest.webmanifest", "/icon.svg"];
 const CACHEABLE_APP_SHELLS = new Set(["/", "/records", "/notes", "/announcements", "/assistant", "/catch-up", "/courses", "/lectures", "/assignments", "/attendance", "/concerns", "/settings", "/coverage", "/calendar"]);
 self.addEventListener("install", (event) => {
@@ -27,7 +27,14 @@ self.addEventListener("fetch", (event) => {
 
   if (request.mode === "navigate" && CACHEABLE_APP_SHELLS.has(url.pathname)) {
     event.respondWith(fetch(request).then((response) => {
-      if (response.ok && !response.redirected) caches.open(CACHE).then((cache) => cache.put(request, response.clone()));
+      // Authenticated Next.js pages can contain role-specific props or account data.
+      // Cache only explicitly public responses; never persist private/no-store HTML
+      // that could be replayed after switching between the two staff accounts.
+      const cacheControl = response.headers.get("Cache-Control") || "";
+      const explicitlyPublic = /public/i.test(cacheControl) && !/private|no-store|no-cache/i.test(cacheControl);
+      if (response.ok && !response.redirected && explicitlyPublic) {
+        caches.open(CACHE).then((cache) => cache.put(request, response.clone()));
+      }
       return response;
     }).catch(async () => (await caches.match(request)) || (await caches.match("/login")) || new Response("You are offline. Reconnect to open ClassDesk.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } })));
   }
