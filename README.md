@@ -16,6 +16,13 @@ Private academic administration and intelligence workspace for the ND1 Electrica
 
 Hybrid PWA: online application with local offline drafts/queue. PostgreSQL is the authoritative shared database; browser storage is a temporary offline cache, not the only copy. AI and remote document processing require connectivity.
 
+## Ava voice architecture
+
+- **AI reasoning:** Ava sends chat requests to the configured xKiro-compatible endpoint through the server-side AI_BASE_URL, AI_API_KEY, and AI_MODEL settings.
+- **Website speech-to-text:** the browser's Web Speech API (SpeechRecognition / webkitSpeechRecognition) handles transcription. It starts only after the user taps the microphone; no paid transcription API or server-side audio-upload route is used.
+- **Android speech-to-text:** the native Android SpeechRecognizer is used, preferring Android's on-device recognizer when the device and installed language pack support it, with the platform recognition service as fallback. Microphone permission is requested only after the user taps Activate.
+- **Spoken responses:** ElevenLabs is used when configured; browser speech synthesis and Android TextToSpeech provide device-native fallbacks.
+- **Voice privacy:** the microphone is not activated automatically on page load or app launch. The user explicitly starts and ends each voice session.
 ## Application modules
 
 1. Command centre and task overview

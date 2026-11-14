@@ -65,9 +65,6 @@ function ensureConfig() {
     else fs.writeFileSync(file, [
         'ADMIN_PASSWORD=""',
         'ADMIN_PASSWORD_HASH=""',
-        'MISTRAL_API_KEY=""',
-        'MISTRAL_CHAT_MODEL="mistral-small-latest"',
-        'MISTRAL_VOICE_MODEL="voxtral-mini-latest"',
         'ELEVENLABS_API_KEY=""',
         'ELEVENLABS_VOICE_ID="pFZP5JQG7iQjIQuC4Bku"',
         'ELEVENLABS_MODEL="eleven_turbo_v2_5"',
@@ -199,7 +196,7 @@ async function start() {
   if (!env.ADMIN_PASSWORD && !env.ADMIN_PASSWORD_HASH) {
     startupLog("administrator credentials missing; opening setup config");
     await shell.openPath(cfg);
-    await dialog.showMessageBox({ type: "info", title: "AFIT ClassDesk setup", message: "First-time setup", detail: "Your API keys file opened in Notepad.\n\nType your login password between the quotes after ADMIN_PASSWORD=. Add your MISTRAL_API_KEY (chat + voice listening) and, if you like, ELEVENLABS_API_KEY (Ava\'s voice). Save, then start ClassDesk again." });
+    await dialog.showMessageBox({ type: "info", title: "AFIT ClassDesk setup", message: "First-time setup", detail: "Your API keys file opened in Notepad.\n\nType your login password between the quotes after ADMIN_PASSWORD=. Configure your xKiro-compatible AI_BASE_URL, AI_API_KEY and AI_MODEL, and, if you like, ELEVENLABS_API_KEY for Ava\'s voice. Save, then start ClassDesk again." });
     app.quit(); return;
   }
   startupLog("starting embedded PostgreSQL");

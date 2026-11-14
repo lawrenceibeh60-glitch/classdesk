@@ -77,8 +77,14 @@ assert.match(avaWorkspace, /voicePanelOpen && <div className="ava-overlay"/, "Ta
 assert.match(avaWorkspace, /if \(ava\.listening\) ava\.speak\(/, "Ava spoken replies must be limited to an active microphone session");
 assert.match(avaWorkspace, /setVoicePanelOpen\(true\); ava\.toggle\(\)/, "The microphone button must explicitly open and start voice mode");
 assert.ok(!/e\.altKey\s*&&\s*e\.key\.toLowerCase\(\)\s*===\s*"a"/.test(avaWorkspace), "Ava must only activate from the microphone button, not a keyboard shortcut");
-assert.match(avaSource, /setSupported\(hasBrowserRec \|\| \(hasMicrophoneInput && flags\.stt\)\)/, "Ava must only offer cloud microphone input when speech transcription is configured");
-assert.match(avaSource, /if \(!wantRef\.current\) \{ cleanupRef\.current\?\.\(\); cleanupRef\.current = null; return; \}/, "Ava must clean up a microphone stream if the user stops while permission is pending");
+assert.match(avaSource, /setSupported\(hasBrowserRec\)/, "Website Ava must use browser-native speech recognition");
+assert.match(avaSource, /SpeechRecognition\?: RecCtor; webkitSpeechRecognition\?: RecCtor/, "Website Ava must support standard and WebKit browser speech recognition");
+assert.ok(!avaSource.includes("MISTRAL_API_KEY") && !avaSource.includes("/api/voice/transcribe"), "Website Ava must not depend on paid server-side speech transcription");
+assert.ok(!avaSource.includes("cleanupRef"), "Website Ava must not retain the obsolete cloud microphone stream path");
+const androidVoiceSource = read("android/app/src/main/java/com/kyro/classdesk/ui/AvaVoiceScreen.kt");
+assert.match(androidVoiceSource, /SpeechRecognizer\.createOnDeviceSpeechRecognizer/, "Android Ava must prefer native on-device speech recognition when available");
+assert.match(androidVoiceSource, /SpeechRecognizer\.createSpeechRecognizer/, "Android Ava must fall back to the Android platform speech recognizer");
+assert.match(androidVoiceSource, /permission\.launch\(Manifest\.permission\.RECORD_AUDIO\)/, "Android microphone permission must only be requested after the user activates voice mode");
 assert.match(avaSource, /setTimeout\(\(\) => \{ if \(wantRef\.current\) speak\("Ava is ready\. Go ahead\."\); \}, 300\)/, "Ava must not speak a delayed startup prompt after voice mode has been stopped");
 
 const healthRoute = read("app/api/health/route.ts");

@@ -41,23 +41,6 @@ export const ACKS = ["Right away, boss.", "On it, boss.", "Of course, boss.", "C
 export const FOLLOWUPS = ["Anything else, boss?", "Anything else for me, boss?", "Shall I do anything else, boss?"];
 export const pick = (list: string[]) => list[Math.floor(Math.random() * list.length)];
 
-/** 16 kHz mono 16-bit WAV from raw microphone frames. */
-function encodeWav(chunks: Float32Array[], inRate: number) {
-  const total = chunks.reduce((n, c) => n + c.length, 0); const merged = new Float32Array(total); let o = 0;
-  for (const c of chunks) { merged.set(c, o); o += c.length; }
-  const ratio = inRate / 16000; const outLen = Math.floor(total / ratio);
-  const buf = new ArrayBuffer(44 + outLen * 2); const v = new DataView(buf);
-  const w = (at: number, str: string) => { for (let i = 0; i < str.length; i++) v.setUint8(at + i, str.charCodeAt(i)); };
-  w(0, "RIFF"); v.setUint32(4, 36 + outLen * 2, true); w(8, "WAVE"); w(12, "fmt "); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
-  v.setUint32(24, 16000, true); v.setUint32(28, 32000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, outLen * 2, true);
-  for (let i = 0; i < outLen; i++) {
-    const a = Math.floor(i * ratio), b = Math.min(total, Math.floor((i + 1) * ratio)); let s = 0;
-    for (let j = a; j < b; j++) s += merged[j];
-    const x = Math.max(-1, Math.min(1, s / Math.max(1, b - a))); v.setInt16(44 + i * 2, x < 0 ? x * 0x8000 : x * 0x7fff, true);
-  }
-  return new Blob([buf], { type: "audio/wav" });
-}
-
 export type AvaHandlers = { onCommand: (command: string) => void | Promise<void>; onStopListening?: () => void };
 
 export function useAva(handlers: AvaHandlers) {
@@ -70,10 +53,9 @@ export function useAva(handlers: AvaHandlers) {
   const [voiceError, setVoiceError] = useState("");
   const [voices, setVoices] = useState<string[]>([]);
   const [voiceName, setVoiceNameState] = useState("");
-  const [cloud, setCloud] = useState({ stt: false, tts: false });
-  const cloudRef = useRef({ stt: false, tts: false });
+  const [cloud, setCloud] = useState({ tts: false });
+  const cloudRef = useRef({ tts: false });
   const recRef = useRef<Rec | null>(null);
-  const cleanupRef = useRef<(() => void) | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playToken = useRef(0);
   const voiceRef = useRef("");
@@ -153,79 +135,62 @@ export function useAva(handlers: AvaHandlers) {
       .finally(() => setProcessing(false));
   }, []);
 
-  /** Listening with Mistral Voxtral: detect speech locally, send each phrase for transcription. */
-  const startCloud = useCallback(async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-    const ctx = new AudioContext(); const src = ctx.createMediaStreamSource(stream);
-    const proc = ctx.createScriptProcessor(4096, 1, 1); const sink = ctx.createGain(); sink.gain.value = 0;
-    src.connect(proc); proc.connect(sink); sink.connect(ctx.destination);
-    const frameMs = (4096 / ctx.sampleRate) * 1000;
-    let pre: Float32Array[] = [], seg: Float32Array[] = [], speaking = false, silent = 0, voiced = 0, floor = 0.01;
-    const send = async (blob: Blob) => {
-      try {
-        const fd = new FormData(); fd.append("file", blob, "speech.wav");
-        const r = await fetch("/api/voice/transcribe", { method: "POST", body: fd });
-        const d = await r.json().catch(() => ({}));
-        if (!r.ok) { setVoiceError(d.error || "Transcription failed"); return; }
-        setVoiceError(""); if (d.text) handleFinal(d.text);
-      } catch { setVoiceError("Couldn't reach the speech service. Check your internet."); }
-    };
-    proc.onaudioprocess = (e) => {
-      const data = new Float32Array(e.inputBuffer.getChannelData(0));
-      if (Date.now() < mutedUntil.current) { pre = []; seg = []; speaking = false; silent = voiced = 0; return; }
-      let sum = 0; for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
-      const rms = Math.sqrt(sum / data.length); const threshold = Math.max(0.02, floor * 3.5);
-      if (rms > threshold) { if (!speaking) { speaking = true; seg = [...pre]; voiced = 0; } silent = 0; voiced += frameMs; seg.push(data); }
-      else if (speaking) {
-        seg.push(data); silent += frameMs;
-        if (silent > 850 || seg.length * frameMs > 15000) { const ok = voiced > 350; const blob = ok ? encodeWav(seg, ctx.sampleRate) : null; speaking = false; seg = []; silent = voiced = 0; if (blob) void send(blob); }
-      } else { floor = floor * 0.97 + rms * 0.03; pre.push(data); if (pre.length > 4) pre.shift(); }
-    };
-    cleanupRef.current = () => { proc.onaudioprocess = null; try { proc.disconnect(); src.disconnect(); } catch { /* ignore */ } stream.getTracks().forEach(t => t.stop()); void ctx.close(); };
-  }, [handleFinal]);
-
   const startBrowserRec = useCallback(() => {
     const w = window as unknown as { SpeechRecognition?: RecCtor; webkitSpeechRecognition?: RecCtor };
     const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
-    if (!Ctor) { setVoiceError("Listening isn't supported here. Add a MISTRAL_API_KEY in keys/API-KEYS.env, or use Chrome, Edge or Safari."); wantRef.current = false; return false; }
+    if (!Ctor) { setVoiceError("This browser does not provide speech recognition. Please use a supported browser such as Chrome, Edge or Safari."); wantRef.current = false; return false; }
     const rec = new Ctor(); rec.lang = "en-NG"; rec.continuous = true; rec.interimResults = false;
     rec.onresult = (e: any) => { for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) handleFinal(e.results[i][0].transcript); };
     rec.onerror = (e) => {
-      if (e.error === "not-allowed" || e.error === "service-not-allowed") { wantRef.current = false; setListening(false); setVoiceError("Microphone permission denied. Allow it in your browser settings."); }
-      else if (e.error === "language-not-supported") rec.lang = "en-US";
-      else if (e.error === "network") { wantRef.current = false; setListening(false); setVoiceError(navigator.onLine ? "This window has no speech service. Add MISTRAL_API_KEY in keys/API-KEYS.env, or use the Edge window option." : "You're offline: listening needs internet, but typing works and Ava still speaks replies."); }
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        wantRef.current = false;
+        setListening(false);
+        setVoiceError("Microphone permission was denied. Allow microphone access in your browser settings, then tap the microphone again.");
+      } else if (e.error === "language-not-supported") {
+        rec.lang = "en-US";
+      } else if (e.error === "network") {
+        wantRef.current = false;
+        setListening(false);
+        setVoiceError(navigator.onLine
+          ? "The browser speech service could not be reached. Check your connection or try Chrome or Edge."
+          : "You're offline. Website speech recognition needs a connection; you can still type to Ava.");
+      } else if (e.error === "audio-capture") {
+        wantRef.current = false;
+        setListening(false);
+        setVoiceError("The browser could not access a microphone. Check that your microphone is connected and permitted.");
+      } else if (e.error === "aborted" && wantRef.current) {
+        wantRef.current = false;
+        setListening(false);
+        setVoiceError("The browser stopped the speech session. Tap the microphone to start a fresh session.");
+      }
     };
-    rec.onend = () => { if (wantRef.current) { try { rec.start(); } catch { /* already started */ } } else setListening(false); };
+    rec.onend = () => {
+      if (!wantRef.current) { setListening(false); return; }
+      try {
+        rec.start();
+      } catch {
+        wantRef.current = false;
+        setListening(false);
+        setVoiceError("The browser speech session stopped unexpectedly. Tap the microphone to try again.");
+      }
+    };
     recRef.current = rec;
     try { rec.start(); return true; } catch { setVoiceError("Could not start the microphone."); return false; }
   }, [handleFinal]);
 
-  const start = useCallback(async () => {
-    setVoiceError(""); wantRef.current = true;
-    if (cloudRef.current.stt && navigator.onLine) {
-      try {
-        await startCloud();
-        if (!wantRef.current) { cleanupRef.current?.(); cleanupRef.current = null; return; }
-        setListening(true);
-        setTimeout(() => { if (wantRef.current) speak("Ava is ready. Go ahead."); }, 300);
-        return;
-      } catch {
-        if (!wantRef.current) return;
-        wantRef.current = false;
-        setVoiceError("Microphone unavailable or permission denied.");
-        return;
-      }
-    }
+  const start = useCallback(() => {
+    setVoiceError("");
+    wantRef.current = true;
     if (startBrowserRec()) {
       if (!wantRef.current) { recRef.current?.abort(); recRef.current = null; return; }
       setListening(true);
       setTimeout(() => { if (wantRef.current) speak("Ava is ready. Go ahead."); }, 300);
     }
-  }, [startCloud, startBrowserRec, speak]);
+  }, [startBrowserRec, speak]);
 
   const stop = useCallback(() => {
     wantRef.current = false; awakeUntil.current = 0; setAwake(false); setListening(false); setProcessing(false);
-    recRef.current?.abort(); recRef.current = null; cleanupRef.current?.(); cleanupRef.current = null; stopSpeaking();
+    recRef.current?.abort(); recRef.current = null; stopSpeaking();
     handlersRef.current.onStopListening?.();
   }, [stopSpeaking]);
 
@@ -233,18 +198,16 @@ export function useAva(handlers: AvaHandlers) {
 
   useEffect(() => {
     const w = window as any; const hasBrowserRec = Boolean(w.SpeechRecognition || w.webkitSpeechRecognition);
-    const hasMicrophoneInput = Boolean(navigator.mediaDevices?.getUserMedia);
     setSupported(hasBrowserRec);
     fetch("/api/health").then(r => r.json()).then(d => {
-      const flags = { stt: Boolean(d.sttConfigured), tts: Boolean(d.ttsConfigured) };
+      const flags = { tts: Boolean(d.ttsConfigured) };
       cloudRef.current = flags;
       setCloud(flags);
-      setSupported(hasBrowserRec || (hasMicrophoneInput && flags.stt));
-    }).catch(() => { setSupported(hasBrowserRec); });
+    }).catch(() => { setCloud({ tts: false }); });
     const loadVoices = () => setVoices(window.speechSynthesis?.getVoices().filter(v => v.lang.toLowerCase().startsWith("en")).map(v => v.name) || []);
     try { const saved = localStorage.getItem("ava-voice"); if (saved) { voiceRef.current = saved; setVoiceNameState(saved); } } catch { /* ignore */ }
     loadVoices(); window.speechSynthesis?.addEventListener?.("voiceschanged", loadVoices);
-    return () => { window.speechSynthesis?.removeEventListener?.("voiceschanged", loadVoices); wantRef.current = false; recRef.current?.abort(); cleanupRef.current?.(); stopSpeaking(); };
+    return () => { window.speechSynthesis?.removeEventListener?.("voiceschanged", loadVoices); wantRef.current = false; recRef.current?.abort(); stopSpeaking(); };
   }, [stopSpeaking]);
 
   return { supported, listening, speaking, processing, awake, heard, voiceError, toggle, stop, speak, shutUp, voices, voiceName, setVoiceName, cloud };
