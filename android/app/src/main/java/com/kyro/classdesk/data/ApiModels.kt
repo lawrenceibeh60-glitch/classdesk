@@ -17,3 +17,7 @@ data class SyncPushRequest(val mutations: List<SyncMutationDto>)
 data class SyncConflictDto(val id: String, val entityId: String, val reason: String)
 data class SyncRejectedDto(val id: String, val reason: String)
 data class SyncPushResponse(val appliedIds: List<String>?, val conflicts: List<SyncConflictDto>?, val rejected: List<SyncRejectedDto>?)
+
+data class ChatRequest(val message: String, val voice: Boolean = true, val history: List<ChatHistoryItem> = emptyList())
+data class ChatHistoryItem(val role: String, val content: String)
+data class ChatResponse(val answer: String?, val error: String?)
