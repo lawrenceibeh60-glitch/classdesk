@@ -38,19 +38,22 @@ suspend fun saveAcademicMutation(
         }
         OfflineMutationResult(response.isSuccessful, statusCode = response.code(), message = response.errorBody()?.string())
     } catch (_: Exception) {
-        val store = OfflineStore(context)
         try {
-            store.enqueue(PendingMutation(
-                id = UUID.randomUUID().toString(),
-                ownerUsername = user.username,
-                entityId = id,
-                operation = "academic:$method:$resource",
-                baseVersion = 0,
-                payloadJson = Gson().toJson(payload)
-            ))
-            ClassDeskSyncScheduler.scheduleNow(context)
-        } finally { store.closeStore() }
-        OfflineMutationResult(true, queued = true, statusCode = 0, message = "Saved on this device. It will sync when the network returns.")
+            val store = OfflineStore(context)
+            try {
+                store.enqueue(PendingMutation(
+                    id = UUID.randomUUID().toString(),
+                    ownerUsername = user.username,
+                    entityId = id,
+                    operation = "academic:$method:$resource",
+                    baseVersion = 0,
+                    payloadJson = Gson().toJson(payload)
+                ))
+            } finally { store.closeStore() }
+            OfflineMutationResult(true, queued = true, statusCode = 0, message = "Saved on this device. It will sync when the network returns.")
+        } catch (queueError: Exception) {
+            OfflineMutationResult(false, statusCode = 0, message = queueError.message ?: "The network is unavailable and this change could not be saved locally.")
+        }
     }
 }
 
@@ -71,18 +74,21 @@ suspend fun saveAnnouncementMutation(
         }
         OfflineMutationResult(response.isSuccessful, statusCode = response.code(), message = response.errorBody()?.string())
     } catch (_: Exception) {
-        val store = OfflineStore(context)
         try {
-            store.enqueue(PendingMutation(
-                id = UUID.randomUUID().toString(),
-                ownerUsername = user.username,
-                entityId = id,
-                operation = "announcement:$method",
-                baseVersion = 0,
-                payloadJson = Gson().toJson(payload)
-            ))
-            ClassDeskSyncScheduler.scheduleNow(context)
-        } finally { store.closeStore() }
-        OfflineMutationResult(true, queued = true, statusCode = 0, message = "Announcement change saved locally and queued for synchronization.")
+            val store = OfflineStore(context)
+            try {
+                store.enqueue(PendingMutation(
+                    id = UUID.randomUUID().toString(),
+                    ownerUsername = user.username,
+                    entityId = id,
+                    operation = "announcement:$method",
+                    baseVersion = 0,
+                    payloadJson = Gson().toJson(payload)
+                ))
+            } finally { store.closeStore() }
+            OfflineMutationResult(true, queued = true, statusCode = 0, message = "Announcement change saved locally and queued for synchronization.")
+        } catch (queueError: Exception) {
+            OfflineMutationResult(false, statusCode = 0, message = queueError.message ?: "The network is unavailable and this announcement change could not be saved locally.")
+        }
     }
 }
