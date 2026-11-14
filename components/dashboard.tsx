@@ -25,6 +25,7 @@ export default function Dashboard() {
   const [summary, setSummary] = useState<DashboardSummary>({ courses: 0, lectures: 0, assignments: 0, concerns: 0 });
   const [conflicts, setConflicts] = useState<SyncConflict[]>([]);
   const [accountRole, setAccountRole] = useState<"CLASS_REP" | "ASSISTANT_REP" | null>(null);
+  const [accountName, setAccountName] = useState("ClassDesk user");
   const syncingRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -164,7 +165,7 @@ export default function Dashboard() {
   }
 
   useEffect(() => {
-    fetch("/api/auth/me", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => { if (data?.user?.role) setAccountRole(data.user.role); }).catch(() => undefined);
+    fetch("/api/auth/me", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => { if (data?.user?.role) setAccountRole(data.user.role); if (data?.user?.displayName) setAccountName(data.user.displayName); }).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -178,7 +179,7 @@ export default function Dashboard() {
 
   return <div className="shell">
     <aside className="sidebar"><div className="brand"><div className="brand-mark">✳</div><div><strong>ClassDesk</strong><small>AFIT · ND1 · 2026/27</small></div></div><div className="nav-label">Workspace</div><nav className="nav">{nav.filter(([, label]) => label !== "Settings" || accountRole === "CLASS_REP").map(([icon, label, href]) => <Link key={href} className={href === "/" ? "active" : ""} href={href}><span>{icon}</span>{label}</Link>)}</nav><div style={{ marginTop: "auto" }} className="notice">Private workspace<br /><span className="muted">Two authorised staff accounts</span></div><LogoutButton /></aside>
-    <main className="main"><div className="topline"><div><div className="eyebrow">COMMAND CENTRE / 2026–2027</div><h1>Good day, Class Rep.</h1><div className="sub">Your academic coordination workspace. Keep information accurate, organised and accessible.</div></div><div className="actions"><AccountBadge /><span className="tag">{online ? "ONLINE" : "OFFLINE"}</span><button className="btn ghost" onClick={() => void sync()} disabled={busy}>{busy ? "Syncing…" : "↻ Sync"} {pending > 0 ? `(${pending})` : ""}</button></div></div>
+    <main className="main"><div className="topline"><div><div className="eyebrow">COMMAND CENTRE / 2026–2027</div><h1>Good day, {accountName}.</h1><div className="sub">Your academic coordination workspace. Keep information accurate, organised and accessible.</div></div><div className="actions"><AccountBadge /><span className="tag">{online ? "ONLINE" : "OFFLINE"}</span><button className="btn ghost" onClick={() => void sync()} disabled={busy}>{busy ? "Syncing…" : "↻ Sync"} {pending > 0 ? `(${pending})` : ""}</button></div></div>
       {syncMessage && <p className="sub" role="status">{syncMessage}</p>}
       {conflicts.length > 0 && <div className="panel" style={{ marginBottom: 16 }}><div className="row"><h2>Sync conflicts</h2><span className="tag">{conflicts.length} need review</span></div><p className="sub">Another device changed or deleted a record while this device was offline. Choose which version should win. No change is discarded until you choose.</p>{conflicts.map((conflict) => <div className="item" key={conflict.id}><div className="row"><strong>{conflict.mutation.operation === "delete" ? "Offline deletion" : (conflict.mutation.payload as RecordItem).title}</strong><span className="tag">{conflict.reason}</span></div><p>Cloud version: {conflict.serverRecord?.title || "Record no longer exists in the cloud"}</p><div className="actions"><button className="btn" onClick={() => void resolveConflict(conflict, "server")}>Use cloud version</button><button className="btn primary" onClick={() => void resolveConflict(conflict, "local")}>{conflict.mutation.operation === "delete" ? "Delete cloud version" : "Keep my local version"}</button></div></div>)}</div>}
       <section className="grid"><div className="panel stat"><label>ACTIVE COURSES</label><strong>{summary.courses}</strong><small>In the course catalogue</small></div><div className="panel stat"><label>LECTURE SESSIONS</label><strong>{summary.lectures}</strong><small>Scheduled or recorded</small></div><div className="panel stat"><label>OPEN ASSIGNMENTS</label><strong>{summary.assignments}</strong><small>Not marked complete</small></div><div className="panel stat"><label>SYNC QUEUE</label><strong>{pending}</strong><small>Changes waiting to sync</small></div>
