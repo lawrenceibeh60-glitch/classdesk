@@ -41,9 +41,10 @@ export default function Dashboard() {
           await offlineDB.records.bulkPut(visibleServer.map((item) => ({ ...item, metadata: item.metadata || {}, syncState: "synced" as const })));
           setRecords([...localPending, ...visibleServer]);
         } else setRecords(server);
-      }
-    } catch {
-      if (offlineDB) setRecords(await offlineDB.records.orderBy("updatedAt").reverse().limit(12).toArray());
+      } else if (r.status === 401 || r.status === 403) setRecords([]);
+    } catch (error) {
+      if (error instanceof TypeError && offlineDB) setRecords(await offlineDB.records.orderBy("updatedAt").reverse().limit(12).toArray());
+      else setRecords([]);
     }
     try {
       const response = await fetch("/api/academic?resource=summary", { cache: "no-store" });
@@ -51,8 +52,8 @@ export default function Dashboard() {
         const data = await response.json();
         setSummary(data.summary || { courses: 0, lectures: 0, assignments: 0, concerns: 0 });
         setUpcoming(data.upcomingAssignments || []);
-      }
-    } catch { /* keep cached dashboard state */ }
+      } else if (response.status === 401 || response.status === 403) { setSummary({ courses: 0, lectures: 0, assignments: 0, concerns: 0 }); setUpcoming([]); }
+    } catch { /* keep the current dashboard view during a network interruption */ }
     if (offlineDB) {
       setPending((await offlineDB.outbox.count()) + (await offlineDB.uploads.count()) + (await offlineDB.academicQueue.count()) + (await offlineDB.aiQueue.count()));
       const savedConflicts = await offlineDB.meta.toArray();
