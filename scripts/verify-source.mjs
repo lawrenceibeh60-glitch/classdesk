@@ -23,6 +23,9 @@ const sourceFiles = readdirSync(root, { recursive: true }).filter((file) => type
 const sourceText = sourceFiles.map((file) => read(file)).join("\n");
 assert.ok(!/NEXT_PUBLIC_(?:AI_API_KEY|OPENAI_API_KEY|SESSION_SECRET|S3_SECRET_ACCESS_KEY)/.test(sourceText), "A server secret appears to be exposed through a NEXT_PUBLIC variable");
 assert.ok(sourceText.includes("assertSameOrigin") && sourceText.includes("rateLimit"), "Mutation origin checks or rate limiting are missing");
+assert.match(read("lib/storage.ts"), /requireProductionObjectStorage/, "Production uploads must fail closed without shared object storage");
+assert.match(read("lib/storage.ts"), /NODE_ENV === "production"/, "Production storage configuration must be enforced");
+assert.match(read("app/api/sync/route.ts"), /ASSISTANT_REP.*delete|ASSISTANT_REP.*operation === "delete"/s, "Offline sync must enforce assistant delete restrictions");
 const authSource = read("lib/auth.ts");
 assert.match(authSource, /CLASS_REP_PASSWORD_HASH/, "Primary account credential configuration is missing");
 assert.match(authSource, /ASSISTANT_REP_PASSWORD_HASH/, "Assistant account credential configuration is missing");
