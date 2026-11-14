@@ -150,8 +150,10 @@ export function useAva(handlers: AvaHandlers) {
       setVoiceError("This browser cannot record audio. Use a supported browser or type to Ava.");
       return;
     }
+    let acquiredStream: MediaStream | null = null;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      acquiredStream = stream;
       if (!wantRef.current) { stream.getTracks().forEach(track => track.stop()); return; }
       const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"].find(type => MediaRecorder.isTypeSupported(type));
       const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
@@ -193,6 +195,9 @@ export function useAva(handlers: AvaHandlers) {
       setListening(true);
     } catch (error) {
       wantRef.current = false;
+      acquiredStream?.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current = null;
+      mediaRecorderRef.current = null;
       setListening(false);
       setVoiceError(error instanceof Error && error.name === "NotAllowedError"
         ? "Microphone permission was denied. Allow microphone access in your browser settings, then tap again."
@@ -278,7 +283,22 @@ export function useAva(handlers: AvaHandlers) {
     const loadVoices = () => setVoices(window.speechSynthesis?.getVoices().filter(v => v.lang.toLowerCase().startsWith("en")).map(v => v.name) || []);
     try { const saved = localStorage.getItem("ava-voice"); if (saved) { voiceRef.current = saved; setVoiceNameState(saved); } } catch { /* ignore */ }
     loadVoices(); window.speechSynthesis?.addEventListener?.("voiceschanged", loadVoices);
-    return () => { window.speechSynthesis?.removeEventListener?.("voiceschanged", loadVoices); wantRef.current = false; recRef.current?.abort(); if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop(); mediaStreamRef.current?.getTracks().forEach(track => track.stop()); stopSpeaking(); };
+    return () => {
+      window.speechSynthesis?.removeEventListener?.("voiceschanged", loadVoices);
+      wantRef.current = false;
+      recRef.current?.abort();
+      // Navigation/unmount discards an unfinished recording; it must never upload implicitly.
+      if (mediaRecorderRef.current) {
+        mediaRecorderRef.current.onstop = null;
+        mediaRecorderRef.current.ondataavailable = null;
+        mediaRecorderRef.current.onerror = null;
+        if (mediaRecorderRef.current.state === "recording") mediaRecorderRef.current.stop();
+        mediaRecorderRef.current = null;
+      }
+      mediaStreamRef.current?.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current = null;
+      stopSpeaking();
+    };
   }, [stopSpeaking]);
 
   return { supported, listening, speaking, processing, inputMode, awake, heard, voiceError, toggle, stop, speak, shutUp, voices, voiceName, setVoiceName, cloud };
