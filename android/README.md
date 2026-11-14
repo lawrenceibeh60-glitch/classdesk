@@ -9,7 +9,7 @@ Native Android client workspace for the existing ClassDesk service.
 - EncryptedSharedPreferences-backed session cookies, offline profile and read-only snapshots.
 - Android Keystore AES-GCM encryption for queued offline mutation payloads; queued changes are bound to the account that created them.
 - SQLite outbox and WorkManager network-constrained sync foundation.
-- Native SpeechRecognizer and TextToSpeech for Ava; microphone permission is requested only after the user taps Activate.
+- Native SpeechRecognizer and TextToSpeech for Ava; on-device speech recognition is preferred when Android and an installed language pack support it, with the platform recognition service as a fallback. Microphone permission is requested only after the user taps Activate.
 
 ## Configure the API
 
