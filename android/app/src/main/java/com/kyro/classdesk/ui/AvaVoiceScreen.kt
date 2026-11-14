@@ -156,7 +156,7 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
         speech = engine
         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) { speaking = true }
-            override fun onDone(utteranceId: String?) { speaking = false }
+            override fun onDone(utteranceId: String?) {\n                speaking = false\n                // Continue the user-started voice session after Ava finishes speaking.\n                // stopSession() clears sessionActive, so this can never reopen the mic after End.\n                if (sessionActive) startRecognition()\n            }
             override fun onError(utteranceId: String?) { speaking = false; error = "Ava's speech output failed." }
         })
         onDispose {
