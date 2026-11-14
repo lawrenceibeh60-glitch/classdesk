@@ -142,11 +142,38 @@ export function useAva(handlers: AvaHandlers) {
     const rec = new Ctor(); rec.lang = "en-NG"; rec.continuous = true; rec.interimResults = false;
     rec.onresult = (e: any) => { for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) handleFinal(e.results[i][0].transcript); };
     rec.onerror = (e) => {
-      if (e.error === "not-allowed" || e.error === "service-not-allowed") { wantRef.current = false; setListening(false); setVoiceError("Microphone permission denied. Allow it in your browser settings."); }
-      else if (e.error === "language-not-supported") rec.lang = "en-US";
-      else if (e.error === "network") { wantRef.current = false; setListening(false); setVoiceError(navigator.onLine ? "This browser could not reach its speech recognition service. Check your connection or try Chrome or Edge." : "You're offline: listening needs internet, but typing works and Ava still speaks replies."); }
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        wantRef.current = false;
+        setListening(false);
+        setVoiceError("Microphone permission was denied. Allow microphone access in your browser settings, then tap the microphone again.");
+      } else if (e.error === "language-not-supported") {
+        rec.lang = "en-US";
+      } else if (e.error === "network") {
+        wantRef.current = false;
+        setListening(false);
+        setVoiceError(navigator.onLine
+          ? "The browser speech service could not be reached. Check your connection or try Chrome or Edge."
+          : "You're offline. Website speech recognition needs a connection; you can still type to Ava.");
+      } else if (e.error === "audio-capture") {
+        wantRef.current = false;
+        setListening(false);
+        setVoiceError("The browser could not access a microphone. Check that your microphone is connected and permitted.");
+      } else if (e.error === "aborted" && wantRef.current) {
+        wantRef.current = false;
+        setListening(false);
+        setVoiceError("The browser stopped the speech session. Tap the microphone to start a fresh session.");
+      }
     };
-    rec.onend = () => { if (wantRef.current) { try { rec.start(); } catch { /* already started */ } } else setListening(false); };
+    rec.onend = () => {
+      if (!wantRef.current) { setListening(false); return; }
+      try {
+        rec.start();
+      } catch {
+        wantRef.current = false;
+        setListening(false);
+        setVoiceError("The browser speech session stopped unexpectedly. Tap the microphone to try again.");
+      }
+    };
     recRef.current = rec;
     try { rec.start(); return true; } catch { setVoiceError("Could not start the microphone."); return false; }
   }, [handleFinal]);
