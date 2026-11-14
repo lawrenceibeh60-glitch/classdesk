@@ -38,6 +38,66 @@ class ClassDeskSyncWorker(context: Context, params: WorkerParameters) : Coroutin
                     cookies.saveSnapshot("announcements", Gson().toJson(latest))
                 }
             } catch (_: Exception) { /* Keep notification polling independent from offline mutation replay. */ }
+            try {
+                val response = ApiClient.get(applicationContext).assignments()
+                if (response.isSuccessful) {
+                    val latest = response.body()?.items.orEmpty()
+                    val previous = cookies.loadSnapshot("assignments")?.let {
+                        runCatching { Gson().fromJson(it, Array<AssignmentDto>::class.java)?.toList() }.getOrNull()
+                    }
+                    if (previous != null && ClassDeskNotifications.canPost(applicationContext)) {
+                        val known = previous.map { it.id }.toSet()
+                        latest.filter { it.id !in known }.forEach {
+                            ClassDeskNotifications.assignment(applicationContext, it.id, it.title, it.dueAt)
+                        }
+                    }
+                    cookies.saveSnapshot("assignments", Gson().toJson(latest))
+                }
+            } catch (_: Exception) { }
+            try {
+                val response = ApiClient.get(applicationContext).records()
+                if (response.isSuccessful) {
+                    val latest = response.body()?.records.orEmpty()
+                    val previous = cookies.loadSnapshot("calendar")?.let {
+                        runCatching { Gson().fromJson(it, Array<AcademicRecordDto>::class.java)?.toList() }.getOrNull()
+                    }
+                    if (previous != null && ClassDeskNotifications.canPost(applicationContext)) {
+                        val known = previous.map { it.id }.toSet()
+                        latest.filter { it.id !in known && it.type.uppercase() in listOf("TIMETABLE", "CALENDAR") }
+                            .forEach { ClassDeskNotifications.timetable(applicationContext, it.id, it.title, it.eventDate) }
+                    }
+                    cookies.saveSnapshot("calendar", Gson().toJson(latest))
+                }
+            } catch (_: Exception) { }
+            try {
+                val response = ApiClient.get(applicationContext).attendance()
+                if (response.isSuccessful) {
+                    val latest = response.body()?.items.orEmpty()
+                    val previous = cookies.loadSnapshot("attendance")?.let {
+                        runCatching { Gson().fromJson(it, Array<AttendanceDto>::class.java)?.toList() }.getOrNull()
+                    }
+                    if (previous != null && ClassDeskNotifications.canPost(applicationContext)) {
+                        val known = previous.map { it.id }.toSet()
+                        latest.filter { it.id !in known }.forEach { ClassDeskNotifications.attendance(applicationContext, it.id) }
+                    }
+                    cookies.saveSnapshot("attendance", Gson().toJson(latest))
+                }
+            } catch (_: Exception) { }
+            try {
+                val response = ApiClient.get(applicationContext).concerns()
+                if (response.isSuccessful) {
+                    val latest = response.body()?.items.orEmpty()
+                    val previous = cookies.loadSnapshot("concerns")?.let {
+                        runCatching { Gson().fromJson(it, Array<ConcernDto>::class.java)?.toList() }.getOrNull()
+                    }
+                    if (previous != null && ClassDeskNotifications.canPost(applicationContext)) {
+                        val oldById = previous.associateBy { it.id }
+                        latest.filter { oldById[it.id]?.status != null && oldById[it.id]?.status != it.status }
+                            .forEach { ClassDeskNotifications.concern(applicationContext, it.id, it.status) }
+                    }
+                    cookies.saveSnapshot("concerns", Gson().toJson(latest))
+                }
+            } catch (_: Exception) { }
             val queued = store.pending(owner.username, 100)
             if (queued.isEmpty()) return Result.success()
             var appliedCount = 0
