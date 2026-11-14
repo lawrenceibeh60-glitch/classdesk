@@ -33,10 +33,31 @@ After the two new account hashes are configured, remove the legacy `ADMIN_PASSWO
 
 These restrictions are enforced by server-side API checks, not only by hiding interface controls.
 
+## PostgreSQL (Neon)
+
+Configure both connection strings in the deployment environment:
+
+- `DATABASE_URL`: Neon direct connection. Prisma CLI schema migrations use this URL.
+- `DATABASE_URL_POOLED`: Neon pooled connection. The running Next.js application prefers this URL to reduce connection pressure and falls back to `DATABASE_URL` if it is absent.
+
+Keep the complete connection strings private. Do not commit them to Git or expose them through `NEXT_PUBLIC_` variables. Apply schema changes with `npm run db:migrate` after setting the direct `DATABASE_URL`.
+
+## Shared file storage (Neon Object Storage)
+
+ClassDesk uses the AWS S3 SDK and accepts Neon Object Storage's environment names directly:
+
+| Variable | Purpose |
+|---|---|
+| `AWS_ENDPOINT_URL_S3` | S3-compatible Neon Object Storage endpoint |
+| `AWS_ACCESS_KEY_ID` | Storage access key |
+| `AWS_SECRET_ACCESS_KEY` | Storage secret |
+| `AWS_REGION` | Storage region |
+| `S3_BUCKET` | Existing bucket name |
+
+The existing `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, and `S3_REGION` names remain supported for compatibility. If both forms are set, the `AWS_*` values take precedence. Configure the bucket and all three AWS endpoint/credential values in production. The storage adapter requires a bucket, endpoint, access key and secret in production and fails closed if any are missing.
+
+PostgreSQL stores structured class information, document metadata, and searchable extracted text. Object storage keeps original uploaded files. Production uploads and backup restores that contain original files fail explicitly when shared storage is unavailable; they will not silently report success while losing original file bytes.
+
 ## Existing data
 
-This change does not require a database migration. Both accounts work with the same existing ClassDesk database and shared class records. Account credentials are configured by the deployment environment; they are not stored in the public repository.
-
-## Shared file storage
-
-The PostgreSQL database is shared by both accounts and stores structured class information, document metadata, and searchable extracted text. Configure the S3-compatible variables in `.env.example` on the Render service to keep original uploaded files in durable shared object storage. Production uploads and backup restores that contain original files fail explicitly when this storage is missing; they will not silently report success while losing the original file bytes.
+Both accounts use the same configured PostgreSQL database and shared class records. Account credentials are configured by the deployment environment; they are not stored in the repository.
