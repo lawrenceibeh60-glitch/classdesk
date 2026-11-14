@@ -657,10 +657,11 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                                         val store = OfflineStore(context)
                                         try {
                                             store.enqueue(PendingMutation(UUID.randomUUID().toString(), user.username, item.id, "delete", item.version, "{}"))
-                                            ClassDeskSyncScheduler.scheduleNow(context)
                                             calendarItems = calendarItems.filterNot { it.id == item.id }
                                             secureStore.saveSnapshot("calendar", Gson().toJson(calendarItems))
                                             moduleError = "Deletion saved on this device and queued for synchronization."
+                                        } catch (e: Exception) {
+                                            moduleError = e.message ?: "Could not save this deletion to the offline queue."
                                         } finally { store.closeStore() }
                                     } else if (deleted.isSuccessful) {
                                         calendarItems = calendarItems.filterNot { it.id == item.id }
@@ -704,12 +705,13 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                             val store = OfflineStore(context)
                             try {
                                 store.enqueue(PendingMutation(UUID.randomUUID().toString(), user.username, localId, "upsert", 0, Gson().toJson(payload)))
-                                ClassDeskSyncScheduler.scheduleNow(context)
                                 calendarItems = listOf(AcademicRecordDto(localId, calendarType, calendarTitle.trim(), calendarContent.trim(), normalizedDate, "ACTIVE", 1)) + calendarItems
                                 secureStore.saveSnapshot("calendar", Gson().toJson(calendarItems))
                                 moduleError = "Saved on this device. It will sync when the network returns."
                                 calendarTitle = ""; calendarContent = ""; calendarDate = ""; calendarType = "TIMETABLE"
                                 showCalendarDialog = false
+                            } catch (e: Exception) {
+                                moduleError = e.message ?: "Could not save this event to the offline queue."
                             } finally { store.closeStore() }
                         } else if (saved.isSuccessful) {
                             try { val refreshed = api.records(); if (refreshed.isSuccessful) calendarItems = refreshed.body()?.records.orEmpty() } catch (_: Exception) { /* retain the current local view */ }
