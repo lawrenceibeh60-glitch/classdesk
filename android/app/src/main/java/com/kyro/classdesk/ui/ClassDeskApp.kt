@@ -777,12 +777,12 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                         }
                         val existing = editingCalendarId?.let { id -> calendarItems.firstOrNull { it.id == id } }
                         val id = editingCalendarId
-                        val payloadMap = mapOf("type" to calendarType, "title" to calendarTitle.trim(), "content" to calendarContent.trim(), "eventDate" to normalizedDate)
+                        val localId = id ?: UUID.randomUUID().toString()
+                        val payloadMap = mapOf("id" to localId, "type" to calendarType, "title" to calendarTitle.trim(), "content" to calendarContent.trim(), "eventDate" to normalizedDate)
                         val saved = try {
-                            if (id == null) api.createRecord(payloadMap) else api.updateRecord(payloadMap + mapOf("id" to id))
+                            if (id == null) api.createRecord(payloadMap) else api.updateRecord(payloadMap)
                         } catch (_: Exception) { null }
                         if (saved == null) {
-                            val localId = id ?: UUID.randomUUID().toString()
                             val payload = JsonObject().apply {
                                 addProperty("type", calendarType)
                                 addProperty("title", calendarTitle.trim())
