@@ -50,6 +50,12 @@ interface ClassDeskApi {
     @GET("api/documents")
     suspend fun documents(): Response<DocumentsEnvelope>
 
+    @GET("api/records")
+    suspend fun records(@Query("limit") limit: Int = 200, @Query("upcoming") upcoming: Int = 1): Response<RecordsEnvelope>
+
+    @POST("api/records")
+    suspend fun createRecord(@Body body: Map<String, String>): Response<Map<String, Any>>
+
     @Multipart
     @POST("api/documents")
     suspend fun uploadDocument(@Part file: MultipartBody.Part, @PartMap fields: Map<String, @JvmSuppressWildcards RequestBody>): Response<Map<String, Any>>
