@@ -146,3 +146,9 @@ assert.ok(read("app/api/ai/tools/route.ts").includes("requirePrimaryAdmin"), "De
 assert.ok(read("app/api/ai/tools/route.ts").includes("DOCUMENT_DELETE_SUCCEEDED"), "Successful permanent document deletions must be audited");
 assert.ok(read("components/storage-management.tsx").includes("Ava SQL editor / read-only"), "Primary settings must expose the guarded SQL editor");
 assert.ok(read("components/storage-management.tsx").includes("Privileged action audit log"), "Primary settings must expose privileged-action audit history");
+
+assert.ok(read("app/api/ai/chat/route.ts").includes("actionConfirmation"), "Ava chat must return a confirmation preview before document deletion");
+assert.ok(read("app/api/ai/tools/route.ts").includes("confirmPermanent:") === false, "The server must require an explicit permanent-deletion confirmation flag from the client");
+assert.ok(read("app/api/ai/tools/route.ts").includes("body?.confirmPermanent !== true"), "The document deletion tool must reject missing confirmation");
+assert.ok(read("android/app/src/main/java/com/kyro/classdesk/ui/AvaVoiceScreen.kt").includes("pendingDelete?.let"), "Android Ava voice must show a deletion confirmation dialog");
+assert.ok(read("components/ai-workspace.tsx").includes("PERMANENT DELETION CONFIRMATION"), "Web Ava chat must show a deletion confirmation card");
