@@ -12,6 +12,10 @@ import retrofit2.http.Part
 import retrofit2.http.PartMap
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
+import okhttp3.ResponseBody
+import retrofit2.http.Header
+import retrofit2.http.Path
+import retrofit2.http.Streaming
 
 interface ClassDeskApi {
     @POST("api/auth/login")
@@ -63,8 +67,23 @@ interface ClassDeskApi {
     @POST("api/documents")
     suspend fun uploadDocument(@Part file: MultipartBody.Part, @PartMap fields: Map<String, @JvmSuppressWildcards RequestBody>): Response<Map<String, Any>>
 
+    @GET("api/documents/{id}")
+    @Streaming
+    suspend fun downloadDocument(@Path("id") id: String): Response<ResponseBody>
+
     @DELETE("api/documents")
     suspend fun deleteDocument(@Query("id") id: String): Response<Map<String, Any>>
+
+    @GET("api/export")
+    @Streaming
+    suspend fun exportJsonBackup(): Response<ResponseBody>
+
+    @GET("api/export/archive")
+    @Streaming
+    suspend fun exportZipBackup(): Response<ResponseBody>
+
+    @POST("api/backup/restore")
+    suspend fun restoreBackup(@Header("Content-Type") contentType: String, @Header("x-classdesk-restore-confirmation") confirmation: String, @Body body: RequestBody): Response<Map<String, Any>>
 
     @POST("api/announcements")
     suspend fun createAnnouncement(@Body body: Map<String, String>): Response<Map<String, Any>>
