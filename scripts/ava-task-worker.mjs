@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { randomUUID } from "node:crypto";
 
@@ -115,7 +115,7 @@ async function claimTask() {
       WHERE "id" = (
         SELECT "id" FROM "AiTask"
         WHERE ("status" = 'QUEUED' AND "availableAt" <= NOW())
-           OR ("status" = 'RUNNING' AND "lockedAt" < NOW() - INTERVAL '5 minutes' AND "attempts" < ${maxAttempts})
+           OR ("status" = 'RUNNING' AND "lockedAt" < NOW() - INTERVAL '5 minutes')
         ORDER BY "createdAt" ASC
         FOR UPDATE SKIP LOCKED
         LIMIT 1
@@ -185,7 +185,8 @@ async function runTask(task) {
       }
     });
   } catch (error) {
-    await s3.send(new (await import("@aws-sdk/client-s3")).DeleteObjectCommand({ Bucket: bucket, Key: storageKey })).catch(() => undefined);
+    await prisma.document.deleteMany({ where: { storageKey } }).catch(() => undefined);
+    await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: storageKey })).catch(() => undefined);
     throw error;
   }
 }
