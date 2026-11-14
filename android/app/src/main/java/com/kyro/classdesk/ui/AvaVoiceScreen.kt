@@ -90,6 +90,7 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
     var selectedLanguageIndex by remember { mutableIntStateOf(0) }
     var languageFallbackIndex by remember { mutableIntStateOf(0) }
     var languageMenuExpanded by remember { mutableStateOf(false) }
+    var usingPlatformFallback by remember { mutableStateOf(false) }
 
     fun stopSession() {
         sessionActive = false
@@ -152,13 +153,13 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
         if (SpeechRecognizer.isRecognitionAvailable(context)) {
             // Prefer Android's on-device engine when the OS and installed language pack support it.
             // Fall back to the platform recognition service on older or unsupported devices.
-            val speechEngine = if (
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            val onDeviceAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
                 SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
-            ) SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+            val speechEngine = if (onDeviceAvailable) SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
             else SpeechRecognizer.createSpeechRecognizer(context)
-            recognizer = speechEngine.also { engine ->
-                engine.setRecognitionListener(object : RecognitionListener {
+            usingPlatformFallback = !onDeviceAvailable
+            recognizer = speechEngine
+            speechEngine.setRecognitionListener(object : RecognitionListener {
                     override fun onReadyForSpeech(params: Bundle?) { listening = true }
                     override fun onBeginningOfSpeech() { listening = true }
                     override fun onRmsChanged(rmsdB: Float) {}
@@ -178,7 +179,7 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
                                 error = "This speech service does not support the previous language. Trying " + localeLabel + "…"
                                 listening = true
                                 processing = false
-                                runCatching { engine.startListening(buildAvaRecognitionIntent(nextLocale)) }
+                                runCatching { recognizer?.startListening(buildAvaRecognitionIntent(nextLocale)) }
                                     .onFailure {
                                         listening = false
                                         sessionActive = false
@@ -186,8 +187,31 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
                                     }
                                 return
                             }
+                            if (!usingPlatformFallback) {
+                                val platformEngine = runCatching { SpeechRecognizer.createSpeechRecognizer(context) }.getOrNull()
+                                if (platformEngine != null) {
+                                    platformEngine.setRecognitionListener(this)
+                                    val previousEngine = recognizer
+                                    recognizer = platformEngine
+                                    usingPlatformFallback = true
+                                    languageFallbackIndex = 0
+                                    val firstLocale = profile.locales.firstOrNull()
+                                    error = "On-device recognition does not support this language. Trying Android's platform speech service…"
+                                    listening = true
+                                    processing = false
+                                    runCatching {
+                                        previousEngine?.destroy()
+                                        platformEngine.startListening(buildAvaRecognitionIntent(firstLocale))
+                                    }.onFailure {
+                                        listening = false
+                                        sessionActive = false
+                                        error = "Android's platform speech service could not start. Check the installed speech service and try again."
+                                    }
+                                    return
+                                }
+                            }
                             sessionActive = false
-                            error = "None of the installed speech services accepted the " + profile.label + " language profile. Install its speech language pack or choose another language."
+                            error = "Neither on-device nor Android's platform speech service supports the " + profile.label + " language profile. Install its speech language pack or choose another language."
                             return
                         }
                         sessionActive = false
@@ -271,7 +295,6 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
                     override fun onPartialResults(partialResults: Bundle?) {}
                     override fun onEvent(eventType: Int, params: Bundle?) {}
                 })
-            }
         }
         val engine = TextToSpeech(context) { status -> ttsReady = status == TextToSpeech.SUCCESS }
         speech = engine
