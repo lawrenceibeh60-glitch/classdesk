@@ -63,3 +63,9 @@ Never commit `.env.local`, API keys, database URLs, student passwords, or privat
 ## Two-account access
 
 Production deployments must configure the two authorised accounts and session secret as described in [docs/ACCOUNT-SETUP.md](docs/ACCOUNT-SETUP.md). Public registration is disabled.
+
+## Ava background document tasks
+
+Ava assignment-solution and study-summary PDFs are submitted as durable Vercel Workflows. The workflow stores task progress in PostgreSQL, retries failed processing steps, and saves generated PDFs through the configured S3-compatible object storage. A permanently running polling worker is not required on Vercel.
+
+The production environment must provide the pooled/direct database URL, AI endpoint/key/model, and S3-compatible bucket, endpoint, access key, and secret key. The API checks these dependencies before accepting a background task. The legacy `npm run worker:ava` script remains available for local worker-based development only; it is not part of the Vercel production path.
