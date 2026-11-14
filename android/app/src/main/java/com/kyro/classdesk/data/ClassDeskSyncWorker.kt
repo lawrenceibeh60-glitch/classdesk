@@ -17,7 +17,8 @@ class ClassDeskSyncWorker(context: Context, params: WorkerParameters) : Coroutin
     override suspend fun doWork(): Result {
         val store = OfflineStore(applicationContext)
         try {
-            val queued = store.pending(100)
+            val owner = ApiClient.cookies(applicationContext).loadUser() ?: return Result.success()
+            val queued = store.pending(owner.username, 100)
             if (queued.isEmpty()) return Result.success()
             val mutations = queued.map { row ->
                 SyncMutationDto(
