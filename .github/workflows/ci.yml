@@ -4,7 +4,7 @@ concurrency:
   cancel-in-progress: true
 on:
   push:
-    branches: [main, work/**, feat/**]
+    branches: [main, work/**, feat/**, feature/android-parity-completion]
   pull_request:
     branches: [main]
   workflow_dispatch:
