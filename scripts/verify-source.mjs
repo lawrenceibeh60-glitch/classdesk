@@ -159,3 +159,14 @@ assert.ok(read("android/app/src/main/java/com/kyro/classdesk/ui/ClassDeskApp.kt"
 assert.ok(read("scripts/ava-task-worker.mjs").includes("aiWorkerState.upsert"), "Ava worker must publish a database heartbeat");
 assert.ok(read("app/api/ai/tasks/route.ts").includes("Ava's background worker is not online yet"), "Ava must not accept background tasks without a live worker");
 assert.ok(read("app/api/health/route.ts").includes("avaWorkerOnline"), "Health status must expose Ava worker availability");
+
+const androidOfflineStore = read("android/app/src/main/java/com/kyro/classdesk/data/OfflineStore.kt");
+const androidSyncWorker = read("android/app/src/main/java/com/kyro/classdesk/data/ClassDeskSyncWorker.kt");
+const androidQueueScreen = read("android/app/src/main/java/com/kyro/classdesk/ui/OfflineQueueScreen.kt");
+const androidAppShell = read("android/app/src/main/java/com/kyro/classdesk/ui/ClassDeskApp.kt");
+assert.match(androidOfflineStore, /SQLiteOpenHelper\(context, "classdesk-offline\.db", null, 4\)/, "Android offline queue schema must include the conflict-recovery migration");
+assert.match(androidOfflineStore, /OfflineCrypto\.encrypt\(serverRecordJson\)/, "Cloud conflict snapshots must be encrypted at rest");
+assert.match(androidOfflineStore, /rebaseForRetry\(id: String, latestVersion: Int\)/, "Android must support explicit version rebasing for local conflict resolution");
+assert.match(androidSyncWorker, /store\.markConflict\(conflict\.id, conflict\.reason, conflict\.serverRecord\?\.let/, "Android sync must preserve the server version returned for a conflict");
+assert.match(androidQueueScreen, /USE CLOUD[\s\S]*KEEP LOCAL[\s\S]*SYNC NOW[\s\S]*DISCARD LOCAL CHANGE/, "Android offline queue must expose cloud/local conflict resolution and recovery controls");
+assert.match(androidAppShell, /filter \{ it != "Settings" \|\| user\.role == "CLASS_REP" \}/, "Android settings navigation must be restricted to the primary account");
