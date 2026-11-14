@@ -85,9 +85,10 @@ export async function PATCH(req: NextRequest) {
   const body = await req.json().catch(() => null); const resource = resourceOf(body?.resource); const id = text(body?.id, 100);
   if (!resource || resource === "summary" || !id) return NextResponse.json({ error: "Writable resource and id are required" }, { status: 400 });
   if (resource === "courses" && body.active === false) { const primaryDenied = await requirePrimaryAdmin(); if (primaryDenied) return primaryDenied; }
+  if (resource === "courses" && body.active === "false") { const primaryDenied = await requirePrimaryAdmin(); if (primaryDenied) return primaryDenied; }
   try {
     if (resource === "courses") {
-      const item = await db.course.update({ where: { id }, data: { ...(typeof body.code === "string" ? { code: text(body.code, 40).toUpperCase() } : {}), ...(typeof body.name === "string" ? { name: text(body.name, 180) } : {}), ...(typeof body.lecturer === "string" ? { lecturer: text(body.lecturer, 120) || null } : {}), ...(typeof body.semester === "string" ? { semester: text(body.semester, 80) || null } : {}), ...(typeof body.active === "boolean" ? { active: body.active } : {}), ...(typeof body.description === "string" ? { description: text(body.description, 5000) || null } : {}) } }); return NextResponse.json({ item });
+      const item = await db.course.update({ where: { id }, data: { ...(typeof body.code === "string" ? { code: text(body.code, 40).toUpperCase() } : {}), ...(typeof body.name === "string" ? { name: text(body.name, 180) } : {}), ...(typeof body.lecturer === "string" ? { lecturer: text(body.lecturer, 120) || null } : {}), ...(typeof body.semester === "string" ? { semester: text(body.semester, 80) || null } : {}), ...(typeof body.active === "boolean" ? { active: body.active } : typeof body.active === "string" && ["true", "false"].includes(body.active) ? { active: body.active === "true" } : {}), ...(typeof body.description === "string" ? { description: text(body.description, 5000) || null } : {}) } }); return NextResponse.json({ item });
     }
     if (resource === "lectures") {
       const heldAt = dateOf(body.heldAt); const scheduledAt = dateOf(body.scheduledAt);
