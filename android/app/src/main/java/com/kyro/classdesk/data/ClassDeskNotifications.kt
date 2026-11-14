@@ -35,36 +35,37 @@ object ClassDeskNotifications {
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
     fun announcement(context: Context, id: String, title: String) {
-        post(context, id.hashCode(), CHANNEL_UPDATES, "New class announcement", title)
+        post(context, id.hashCode(), CHANNEL_UPDATES, "New class announcement", title, "Announcements")
     }
 
     fun assignment(context: Context, id: String, title: String, dueAt: String?) {
         val detail = dueAt?.takeIf { it.isNotBlank() }?.let { "Due: $it" } ?: "A new assignment is available."
-        post(context, id.hashCode(), CHANNEL_UPDATES, "New assignment", "$title — $detail")
+        post(context, id.hashCode(), CHANNEL_UPDATES, "New assignment", "$title — $detail", "Tasks")
     }
 
     fun timetable(context: Context, id: String, title: String, date: String?) {
         val detail = date?.takeIf { it.isNotBlank() } ?: "A new class event is available."
-        post(context, id.hashCode(), CHANNEL_UPDATES, "Timetable update", "$title — $detail")
+        post(context, id.hashCode(), CHANNEL_UPDATES, "Timetable update", "$title — $detail", "Calendar")
     }
 
     fun attendance(context: Context, id: String) {
-        post(context, id.hashCode(), CHANNEL_UPDATES, "Attendance updated", "A new class attendance record is available.")
+        post(context, id.hashCode(), CHANNEL_UPDATES, "Attendance updated", "A new class attendance record is available.", "Attendance")
     }
 
     fun concern(context: Context, id: String, status: String) {
-        post(context, id.hashCode(), CHANNEL_UPDATES, "Class concern updated", "A concern status changed to ${status.lowercase()}.")
+        post(context, id.hashCode(), CHANNEL_UPDATES, "Class concern updated", "A concern status changed to ${status.lowercase()}.", "Concerns")
     }
 
     fun syncCompleted(context: Context, count: Int) {
         if (count > 0) post(context, 81001, CHANNEL_SYNC, "ClassDesk is up to date",
-            "$count offline change${if (count == 1) "" else "s"} synchronised successfully.")
+            "$count offline change${if (count == 1) "" else "s"} synchronised successfully.", "Sync Queue")
     }
 
-    private fun post(context: Context, id: Int, channel: String, title: String, body: String) {
+    private fun post(context: Context, id: Int, channel: String, title: String, body: String, destination: String) {
         createChannels(context)
         if (!canPost(context)) return
         val openApp = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java).apply {
+            putExtra("classdesk_destination", destination)
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = NotificationCompat.Builder(context, channel)
