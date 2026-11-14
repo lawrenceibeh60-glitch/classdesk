@@ -15,4 +15,13 @@ interface ClassDeskApi {
 
     @GET("api/academic")
     suspend fun summary(@Query("resource") resource: String = "summary"): Response<SummaryEnvelope>
+
+    @GET("api/academic")
+    suspend fun courses(@Query("resource") resource: String = "courses"): Response<CoursesEnvelope>
+
+    @GET("api/academic")
+    suspend fun assignments(@Query("resource") resource: String = "assignments"): Response<AssignmentsEnvelope>
+
+    @POST("api/sync")
+    suspend fun pushSync(@Body body: SyncPushRequest): Response<SyncPushResponse>
 }
