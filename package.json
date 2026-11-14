@@ -37,7 +37,8 @@
     "tesseract.js": "^6.0.1",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^5.4.296",
-    "@napi-rs/canvas": "^0.1.80"
+    "@napi-rs/canvas": "^0.1.80",
+    "workflow": "^5.5.0"
   },
   "devDependencies": {
     "@types/node": "^22.18.0",
