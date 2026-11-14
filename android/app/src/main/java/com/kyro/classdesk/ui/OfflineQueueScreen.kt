@@ -29,7 +29,6 @@ fun OfflineQueueScreen(user: UserDto) {
     var entries by remember { mutableStateOf<List<OfflineQueueEntry>>(emptyList()) }
     var discardTarget by remember { mutableStateOf<OfflineQueueEntry?>(null) }
     var actionMessage by remember { mutableStateOf<String?>(null) }
-    var busyId by remember { mutableStateOf<String?>(null) }
 
     fun refresh() {
         val store = OfflineStore(context)
@@ -63,7 +62,6 @@ fun OfflineQueueScreen(user: UserDto) {
     val pending = entries.count { it.status == "PENDING" }
     val conflicts = entries.count { it.status == "CONFLICT" }
     val rejected = entries.count { it.status == "REJECTED" || it.status == "CORRUPT" }
-    val busy = busyId != null
 
     Column(
         Modifier.fillMaxWidth().background(Color(0xFF0A1019)).padding(18.dp).verticalScroll(rememberScrollState()),
@@ -83,7 +81,7 @@ fun OfflineQueueScreen(user: UserDto) {
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF42D9F5), contentColor = Color(0xFF0A1019)),
                 shape = RoundedCornerShape(6.dp)
             ) { Text("SYNC NOW") }
-            OutlinedButton(onClick = { refresh() }, enabled = !busy, modifier = Modifier.weight(1f), shape = RoundedCornerShape(6.dp)) {
+            OutlinedButton(onClick = { refresh() }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(6.dp)) {
                 Text("REFRESH", color = Color(0xFF42D9F5))
             }
         }
