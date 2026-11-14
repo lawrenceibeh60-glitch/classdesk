@@ -115,6 +115,15 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  if (action === "list_audit_logs") {
+    const primaryDenied = await requirePrimaryAdmin(); if (primaryDenied) return primaryDenied;
+    const events = await db.auditLog.findMany({
+      orderBy: { createdAt: "desc" }, take: 100,
+      select: { id: true, actorUsername: true, actorRole: true, action: true, targetType: true, targetId: true, details: true, createdAt: true }
+    });
+    return NextResponse.json({ events });
+  }
+
   if (action === "sql_select") {
     const query = String(body?.query || "").trim();
     if (!query || query.length > 4000 || !/^SELECT\b/i.test(query)) {
