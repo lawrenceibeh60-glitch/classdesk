@@ -87,3 +87,12 @@ assert.match(avaSource, /const \[processing, setProcessing\] = useState\(false\)
 assert.match(avaWorkspace, /ava\.speaking \? "Ava is speaking" : ava\.processing \? "Working on your request"/, "Ava voice interface must show speaking and processing feedback");
 assert.match(read("components/section-shell.tsx"), /Calendar & timetable.*\/calendar/, "Calendar and timetable must be reachable from workspace navigation");
 assert.match(healthRoute, /NODE_ENV !== "production" && process\.env\.LOCAL_STORAGE_DIR/, "Local disk storage must not be reported as production shared storage");
+
+const academicManagerSource = read("components/academic-manager.tsx");
+const announcementStudioSource = read("components/announcement-studio.tsx");
+const recordsManagerSource = read("components/records-manager.tsx");
+const dashboardSource = read("components/dashboard.tsx");
+assert.match(academicManagerSource, /error instanceof TypeError/, "Academic offline cache must be used only for network failures");
+assert.match(announcementStudioSource, /error instanceof TypeError/, "Announcement offline cache must be used only for network failures");
+assert.match(recordsManagerSource, /error instanceof TypeError && offlineDB/, "Record cache must not be shown after an authentication failure");
+assert.match(dashboardSource, /error instanceof TypeError && offlineDB/, "Dashboard cache must not be shown after an authentication failure");
