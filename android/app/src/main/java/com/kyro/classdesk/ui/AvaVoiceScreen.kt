@@ -45,6 +45,29 @@ import kotlinx.coroutines.launch
 import java.util.Locale
 import java.util.UUID
 
+private data class AvaRecognitionLanguageProfile(
+    val label: String,
+    val locales: List<String?>
+)
+
+private val avaRecognitionLanguageProfiles = listOf(
+    AvaRecognitionLanguageProfile("English (Nigeria)", listOf("en-NG", "en-GB", "en-US", "en", null)),
+    AvaRecognitionLanguageProfile("Hausa", listOf("ha-NG", "ha", null)),
+    AvaRecognitionLanguageProfile("Yoruba", listOf("yo-NG", "yo", null)),
+    AvaRecognitionLanguageProfile("Igbo", listOf("ig-NG", "ig", null))
+)
+
+private fun buildAvaRecognitionIntent(languageTag: String?): Intent =
+    Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+        if (!languageTag.isNullOrBlank()) {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, languageTag)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, languageTag)
+        }
+        putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+        putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+    }
+
 @Composable
 fun AvaVoiceScreen(api: ClassDeskApi) {
     val context = LocalContext.current
@@ -64,6 +87,10 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
     var conversationHistory by remember { mutableStateOf<List<ChatHistoryItem>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
     var pendingDelete by remember { mutableStateOf<AvaActionConfirmationDto?>(null) }
+    var selectedLanguageIndex by remember { mutableIntStateOf(0) }
+    var languageFallbackIndex by remember { mutableIntStateOf(0) }
+    var languageMenuExpanded by remember { mutableStateOf(false) }
+    var usingPlatformFallback by remember { mutableStateOf(false) }
 
     fun stopSession() {
         sessionActive = false
@@ -105,15 +132,10 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
         userStopped = false
         error = null
         listening = true
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-NG")
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "en-NG")
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-        }
+        languageFallbackIndex = 0
+        val initialLocale = avaRecognitionLanguageProfiles[selectedLanguageIndex].locales.firstOrNull()
         try {
-            engine.startListening(intent)
+            engine.startListening(buildAvaRecognitionIntent(initialLocale))
         } catch (_: Exception) {
             sessionActive = false
             listening = false
@@ -131,13 +153,13 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
         if (SpeechRecognizer.isRecognitionAvailable(context)) {
             // Prefer Android's on-device engine when the OS and installed language pack support it.
             // Fall back to the platform recognition service on older or unsupported devices.
-            val speechEngine = if (
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            val onDeviceAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
                 SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
-            ) SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+            val speechEngine = if (onDeviceAvailable) SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
             else SpeechRecognizer.createSpeechRecognizer(context)
-            recognizer = speechEngine.also { engine ->
-                engine.setRecognitionListener(object : RecognitionListener {
+            usingPlatformFallback = !onDeviceAvailable
+            recognizer = speechEngine
+            speechEngine.setRecognitionListener(object : RecognitionListener {
                     override fun onReadyForSpeech(params: Bundle?) { listening = true }
                     override fun onBeginningOfSpeech() { listening = true }
                     override fun onRmsChanged(rmsdB: Float) {}
@@ -147,6 +169,51 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
                         listening = false
                         processing = false
                         if (userStopped) { userStopped = false; return }
+                        if (errorCode == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED) {
+                            val profile = avaRecognitionLanguageProfiles[selectedLanguageIndex]
+                            val nextIndex = languageFallbackIndex + 1
+                            if (nextIndex < profile.locales.size) {
+                                languageFallbackIndex = nextIndex
+                                val nextLocale = profile.locales[nextIndex]
+                                val localeLabel = nextLocale ?: "Android's device default"
+                                error = "This speech service does not support the previous language. Trying " + localeLabel + "…"
+                                listening = true
+                                processing = false
+                                runCatching { recognizer?.startListening(buildAvaRecognitionIntent(nextLocale)) }
+                                    .onFailure {
+                                        listening = false
+                                        sessionActive = false
+                                        error = "Could not start the next language fallback. Check Android speech services and try again."
+                                    }
+                                return
+                            }
+                            if (!usingPlatformFallback) {
+                                val platformEngine = runCatching { SpeechRecognizer.createSpeechRecognizer(context) }.getOrNull()
+                                if (platformEngine != null) {
+                                    platformEngine.setRecognitionListener(this)
+                                    val previousEngine = recognizer
+                                    recognizer = platformEngine
+                                    usingPlatformFallback = true
+                                    languageFallbackIndex = 0
+                                    val firstLocale = profile.locales.firstOrNull()
+                                    error = "On-device recognition does not support this language. Trying Android's platform speech service…"
+                                    listening = true
+                                    processing = false
+                                    runCatching {
+                                        previousEngine?.destroy()
+                                        platformEngine.startListening(buildAvaRecognitionIntent(firstLocale))
+                                    }.onFailure {
+                                        listening = false
+                                        sessionActive = false
+                                        error = "Android's platform speech service could not start. Check the installed speech service and try again."
+                                    }
+                                    return
+                                }
+                            }
+                            sessionActive = false
+                            error = "Neither on-device nor Android's platform speech service supports the " + profile.label + " language profile. Install its speech language pack or choose another language."
+                            return
+                        }
                         sessionActive = false
                         error = when (errorCode) {
                             SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission is required. Allow it in Android settings, then tap Activate."
@@ -228,7 +295,6 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
                     override fun onPartialResults(partialResults: Bundle?) {}
                     override fun onEvent(eventType: Int, params: Bundle?) {}
                 })
-            }
         }
         val engine = TextToSpeech(context) { status -> ttsReady = status == TextToSpeech.SUCCESS }
         speech = engine
@@ -318,6 +384,42 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
             }
         }
         error?.let { Text(it, color = Color(0xFFFF7D78), fontSize = 12.sp) }
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("RECOGNITION LANGUAGE", color = Color(0xFF91A4B8), fontSize = 9.sp, letterSpacing = 1.sp)
+                Text(avaRecognitionLanguageProfiles[selectedLanguageIndex].label, color = Color.White, fontSize = 13.sp)
+            }
+            Box {
+                TextButton(onClick = { languageMenuExpanded = true }) {
+                    Text("CHANGE", color = Color(0xFF42D9F5), fontWeight = FontWeight.Bold)
+                }
+                DropdownMenu(
+                    expanded = languageMenuExpanded,
+                    onDismissRequest = { languageMenuExpanded = false }
+                ) {
+                    avaRecognitionLanguageProfiles.forEachIndexed { index, profile ->
+                        DropdownMenuItem(
+                            text = { Text(profile.label) },
+                            onClick = {
+                                selectedLanguageIndex = index
+                                languageFallbackIndex = 0
+                                languageMenuExpanded = false
+                                error = null
+                            }
+                        )
+                    }
+                }
+            }
+        }
+        Text(
+            "AUTOMATIC FALLBACK: Nigerian, British, American and general English; Hausa, Yoruba and Igbo profiles include device-default fallback.",
+            color = Color(0xFF91A4B8),
+            fontSize = 9.sp
+        )
         Button(
             onClick = {
                 if (listening || speaking) stopSession()

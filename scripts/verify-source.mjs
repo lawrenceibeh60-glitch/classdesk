@@ -7,9 +7,9 @@ const pkg = JSON.parse(read("package.json"));
 const schema = read("prisma/schema.prisma");
 const migrationDirs = readdirSync(join(root, "prisma/migrations")).filter((name) => !name.startsWith(".") && statSync(join(root, "prisma/migrations", name)).isDirectory());
 const migrationSql = migrationDirs.map((name) => read(`prisma/migrations/${name}/migration.sql`)).join("\n");
-const requiredModels = ["AcademicRecord", "Document", "DocumentChunk", "Announcement", "AnnouncementVersion", "AnnouncementEvent", "SyncMutation", "Course", "LectureSession", "Assignment", "AttendanceSummary", "ClassConcern", "RateLimitBucket", "AiTask", "AuditLog", "AiWorkerState"];
+const requiredModels = ["AcademicRecord", "Document", "DocumentChunk", "Announcement", "AnnouncementVersion", "AnnouncementEvent", "SyncMutation", "Course", "LectureSession", "Assignment", "AttendanceSummary", "ClassConcern", "RateLimitBucket", "AiTask", "AuditLog", "AiWorkerState", "AiRequestReceipt"];
 for (const model of requiredModels) assert.match(schema, new RegExp(`model\\s+${model}\\s*\\{`), `Missing Prisma model: ${model}`);
-for (const table of ["Course", "LectureSession", "Assignment", "AttendanceSummary", "ClassConcern", "AnnouncementVersion", "AnnouncementEvent", "RateLimitBucket", "AiTask", "AuditLog", "AiWorkerState"]) assert.ok(migrationSql.includes(`CREATE TABLE "${table}"`), `Missing SQL migration table: ${table}`);
+for (const table of ["Course", "LectureSession", "Assignment", "AttendanceSummary", "ClassConcern", "AnnouncementVersion", "AnnouncementEvent", "RateLimitBucket", "AiTask", "AuditLog", "AiWorkerState", "AiRequestReceipt"]) assert.ok(migrationSql.includes(`CREATE TABLE "${table}"`), `Missing SQL migration table: ${table}`);
 assert.match(migrationSql, /ALTER TABLE "AcademicRecord" ADD COLUMN "version" INTEGER NOT NULL DEFAULT 1/, "Missing optimistic record version migration");
 assert.match(read("app/api/sync/route.ts"), /baseVersion/, "Sync optimistic version checks are missing");
 assert.match(read("app/api/sync/route.ts"), /const actor = await getSession\(\);[\s\S]*if \(!actor\)[\s\S]*actor\?\.role === "ASSISTANT_REP"/, "Offline sync role restrictions must use the same authenticated session that passed authorization");
@@ -22,6 +22,8 @@ for (const route of ["app/api/academic/route.ts", "app/api/announcements/route.t
 for (const page of ["courses", "lectures", "assignments", "attendance", "concerns", "calendar", "coverage"]) assert.ok(existsSync(join(root, `app/${page}/page.tsx`)), `Missing page: ${page}`);
 assert.ok(pkg.dependencies?.next && pkg.dependencies?.react && pkg.dependencies?.["@prisma/client"], "Core runtime dependencies are missing");
 assert.ok(pkg.scripts?.build?.includes("prisma generate") && pkg.scripts?.typecheck, "Build/typecheck scripts are missing");
+assert.ok(pkg.scripts?.["vercel-build"]?.includes("prisma migrate deploy"), "Vercel builds must apply all pending Prisma migrations before compiling the app");
+assert.match(migrationSql, /CREATE TABLE "AiRequestReceipt"/, "AI request receipt migration must create the production table");
 const sourceFiles = readdirSync(root, { recursive: true }).filter((file) => typeof file === "string" && /\.(?:ts|tsx|js|jsx)$/.test(file) && !file.startsWith("node_modules/") && !file.startsWith(".next/") && !file.startsWith("desktop/node_modules/") && !file.startsWith("desktop/payload/") && !file.startsWith("dist-desktop/"));
 const sourceText = sourceFiles.map((file) => read(file)).join("\n");
 assert.ok(!/NEXT_PUBLIC_(?:AI_API_KEY|OPENAI_API_KEY|SESSION_SECRET|S3_SECRET_ACCESS_KEY)/.test(sourceText), "A server secret appears to be exposed through a NEXT_PUBLIC variable");
@@ -84,6 +86,13 @@ assert.ok(!avaSource.includes("cleanupRef"), "Website Ava must not retain the ob
 const androidVoiceSource = read("android/app/src/main/java/com/kyro/classdesk/ui/AvaVoiceScreen.kt");
 assert.match(androidVoiceSource, /SpeechRecognizer\.createOnDeviceSpeechRecognizer/, "Android Ava must prefer native on-device speech recognition when available");
 assert.match(androidVoiceSource, /SpeechRecognizer\.createSpeechRecognizer/, "Android Ava must fall back to the Android platform speech recognizer");
+assert.ok(androidVoiceSource.includes('AvaRecognitionLanguageProfile("English (Nigeria)", listOf("en-NG", "en-GB", "en-US", "en", null))'), "English speech recognition must fall back from Nigerian to British, American, general and device-default language");
+assert.ok(androidVoiceSource.includes('AvaRecognitionLanguageProfile("Hausa"'), "Ava must offer a Hausa recognition profile");
+assert.ok(androidVoiceSource.includes('AvaRecognitionLanguageProfile("Yoruba"'), "Ava must offer a Yoruba recognition profile");
+assert.ok(androidVoiceSource.includes('AvaRecognitionLanguageProfile("Igbo"'), "Ava must offer an Igbo recognition profile");
+assert.ok(androidVoiceSource.includes("ERROR_LANGUAGE_NOT_SUPPORTED") && androidVoiceSource.includes("recognizer?.startListening(buildAvaRecognitionIntent(nextLocale))"), "Android Ava must automatically try the next locale when the recognizer reports an unsupported language");
+assert.ok(androidVoiceSource.includes("usingPlatformFallback") && androidVoiceSource.includes("SpeechRecognizer.createSpeechRecognizer(context)"), "Android Ava must fall back from unsupported on-device language packs to the platform speech service");
+assert.ok(androidVoiceSource.includes("RECOGNITION LANGUAGE") && androidVoiceSource.includes("DropdownMenu"), "Android Ava must expose a selectable speech recognition language");
 assert.match(androidVoiceSource, /permission\.launch\(Manifest\.permission\.RECORD_AUDIO\)/, "Android microphone permission must only be requested after the user activates voice mode");
 assert.match(avaSource, /setTimeout\(\(\) => \{ if \(wantRef\.current\) speak\("Ava is ready\. Go ahead\."\); \}, 300\)/, "Ava must not speak a delayed startup prompt after voice mode has been stopped");
 

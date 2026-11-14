@@ -4,14 +4,14 @@ concurrency:
   cancel-in-progress: true
 on:
   push:
-    branches: [main, work/**, feat/**, feature/android-parity-completion]
+    branches: [main, work/**, feat/**, feature/android-parity-completion, fix/**]
   pull_request:
     branches: [main]
   workflow_dispatch:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     env:
       DATABASE_URL: postgresql://classdesk:classdesk@localhost:5432/classdesk
       SESSION_SECRET: ci-only-session-secret-with-more-than-32-characters
@@ -39,7 +39,90 @@ jobs:
       - run: node --check scripts/ava-task-worker.mjs
       - run: npx prisma validate
       - run: npx prisma generate
-      - run: npx prisma migrate deploy
       - run: npm run typecheck
       - run: npm run lint
-      - run: npm run build
+      - run: npm run vercel-build
+
+  android-verify:
+    name: Android Kotlin compile and unit tests
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/fix/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+      - name: Configure Android SDK
+        shell: bash
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          if [ ! -x "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+            echo "Android SDK command-line tools not found at $SDK_ROOT" >&2
+            exit 1
+          fi
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          echo "$SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          set +o pipefail
+          yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses
+          set -o pipefail
+      - name: Install Android SDK 35
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+      - name: Compile Kotlin and run Android unit tests
+        working-directory: android
+        run: gradle :app:compileDebugKotlin :app:testDebugUnitTest --stacktrace
+
+  build-debug-apk:
+    name: Build APK after all CI checks pass
+    needs: [validate, android-verify]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/fix/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+      - name: Configure Android SDK
+        shell: bash
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          if [ ! -x "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+            echo "Android SDK command-line tools not found at $SDK_ROOT" >&2
+            exit 1
+          fi
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          echo "$SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          set +o pipefail
+          yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses
+          set -o pipefail
+      - name: Install Android SDK 35
+        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+      - name: Build debug APK
+        working-directory: android
+        env:
+          CLASSDESK_API_BASE_URL: https://afit-classdesk.vercel.app/
+        run: gradle assembleDebug --stacktrace
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AFIT-ClassDesk-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
