@@ -112,6 +112,7 @@ fun ClassDeskApp() {
             upcoming = upcoming,
             onRefresh = { scope.launch { loading = true; refreshSession() } },
             onLogout = {
+                ClassDeskSyncScheduler.cancel(context)
                 ApiClient.cookies(context).clear()
                 user = null
                 summary = null
