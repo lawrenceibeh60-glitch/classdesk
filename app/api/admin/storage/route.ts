@@ -1,0 +1,71 @@
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { assertSameOrigin, requirePrimaryAdmin } from "@/lib/http";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+export async function GET() {
+  const denied = await requirePrimaryAdmin();
+  if (denied) return denied;
+
+  const [records, documents, chunks, announcements, announcementVersions, courses, assignments, syncPending, syncApplied, rateLimitBuckets, aiReceipts] = await Promise.all([
+    db.academicRecord.count(),
+    db.document.count(),
+    db.documentChunk.count(),
+    db.announcement.count(),
+    db.announcementVersion.count(),
+    db.course.count(),
+    db.assignment.count(),
+    db.syncMutation.count({ where: { appliedAt: null } }),
+    db.syncMutation.count({ where: { appliedAt: { not: null } } }),
+    db.rateLimitBucket.count(),
+    db.aiRequestReceipt.count(),
+  ]);
+
+  let databaseBytes: number | null = null;
+  try {
+    const size = await db.$queryRaw<Array<{ bytes: bigint | string }>>`SELECT pg_database_size(current_database()) AS bytes`;
+    const value = size[0]?.bytes;
+    if (value !== undefined) databaseBytes = Number(value);
+  } catch {
+    // Some hosted Postgres roles restrict database-size introspection.
+  }
+
+  return NextResponse.json({
+    counts: { records, documents, chunks, announcements, announcementVersions, courses, assignments, syncPending, syncApplied, rateLimitBuckets, aiReceipts },
+    databaseBytes,
+    cleanupPolicy: "Only expired rate-limit buckets and old applied sync/AI idempotency receipts are eligible. Class records, announcements, documents and their extracted text are never bulk-deleted here.",
+  }, { headers: { "Cache-Control": "no-store" } });
+}
+
+export async function POST(req: NextRequest) {
+  const originDenied = assertSameOrigin(req);
+  if (originDenied) return originDenied;
+  const denied = await requirePrimaryAdmin();
+  if (denied) return denied;
+
+  const body = await req.json().catch(() => null);
+  if (body?.confirmation !== "CLEANUP_CLASSDESK_SQL") {
+    return NextResponse.json({ error: "Type CLEANUP_CLASSDESK_SQL to confirm this operation" }, { status: 400 });
+  }
+  const retentionDays = Number(body.retentionDays);
+  if (![30, 60, 90].includes(retentionDays)) {
+    return NextResponse.json({ error: "Choose a supported retention period: 30, 60 or 90 days" }, { status: 400 });
+  }
+
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
+  const [rateLimits, syncHistory, aiReceipts] = await db.$transaction([
+    db.rateLimitBucket.deleteMany({ where: { resetAt: { lt: now } } }),
+    db.syncMutation.deleteMany({ where: { appliedAt: { not: null }, createdAt: { lt: cutoff } } }),
+    db.aiRequestReceipt.deleteMany({ where: { createdAt: { lt: cutoff } } }),
+  ]);
+
+  return NextResponse.json({
+    ok: true,
+    deleted: { expiredRateLimitBuckets: rateLimits.count, oldAppliedSyncMutations: syncHistory.count, oldAiRequestReceipts: aiReceipts.count },
+    retainedSince: cutoff.toISOString(),
+    message: "Temporary SQL housekeeping data cleaned. Class content and uploaded documents were left untouched.",
+  });
+}
