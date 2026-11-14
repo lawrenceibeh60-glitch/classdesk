@@ -57,6 +57,10 @@ interface ClassDeskApi {
     @POST("api/ai/chat")
     suspend fun chat(@Body body: ChatRequest): Response<ChatResponse>
 
+    @Streaming
+    @POST("api/voice/speak")
+    suspend fun speak(@Body body: Map<String, String>): Response<ResponseBody>
+
     @GET("api/announcements")
     suspend fun announcements(): Response<AnnouncementsEnvelope>
 
