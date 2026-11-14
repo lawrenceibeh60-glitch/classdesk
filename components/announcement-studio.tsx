@@ -30,7 +30,7 @@ export default function AnnouncementStudio({ isPrimaryAdmin }: { isPrimaryAdmin:
         setItems(list);
       }
     } catch (error) {
-      if (!offlineDB) throw error;
+      if (!offlineDB || !(error instanceof TypeError)) { setItems([]); throw error; }
       const cached = await offlineDB.academicItems.where("resource").equals("announcements").toArray(); setItems(cached.map(item => item.payload as unknown as Announcement));
       if (!cached.length) setMessage(error instanceof Error ? error.message : "Offline: no cached announcements available.");
     }
