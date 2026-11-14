@@ -204,6 +204,9 @@ async function runTask(task) {
 }
 
 async function loop() {
+  if (!s3 || !bucket || !endpoint || !process.env.AI_BASE_URL || !process.env.AI_API_KEY || !process.env.AI_MODEL) {
+    throw new Error("Ava worker requires DATABASE_URL, xKiro AI settings and complete S3-compatible storage settings before it can start.");
+  }
   await heartbeat();
   console.log("Ava task worker started; polling every " + intervalMs + "ms");
   while (!stopping) {
