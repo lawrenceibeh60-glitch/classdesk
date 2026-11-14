@@ -73,3 +73,8 @@ assert.match(avaSource, /handlersRef\.current\.onCommand\(text\)/, "Ava must pro
 assert.match(avaWorkspace, /voicePanelOpen && <div className="ava-overlay"/, "Tapping the microphone must open the graphical Ava voice interface");
 assert.match(avaWorkspace, /if \(ava\.listening\) ava\.speak\(/, "Ava spoken replies must be limited to an active microphone session");
 assert.match(avaWorkspace, /setVoicePanelOpen\(true\); ava\.toggle\(\)/, "The microphone button must explicitly open and start voice mode");
+
+const healthRoute = read("app/api/health/route.ts");
+assert.match(healthRoute, /DATABASE_URL_POOLED \|\| process\.env\.DATABASE_URL/, "Health checks must recognise pooled Neon database configuration");
+assert.match(healthRoute, /AWS_ACCESS_KEY_ID/, "Health checks must recognise Neon Object Storage AWS credentials");
+assert.match(healthRoute, /AWS_ENDPOINT_URL_S3/, "Health checks must recognise the Neon Object Storage endpoint");
