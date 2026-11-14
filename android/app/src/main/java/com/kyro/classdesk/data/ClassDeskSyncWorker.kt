@@ -191,7 +191,7 @@ object ClassDeskSyncScheduler {
             .build()
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             "classdesk-offline-sync",
-            ExistingPeriodicWorkPolicy.KEEP,
+            ExistingPeriodicWorkPolicy.UPDATE,
             request
         )
     }
