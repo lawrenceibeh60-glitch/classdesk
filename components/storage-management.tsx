@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 type StorageData = {
   counts: Record<string, number>;
   databaseBytes: number | null;
+  tableSizes?: Array<{ table: string; bytes: number }>;
   cleanupPolicy: string;
 };
 
