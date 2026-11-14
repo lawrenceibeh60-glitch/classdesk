@@ -6,7 +6,10 @@ plugins {
 val apiBaseUrl = providers.gradleProperty("CLASSDESK_API_BASE_URL")
     .orElse(providers.environmentVariable("CLASSDESK_API_BASE_URL"))
     .orElse("https://afit-classdesk.vercel.app/")
-    .get().let { if (it.endsWith("/")) it else "$it/" }
+    .get().trim().let {
+        require(it.startsWith("https://", ignoreCase = true)) { "CLASSDESK_API_BASE_URL must use HTTPS." }
+        if (it.endsWith("/")) it else "$it/"
+    }
 android {
     namespace = "com.kyro.classdesk"
     compileSdk = 35
