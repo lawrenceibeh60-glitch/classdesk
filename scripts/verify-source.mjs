@@ -81,3 +81,9 @@ assert.match(healthRoute, /AWS_ENDPOINT_URL_S3/, "Health checks must recognise t
 
 const logoutSource = read("components/logout-button.tsx");
 for (const queue of ["outbox", "academicQueue", "aiQueue", "uploads"]) assert.match(logoutSource, new RegExp(`${queue}\\.count\\(\\)`), `Logout warning must include pending ${queue} items`);
+
+assert.match(avaSource, /const \[speaking, setSpeaking\] = useState\(false\)/, "Ava must expose an explicit speaking state");
+assert.match(avaSource, /const \[processing, setProcessing\] = useState\(false\)/, "Ava must expose an explicit processing state");
+assert.match(avaWorkspace, /ava\.speaking \? "Ava is speaking" : ava\.processing \? "Working on your request"/, "Ava voice interface must show speaking and processing feedback");
+assert.match(read("components/section-shell.tsx"), /Calendar & timetable.*\/calendar/, "Calendar and timetable must be reachable from workspace navigation");
+assert.match(healthRoute, /NODE_ENV !== "production" && process\.env\.LOCAL_STORAGE_DIR/, "Local disk storage must not be reported as production shared storage");
