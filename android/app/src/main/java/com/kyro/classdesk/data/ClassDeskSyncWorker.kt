@@ -19,7 +19,25 @@ class ClassDeskSyncWorker(context: Context, params: WorkerParameters) : Coroutin
     override suspend fun doWork(): Result {
         val store = OfflineStore(applicationContext)
         try {
-            val owner = ApiClient.cookies(applicationContext).loadUser() ?: return Result.success()
+            val cookies = ApiClient.cookies(applicationContext)
+            val owner = cookies.loadUser() ?: return Result.success()
+            // Periodic authenticated polling provides background local alerts without exposing
+            // account data to a third-party push provider. WorkManager may defer this on Android.
+            try {
+                val announcementResponse = ApiClient.get(applicationContext).announcements()
+                if (announcementResponse.isSuccessful) {
+                    val latest = announcementResponse.body()?.announcements.orEmpty()
+                    val previous = cookies.loadSnapshot("announcements")?.let {
+                        runCatching { Gson().fromJson(it, Array<AnnouncementDto>::class.java)?.toList() }.getOrNull()
+                    }
+                    if (previous != null && ClassDeskNotifications.canPost(applicationContext)) {
+                        val knownIds = previous.map { it.id }.toSet()
+                        latest.filter { it.status.equals("PUBLISHED", true) && it.id !in knownIds }
+                            .forEach { ClassDeskNotifications.announcement(applicationContext, it.id, it.title) }
+                    }
+                    cookies.saveSnapshot("announcements", Gson().toJson(latest))
+                }
+            } catch (_: Exception) { /* Keep notification polling independent from offline mutation replay. */ }
             val queued = store.pending(owner.username, 100)
             if (queued.isEmpty()) return Result.success()
             var appliedCount = 0
@@ -107,7 +125,7 @@ object ClassDeskSyncScheduler {
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
-        val request = PeriodicWorkRequestBuilder<ClassDeskSyncWorker>(6, TimeUnit.HOURS)
+        val request = PeriodicWorkRequestBuilder<ClassDeskSyncWorker>(15, TimeUnit.MINUTES)
             .setConstraints(constraints)
             .setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
