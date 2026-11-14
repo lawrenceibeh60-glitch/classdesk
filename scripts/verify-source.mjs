@@ -7,9 +7,9 @@ const pkg = JSON.parse(read("package.json"));
 const schema = read("prisma/schema.prisma");
 const migrationDirs = readdirSync(join(root, "prisma/migrations")).filter((name) => !name.startsWith(".") && statSync(join(root, "prisma/migrations", name)).isDirectory());
 const migrationSql = migrationDirs.map((name) => read(`prisma/migrations/${name}/migration.sql`)).join("\n");
-const requiredModels = ["AcademicRecord", "Document", "DocumentChunk", "Announcement", "AnnouncementVersion", "AnnouncementEvent", "SyncMutation", "Course", "LectureSession", "Assignment", "AttendanceSummary", "ClassConcern", "RateLimitBucket", "AiTask", "AuditLog"];
+const requiredModels = ["AcademicRecord", "Document", "DocumentChunk", "Announcement", "AnnouncementVersion", "AnnouncementEvent", "SyncMutation", "Course", "LectureSession", "Assignment", "AttendanceSummary", "ClassConcern", "RateLimitBucket", "AiTask", "AuditLog", "AiWorkerState"];
 for (const model of requiredModels) assert.match(schema, new RegExp(`model\\s+${model}\\s*\\{`), `Missing Prisma model: ${model}`);
-for (const table of ["Course", "LectureSession", "Assignment", "AttendanceSummary", "ClassConcern", "AnnouncementVersion", "AnnouncementEvent", "RateLimitBucket", "AiTask", "AuditLog"]) assert.ok(migrationSql.includes(`CREATE TABLE "${table}"`), `Missing SQL migration table: ${table}`);
+for (const table of ["Course", "LectureSession", "Assignment", "AttendanceSummary", "ClassConcern", "AnnouncementVersion", "AnnouncementEvent", "RateLimitBucket", "AiTask", "AuditLog", "AiWorkerState"]) assert.ok(migrationSql.includes(`CREATE TABLE "${table}"`), `Missing SQL migration table: ${table}`);
 assert.match(migrationSql, /ALTER TABLE "AcademicRecord" ADD COLUMN "version" INTEGER NOT NULL DEFAULT 1/, "Missing optimistic record version migration");
 assert.match(read("app/api/sync/route.ts"), /baseVersion/, "Sync optimistic version checks are missing");
 assert.match(read("app/api/sync/route.ts"), /const actor = await getSession\(\);[\s\S]*if \(!actor\)[\s\S]*actor\?\.role === "ASSISTANT_REP"/, "Offline sync role restrictions must use the same authenticated session that passed authorization");
@@ -155,3 +155,7 @@ assert.ok(read("components/ai-workspace.tsx").includes("PERMANENT DELETION CONFI
 
 assert.ok(read("android/app/src/main/java/com/kyro/classdesk/ui/AvaToolsScreen.kt").includes("SQL SELECT CONSOLE"), "Android must expose the Ava read-only SQL console");
 assert.ok(read("android/app/src/main/java/com/kyro/classdesk/ui/ClassDeskApp.kt").includes("AvaToolsScreen(api, user.role == \"CLASS_REP\")"), "Android Ava tools must be role-gated in navigation");
+
+assert.ok(read("scripts/ava-task-worker.mjs").includes("aiWorkerState.upsert"), "Ava worker must publish a database heartbeat");
+assert.ok(read("app/api/ai/tasks/route.ts").includes("Ava's background worker is not online yet"), "Ava must not accept background tasks without a live worker");
+assert.ok(read("app/api/health/route.ts").includes("avaWorkerOnline"), "Health status must expose Ava worker availability");
