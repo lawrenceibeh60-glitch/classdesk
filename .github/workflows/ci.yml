@@ -39,10 +39,9 @@ jobs:
       - run: node --check scripts/ava-task-worker.mjs
       - run: npx prisma validate
       - run: npx prisma generate
-      - run: npx prisma migrate deploy
       - run: npm run typecheck
       - run: npm run lint
-      - run: npm run build
+      - run: npm run vercel-build
 
   android-verify:
     name: Android Kotlin compile and unit tests
