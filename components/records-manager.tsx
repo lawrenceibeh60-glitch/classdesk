@@ -238,7 +238,7 @@ export default function RecordsManager({ mode }: { mode: Mode }) {
               <div className="item" key={d.id}>
                 <div className="row"><strong>{d.title}</strong><span className="tag">{d.status}{d.securityScanStatus ? ` · ${d.securityScanStatus}` : ""}</span></div>
                 <p>{d.courseName || "Course not assigned"} · {d.topic || "Topic not assigned"}{d.lectureDate ? ` · ${fmt(d.lectureDate)}` : ""} · {d.filename}</p>
-                <div className="actions">{d.status === "QUEUED" ? <span className="sub">Stored on this device · waiting for connection</span> : d.originalAvailable ? <a className="btn" href={`/api/documents/${encodeURIComponent(d.id)}`}>Download original</a> : <span className="sub">Original not retained · searchable text is saved</span>}<button className="btn ghost" onClick={() => void removeDoc(d.id)}>{d.status === "QUEUED" ? "Remove queued upload" : "Delete"}</button></div>
+                <div className="actions">{d.status === "QUEUED" ? <span className="sub">Stored on this device · waiting for connection</span> : d.originalAvailable ? <a className="btn" href={`/api/documents/${encodeURIComponent(d.id)}`}>Download original</a> : <span className="sub">Original not retained · searchable text is saved</span>}{(d.status === "QUEUED" || isPrimaryAdmin) && <button className="btn ghost" onClick={() => void removeDoc(d.id)}>{d.status === "QUEUED" ? "Remove queued upload" : "Delete"}</button>}</div>
               </div>
             )) : <div className="empty">No documents found.</div>
           ) : visible.length ? visible.map(i => (
@@ -248,7 +248,7 @@ export default function RecordsManager({ mode }: { mode: Mode }) {
               <div className="actions">
                                 <button className="btn ghost" onClick={() => startEdit(i)}>Edit</button>
                 {i.type === "TASK" && <button className="btn" onClick={() => void toggleDone(i)}>{i.status === "DONE" ? "Reopen" : "Mark done"}</button>}
-                <button className="btn ghost" onClick={() => void removeRecord(i.id)}>Delete</button>
+                {isPrimaryAdmin && <button className="btn ghost" onClick={() => void removeRecord(i.id)}>Delete</button>}
               </div>
             </div>
           )) : <div className="empty">No records found.</div>}
