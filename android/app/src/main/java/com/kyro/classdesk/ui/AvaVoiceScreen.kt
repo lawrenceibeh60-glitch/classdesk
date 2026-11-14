@@ -112,10 +112,13 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
         }
-        try { engine.startListening(intent) }
-        catch (_: Exception) {
+        try {
+            engine.startListening(intent)
+        } catch (_: Exception) {
+            sessionActive = false
             listening = false
-            error = "Could not start speech recognition. Check device speech services."
+            processing = false
+            error = "Android speech recognition could not start. Check the device's speech services, then tap Activate to retry."
         }
     }
 
@@ -144,11 +147,16 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
                         listening = false
                         processing = false
                         if (userStopped) { userStopped = false; return }
+                        sessionActive = false
                         error = when (errorCode) {
-                            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission is required."
-                            SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Speech service needs an internet connection."
-                            SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "I didn't catch that. Tap the microphone and try again."
-                            else -> "Speech recognition stopped. Tap to try again."
+                            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission is required. Allow it in Android settings, then tap Activate."
+                            SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Android's speech service needs an internet connection. Check your connection and try again."
+                            SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "I didn't catch that. Tap Activate and speak again."
+                            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Android's speech service is busy. Wait a moment, then tap Activate again."
+                            SpeechRecognizer.ERROR_AUDIO -> "Android could not access the microphone audio. Check microphone permission and try again."
+                            SpeechRecognizer.ERROR_CLIENT -> "Android stopped the speech session. Tap Activate to start a fresh request."
+                            SpeechRecognizer.ERROR_SERVER -> "Android's speech service returned an error. Try again in a moment."
+                            else -> "Android speech recognition stopped (code $errorCode). Tap Activate to retry."
                         }
                     }
                     override fun onResults(results: Bundle?) {
