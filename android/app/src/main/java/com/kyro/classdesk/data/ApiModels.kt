@@ -14,7 +14,7 @@ data class CoursesEnvelope(val items: List<CourseDto>?)
 data class AssignmentsEnvelope(val items: List<AssignmentDto>?)
 data class SyncMutationDto(val id: String, val entityType: String = "record", val entityId: String, val operation: String, val baseVersion: Int, val payload: com.google.gson.JsonObject)
 data class SyncPushRequest(val mutations: List<SyncMutationDto>)
-data class SyncConflictDto(val id: String, val entityId: String, val reason: String)
+data class SyncConflictDto(val id: String, val entityId: String, val reason: String, val serverRecord: AcademicRecordDto? = null)
 data class SyncRejectedDto(val id: String, val reason: String)
 data class SyncPushResponse(val appliedIds: List<String>?, val conflicts: List<SyncConflictDto>?, val rejected: List<SyncRejectedDto>?)
 
