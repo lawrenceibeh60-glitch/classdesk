@@ -62,8 +62,11 @@ class OfflineStore(private val context: Context) : SQLiteOpenHelper(context, "cl
             put("status", "PENDING")
             put("created_at", System.currentTimeMillis())
         }
-        writableDatabase.insertWithOnConflict("pending_mutations", null, values, SQLiteDatabase.CONFLICT_REPLACE)
-        ClassDeskSyncScheduler.scheduleNow(context)
+        val inserted = writableDatabase.insertWithOnConflict("pending_mutations", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        check(inserted != -1L) { "Could not persist the offline change." }
+        // The durable queue entry must survive even if WorkManager cannot be scheduled
+        // at this moment; login also installs periodic network-constrained sync.
+        runCatching { ClassDeskSyncScheduler.scheduleNow(context) }
     }
 
     @Synchronized
