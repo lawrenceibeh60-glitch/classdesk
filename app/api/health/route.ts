@@ -27,7 +27,7 @@ export async function GET() {
     databaseConfigured,
     databaseReachable,
     storageConfigured,
-    aiConfigured: Boolean((process.env.AI_BASE_URL && process.env.AI_API_KEY && process.env.AI_MODEL) || process.env.MISTRAL_API_KEY),
+    aiConfigured: Boolean(process.env.AI_BASE_URL && process.env.AI_API_KEY && process.env.AI_MODEL),
     sttConfigured: Boolean(process.env.MISTRAL_API_KEY),
     ttsConfigured: Boolean(process.env.ELEVENLABS_API_KEY),
     malwareScannerConfigured: Boolean(process.env.CLAMAV_HOST),
