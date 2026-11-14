@@ -363,6 +363,7 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                     }
                 }
             } catch (_: Exception) {
+                if (selected in listOf("Tasks", "Lectures", "Attendance")) courses = secureStore.loadSnapshot("courses")?.let { runCatching { Gson().fromJson(it, Array<CourseDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
                 if (selected == "Courses") courses = secureStore.loadSnapshot("courses")?.let { runCatching { Gson().fromJson(it, Array<CourseDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
                 if (selected == "Tasks") assignments = secureStore.loadSnapshot("assignments")?.let { runCatching { Gson().fromJson(it, Array<AssignmentDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
                 if (selected == "Lectures") lectures = secureStore.loadSnapshot("lectures")?.let { runCatching { Gson().fromJson(it, Array<LectureDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
