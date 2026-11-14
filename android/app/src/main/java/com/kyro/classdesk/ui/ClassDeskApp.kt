@@ -297,7 +297,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
         bottomBar = {
             NavigationBar(containerColor = Panel, contentColor = Cyan) {
                 listOf("Overview", "Courses", "Tasks", "More", "Ava").forEach { item ->
-                    NavigationBarItem(selected = selected == item || (item == "More" && selected in listOf("Lectures", "Attendance", "Concerns", "Announcements", "Calendar", "Documents", "Sync Queue")), onClick = { selected = item },
+                    NavigationBarItem(selected = selected == item || (item == "More" && selected in listOf("Lectures", "Attendance", "Concerns", "Announcements", "Calendar", "Documents", "Sync Queue", "Catch-up Centre", "Coverage", "Class Records", "Settings")), onClick = { selected = item },
                         icon = { Icon(when (item) {
                             "Courses" -> Icons.Default.MenuBook
                             "Tasks" -> Icons.Default.CheckCircle
@@ -437,7 +437,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                         Text(module.uppercase(), color = Cyan, modifier = Modifier.fillMaxWidth())
                     }
                 }
-                Text("More modules will be added here as their native workflows are completed.", color = Muted, fontSize = 12.sp)
+                Text("Native academic tools, records, catch-up views and account diagnostics.", color = Muted, fontSize = 12.sp)
             } else if (selected == "Lectures") {
                 Text("LECTURE REGISTER", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
                 Button(onClick = { showLectureDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD LECTURE") }
