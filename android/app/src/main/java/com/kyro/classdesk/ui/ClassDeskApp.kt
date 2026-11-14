@@ -155,6 +155,12 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
     var attendance by remember { mutableStateOf<List<AttendanceDto>>(emptyList()) }
     var concerns by remember { mutableStateOf<List<ConcernDto>>(emptyList()) }
     var announcements by remember { mutableStateOf<List<AnnouncementDto>>(emptyList()) }
+    var calendarItems by remember { mutableStateOf<List<AcademicRecordDto>>(emptyList()) }
+    var showCalendarDialog by remember { mutableStateOf(false) }
+    var calendarTitle by remember { mutableStateOf("") }
+    var calendarContent by remember { mutableStateOf("") }
+    var calendarDate by remember { mutableStateOf("") }
+    var calendarType by remember { mutableStateOf("TIMETABLE") }
     var showAnnouncementDialog by remember { mutableStateOf(false) }
     var announcementTitle by remember { mutableStateOf("") }
     var announcementBody by remember { mutableStateOf("") }
@@ -188,7 +194,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
     val secureStore = remember { ApiClient.cookies(context) }
     LaunchedEffect(selected) {
         moduleError = null
-        if (selected in listOf("Courses", "Tasks", "Lectures", "Attendance", "Concerns", "Announcements")) {
+        if (selected in listOf("Courses", "Tasks", "Lectures", "Attendance", "Concerns", "Announcements", "Calendar")) {
             moduleLoading = true
             try {
                 if (selected == "Courses") {
@@ -237,6 +243,15 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                         concerns = secureStore.loadSnapshot("concerns")?.let { runCatching { Gson().fromJson(it, Array<ConcernDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
                         moduleError = "Could not refresh concerns; showing the last saved copy."
                     }
+                } else if (selected == "Calendar") {
+                    val response = api.records()
+                    if (response.isSuccessful) {
+                        calendarItems = response.body()?.records.orEmpty()
+                        secureStore.saveSnapshot("calendar", Gson().toJson(calendarItems))
+                    } else {
+                        calendarItems = secureStore.loadSnapshot("calendar")?.let { runCatching { Gson().fromJson(it, Array<AcademicRecordDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
+                        moduleError = "Could not refresh the calendar; showing the last saved copy."
+                    }
                 } else {
                     val response = api.announcements()
                     if (response.isSuccessful) {
@@ -254,6 +269,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                 if (selected == "Attendance") attendance = secureStore.loadSnapshot("attendance")?.let { runCatching { Gson().fromJson(it, Array<AttendanceDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
                 if (selected == "Concerns") concerns = secureStore.loadSnapshot("concerns")?.let { runCatching { Gson().fromJson(it, Array<ConcernDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
                 if (selected == "Announcements") announcements = secureStore.loadSnapshot("announcements")?.let { runCatching { Gson().fromJson(it, Array<AnnouncementDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
+                if (selected == "Calendar") calendarItems = secureStore.loadSnapshot("calendar")?.let { runCatching { Gson().fromJson(it, Array<AcademicRecordDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
                 moduleError = "OFFLINE / Showing the last saved copy where available."
             }
             finally { moduleLoading = false }
@@ -274,7 +290,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
         bottomBar = {
             NavigationBar(containerColor = Panel, contentColor = Cyan) {
                 listOf("Overview", "Courses", "Tasks", "More", "Ava").forEach { item ->
-                    NavigationBarItem(selected = selected == item || (item == "More" && selected in listOf("Lectures", "Attendance", "Concerns", "Announcements", "Documents")), onClick = { selected = item },
+                    NavigationBarItem(selected = selected == item || (item == "More" && selected in listOf("Lectures", "Attendance", "Concerns", "Announcements", "Calendar", "Documents")), onClick = { selected = item },
                         icon = { Icon(when (item) {
                             "Courses" -> Icons.Default.MenuBook
                             "Tasks" -> Icons.Default.CheckCircle
@@ -409,7 +425,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                 )
             } else if (selected == "More") {
                 Text("CLASS OPERATIONS", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
-                listOf("Lectures", "Attendance", "Concerns", "Announcements", "Documents").forEach { module ->
+                listOf("Lectures", "Attendance", "Concerns", "Announcements", "Calendar", "Documents").forEach { module ->
                     OutlinedButton(onClick = { selected = module }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(6.dp)) {
                         Text(module.uppercase(), color = Cyan, modifier = Modifier.fillMaxWidth())
                     }
@@ -537,6 +553,48 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                         } else moduleError = "Concern could not be saved."
                     } }, enabled = concernTitle.isNotBlank() && concernDetails.isNotBlank()) { Text("SAVE") } },
                     dismissButton = { TextButton(onClick = { showConcernDialog = false }) { Text("CANCEL") } }
+                )
+            } else if (selected == "Calendar") {
+                Text("CALENDAR / TIMETABLE", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
+                Button(onClick = { showCalendarDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD EVENT") }
+                if (moduleLoading) CircularProgressIndicator(color = Cyan)
+                moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
+                if (!moduleLoading && calendarItems.isEmpty()) Text("No upcoming class events are recorded.", color = Muted)
+                calendarItems.forEach { item ->
+                    Surface(color = Panel, shape = RoundedCornerShape(6.dp), modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Text(item.type.uppercase(), color = Cyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text(item.title, color = Color.White, fontWeight = FontWeight.SemiBold)
+                            Text(item.eventDate.orEmpty(), color = Gold, fontSize = 12.sp)
+                            if (item.content.isNotBlank()) Text(item.content, color = Muted, fontSize = 12.sp)
+                            if (user.role == "CLASS_REP") TextButton(onClick = {
+                                scope.launch {
+                                    val deleted = api.deleteRecord(item.id)
+                                    if (deleted.isSuccessful) calendarItems = api.records().body()?.records.orEmpty()
+                                    else moduleError = "Could not delete this calendar item."
+                                }
+                            }) { Text("DELETE", color = Color(0xFFFF7D78), fontSize = 10.sp) }
+                        }
+                    }
+                }
+                if (showCalendarDialog) AlertDialog(
+                    onDismissRequest = { showCalendarDialog = false },
+                    title = { Text("Add timetable event") },
+                    text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(calendarType, { calendarType = it.uppercase() }, label = { Text("Type: TIMETABLE or CALENDAR") }, singleLine = true)
+                        OutlinedTextField(calendarTitle, { calendarTitle = it }, label = { Text("Event title") }, singleLine = true)
+                        OutlinedTextField(calendarDate, { calendarDate = it }, label = { Text("Date/time (ISO format)") }, singleLine = true)
+                        OutlinedTextField(calendarContent, { calendarContent = it }, label = { Text("Details / venue") }, minLines = 2)
+                    } },
+                    confirmButton = { TextButton(onClick = { scope.launch {
+                        val saved = api.createRecord(mapOf("type" to calendarType, "title" to calendarTitle.trim(), "content" to calendarContent.trim(), "eventDate" to calendarDate.trim()))
+                        if (saved.isSuccessful) {
+                            calendarItems = api.records().body()?.records.orEmpty()
+                            calendarTitle = ""; calendarContent = ""; calendarDate = ""; calendarType = "TIMETABLE"
+                            showCalendarDialog = false
+                        } else moduleError = "Event could not be saved. Use TIMETABLE or CALENDAR and a valid ISO date."
+                    } }, enabled = calendarTitle.isNotBlank() && calendarDate.isNotBlank() && calendarType in listOf("TIMETABLE", "CALENDAR")) { Text("SAVE") } },
+                    dismissButton = { TextButton(onClick = { showCalendarDialog = false }) { Text("CANCEL") } }
                 )
             } else if (selected == "Documents") {
                 DocumentLibraryScreen(api, user.role == "CLASS_REP")
