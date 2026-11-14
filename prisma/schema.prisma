@@ -221,3 +221,27 @@ model AiRequestReceipt {
   createdAt DateTime @default(now())
   @@index([createdAt])
 }
+
+model AiTask {
+  id String @id @default(cuid())
+  ownerId String
+  ownerUsername String
+  kind String
+  status String @default("QUEUED")
+  input Json
+  output Json?
+  progress Int @default(0)
+  currentStep String @default("Queued")
+  errorMessage String? @db.Text
+  resultDocumentId String?
+  attempts Int @default(0)
+  availableAt DateTime @default(now())
+  lockedAt DateTime?
+  startedAt DateTime?
+  completedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([ownerId, createdAt])
+  @@index([status, availableAt, createdAt])
+  @@index([resultDocumentId])
+}
