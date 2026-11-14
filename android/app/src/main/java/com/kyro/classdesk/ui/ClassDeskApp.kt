@@ -297,7 +297,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
         bottomBar = {
             NavigationBar(containerColor = Panel, contentColor = Cyan) {
                 listOf("Overview", "Courses", "Tasks", "More", "Ava").forEach { item ->
-                    NavigationBarItem(selected = selected == item || (item == "More" && selected in listOf("Lectures", "Attendance", "Concerns", "Announcements", "Calendar", "Documents", "Sync Queue", "Catch-up Centre", "Coverage", "Class Records", "Settings")), onClick = { selected = item },
+                    NavigationBarItem(selected = selected == item || (item == "More" && selected in listOf("Lectures", "Attendance", "Concerns", "Announcements", "Calendar", "Documents", "Sync Queue", "Catch-up Centre", "Coverage", "Class Records", "Settings", "Backup & Export")), onClick = { selected = item },
                         icon = { Icon(when (item) {
                             "Courses" -> Icons.Default.MenuBook
                             "Tasks" -> Icons.Default.CheckCircle
