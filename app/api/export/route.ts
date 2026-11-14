@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { requireStaff } from "@/lib/http";
+import { requirePrimaryAdmin } from "@/lib/http";
 import { db } from "@/lib/db";
 export const runtime = "nodejs";
 export async function GET() {
-  const denied = await requireStaff(); if (denied) return denied;
+  const denied = await requirePrimaryAdmin(); if (denied) return denied;
   const [records, documents, announcements, courses, lectures, assignments, attendance, concerns] = await Promise.all([
     db.academicRecord.findMany({ orderBy: { createdAt: "asc" } }),
     db.document.findMany({ include: { chunks: { orderBy: { chunkIndex: "asc" } } }, orderBy: { createdAt: "asc" } }).then(items => items.map(({ storageKey, ...item }) => item)),
