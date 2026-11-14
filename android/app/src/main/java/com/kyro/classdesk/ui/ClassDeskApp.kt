@@ -576,11 +576,8 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                             if (item.content.isNotBlank()) Text(item.content, color = Muted, fontSize = 12.sp)
                             if (user.role == "CLASS_REP") TextButton(onClick = {
                                 scope.launch {
-                                    try {
-                                        val deleted = api.deleteRecord(item.id)
-                                        if (deleted.isSuccessful) calendarItems = api.records().body()?.records.orEmpty()
-                                        else moduleError = "Could not delete this calendar item."
-                                    } catch (_: Exception) {
+                                    val deleted = try { api.deleteRecord(item.id) } catch (_: Exception) { null }
+                                    if (deleted == null) {
                                         val store = OfflineStore(context)
                                         try {
                                             store.enqueue(PendingMutation(UUID.randomUUID().toString(), user.username, item.id, "delete", item.version, "{}"))
@@ -588,7 +585,11 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                                             secureStore.saveSnapshot("calendar", Gson().toJson(calendarItems))
                                             moduleError = "Deletion saved on this device and queued for synchronization."
                                         } finally { store.closeStore() }
-                                    }
+                                    } else if (deleted.isSuccessful) {
+                                        calendarItems = calendarItems.filterNot { it.id == item.id }
+                                        secureStore.saveSnapshot("calendar", Gson().toJson(calendarItems))
+                                        try { calendarItems = api.records().body()?.records.orEmpty() } catch (_: Exception) { /* local view already reflects the successful delete */ }
+                                    } else moduleError = "Could not delete this calendar item."
                                 }
                             }) { Text("DELETE", color = Color(0xFFFF7D78), fontSize = 10.sp) }
                         }
@@ -611,14 +612,10 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                             moduleError = "Enter a valid date such as YYYY-MM-DD or an ISO date/time."
                             return@launch
                         }
-                        try {
-                            val saved = api.createRecord(mapOf("type" to calendarType, "title" to calendarTitle.trim(), "content" to calendarContent.trim(), "eventDate" to normalizedDate))
-                            if (saved.isSuccessful) {
-                                calendarItems = api.records().body()?.records.orEmpty()
-                                calendarTitle = ""; calendarContent = ""; calendarDate = ""; calendarType = "TIMETABLE"
-                                showCalendarDialog = false
-                            } else moduleError = "Event could not be saved. Use TIMETABLE or CALENDAR and a valid ISO date."
-                        } catch (_: Exception) {
+                        val saved = try {
+                            api.createRecord(mapOf("type" to calendarType, "title" to calendarTitle.trim(), "content" to calendarContent.trim(), "eventDate" to normalizedDate))
+                        } catch (_: Exception) { null }
+                        if (saved == null) {
                             val localId = UUID.randomUUID().toString()
                             val payload = JsonObject().apply {
                                 addProperty("type", calendarType)
@@ -638,7 +635,12 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                                 calendarTitle = ""; calendarContent = ""; calendarDate = ""; calendarType = "TIMETABLE"
                                 showCalendarDialog = false
                             } finally { store.closeStore() }
-                        }
+                        } else if (saved.isSuccessful) {
+                            calendarItems = try { api.records().body()?.records.orEmpty() } catch (_: Exception) { calendarItems }
+                            secureStore.saveSnapshot("calendar", Gson().toJson(calendarItems))
+                            calendarTitle = ""; calendarContent = ""; calendarDate = ""; calendarType = "TIMETABLE"
+                            showCalendarDialog = false
+                        } else moduleError = "Event could not be saved. Use TIMETABLE or CALENDAR and a valid ISO date."
                     } }, enabled = calendarTitle.isNotBlank() && calendarDate.isNotBlank() && calendarType in listOf("TIMETABLE", "CALENDAR")) { Text("SAVE") } },
                     dismissButton = { TextButton(onClick = { showCalendarDialog = false }) { Text("CANCEL") } }
                 )
