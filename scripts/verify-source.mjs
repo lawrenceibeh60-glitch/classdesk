@@ -9,7 +9,7 @@ const migrationDirs = readdirSync(join(root, "prisma/migrations")).filter((name)
 const migrationSql = migrationDirs.map((name) => read(`prisma/migrations/${name}/migration.sql`)).join("\n");
 const requiredModels = ["AcademicRecord", "Document", "DocumentChunk", "Announcement", "AnnouncementVersion", "AnnouncementEvent", "SyncMutation", "Course", "LectureSession", "Assignment", "AttendanceSummary", "ClassConcern", "RateLimitBucket"];
 for (const model of requiredModels) assert.match(schema, new RegExp(`model\\s+${model}\\s*\\{`), `Missing Prisma model: ${model}`);
-for (const table of ["Course", "LectureSession", "Assignment", "AttendanceSummary", "ClassConcern", "AnnouncementVersion", "AnnouncementEvent", "RateLimitBucket"]) assert.ok(migrationSql.includes(`CREATE TABLE "${table}"`), `Missing SQL migration table: ${table}`);
+for (const table of ["Course", "LectureSession", "Assignment", "AttendanceSummary", "ClassConcern", "AnnouncementVersion", "AnnouncementEvent", "RateLimitBucket", "AiTask"]) assert.ok(migrationSql.includes(`CREATE TABLE "${table}"`), `Missing SQL migration table: ${table}`);
 assert.match(migrationSql, /ALTER TABLE "AcademicRecord" ADD COLUMN "version" INTEGER NOT NULL DEFAULT 1/, "Missing optimistic record version migration");
 assert.match(read("app/api/sync/route.ts"), /baseVersion/, "Sync optimistic version checks are missing");
 assert.match(read("app/api/sync/route.ts"), /const actor = await getSession\(\);[\s\S]*if \(!actor\)[\s\S]*actor\?\.role === "ASSISTANT_REP"/, "Offline sync role restrictions must use the same authenticated session that passed authorization");
@@ -131,3 +131,12 @@ assert.match(recordsManagerSource, /if \(!isPrimaryAdmin\).*Only the Class Repre
 assert.match(recordsManagerSource, /if \(!queuedUpload && !isPrimaryAdmin\)/, "Stored document deletion must be restricted to the primary account");
 
 assert.ok(!avaWorkspace.includes("altKey") && !avaWorkspace.includes("Alt+A"), "Only the microphone button may activate Ava voice mode");
+
+assert.match(read("app/api/ai/tasks/route.ts"), /getSession[\\s\\S]*ownerId: user\\.id/, "Ava task creation and history must be scoped to the authenticated account");
+assert.match(read("app/api/ai/tasks/[id]/route.ts"), /ownerId: user\\.id/, "Ava task status and cancellation must be owner-scoped");
+assert.match(read("scripts/ava-task-worker.mjs"), /FOR UPDATE SKIP LOCKED/, "Ava workers must claim jobs transactionally without duplicate execution");
+assert.match(read("scripts/ava-task-worker.mjs"), /maxAttempts = 3/, "Ava worker retries must be bounded");
+assert.match(read("scripts/ava-task-worker.mjs"), /PutObjectCommand/, "Ava generated PDFs must be saved to object storage");
+assert.match(read("components/ai-workspace.tsx"), /AVA TASK ACTIVITY/, "Web AI workspace must show persistent Ava task progress");
+assert.match(read("android/app/src/main/java/com/kyro/classdesk/ui/AvaTasksScreen.kt"), /TASK HISTORY/, "Android must expose Ava task history");
+assert.match(read("android/app/src/main/java/com/kyro/classdesk/data/ClassDeskApi.kt"), /api\\/ai\\/tasks/, "Android must connect to Ava task APIs");
