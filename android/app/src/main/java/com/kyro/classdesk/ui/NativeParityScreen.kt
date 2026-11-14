@@ -112,8 +112,7 @@ fun NativeParityScreen(section: String, api: ClassDeskApi, user: UserDto) {
                 OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Search title or content") }, singleLine = true)
                 val filtered = records.filter { it.title.contains(query, true) || it.content.contains(query, true) || it.type.contains(query, true) }
                 Text("${filtered.size} record(s)", color = NativeMuted, fontSize = 11.sp)
-                filtered.forEach { record -> ParityCard(record.title, "${record.type} / ${record.status} / ${record.eventDate.orEmpty()}
-${record.content.take(240)}") }
+                filtered.forEach { record -> ParityCard(record.title, "${record.type} / ${record.status} / ${record.eventDate.orEmpty()}\n${record.content.take(240)}") }
                 if (!loading && filtered.isEmpty()) Text("No matching records were found.", color = NativeMuted)
             }
             else -> {
