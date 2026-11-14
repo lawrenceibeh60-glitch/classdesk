@@ -82,5 +82,9 @@ export async function deleteObject(key: string) {
     return;
   }
   const file = localPath(key);
-  if (file) await fs.rm(file, { force: true });
+  if (file) {
+    await fs.rm(file, { force: true });
+    return;
+  }
+  throw new Error("Object storage is not configured; the original file could not be deleted or verified.");
 }
