@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
-import { requireAdmin, requirePrimaryAdmin, assertSameOrigin } from "@/lib/http";
+import { requireStaff, requirePrimaryAdmin, assertSameOrigin } from "@/lib/http";
 export const runtime = "nodejs";
 const allowedTypes = ["COURSE", "LECTURE", "ANNOUNCEMENT", "TASK", "CONCERN", "CALENDAR", "TIMETABLE"];
 const allowedStatuses = ["ACTIVE", "DONE", "ARCHIVED", "DRAFT", "APPROVED", "PUBLISHED"];
@@ -13,7 +13,7 @@ function parseDate(value: unknown) {
 }
 
 export async function GET(req: NextRequest) {
-  const denied = await requireAdmin(); if (denied) return denied;
+  const denied = await requireStaff(); if (denied) return denied;
   const requestedLimit = Number(req.nextUrl.searchParams.get("limit") || 50);
   const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(Math.floor(requestedLimit), 1), 200) : 50;
   const type = req.nextUrl.searchParams.get("type");
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const originDenied = assertSameOrigin(req); if (originDenied) return originDenied;
-  const denied = await requireAdmin(); if (denied) return denied;
+  const denied = await requireStaff(); if (denied) return denied;
   const body = await req.json().catch(() => null);
   const title = typeof body?.title === "string" ? body.title.trim().slice(0, 180) : "";
   if (!title || !allowedTypes.includes(body?.type)) return NextResponse.json({ error: "A valid title and record type are required" }, { status: 400 });
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   const originDenied = assertSameOrigin(req); if (originDenied) return originDenied;
-  const denied = await requireAdmin(); if (denied) return denied;
+  const denied = await requireStaff(); if (denied) return denied;
   const body = await req.json().catch(() => null);
   if (["APPROVED", "PUBLISHED", "ARCHIVED"].includes(body?.status)) { const primaryDenied = await requirePrimaryAdmin(); if (primaryDenied) return primaryDenied; }
   if (!body || typeof body.id !== "string" || !body.id) return NextResponse.json({ error: "id is required" }, { status: 400 });
@@ -62,7 +62,7 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const originDenied = assertSameOrigin(req); if (originDenied) return originDenied;
-  const denied = await requireAdmin(); if (denied) return denied;
+  const denied = await requireStaff(); if (denied) return denied;
   const primaryDenied = await requirePrimaryAdmin(); if (primaryDenied) return primaryDenied;
   const id = req.nextUrl.searchParams.get("id"); if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
   await db.$transaction(async (tx) => {
