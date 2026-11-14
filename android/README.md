@@ -38,7 +38,7 @@ Open the `android/` folder in Android Studio, allow Gradle sync, install the SDK
 - Ava voice interface with speech recognition, AI chat, spoken responses, task/tool screens and explicit microphone permission.
 - Ava is push-to-talk: each voice request requires a fresh tap. It does not automatically reopen the microphone after responding or after leaving the voice screen.
 - Encrypted local snapshots for the overview and academic modules; cached content is read-only while offline.
-- SQLite offline mutation queue with Android Keystore encryption, account-bound ownership, review of pending/conflicted/rejected entries, and WorkManager retry/synchronisation for supported academic, announcement and calendar mutations.
+- SQLite offline mutation queue with Android Keystore encryption, account-bound ownership, manual sync, cloud-vs-local conflict resolution with version rebasing, rejected/corrupt item discard controls, and WorkManager retry/synchronisation for supported academic, announcement and calendar mutations.
 - Local notifications for newly observed announcements, assignments, timetable records, attendance and concern updates. Notification polling is periodic WorkManager work, not real-time push delivery.
 - Custom ClassDesk launcher icon and HTTPS-only network policy.
 
@@ -46,8 +46,7 @@ Open the `android/` folder in Android Studio, allow Gradle sync, install the SDK
 
 1. **CI verification passed on the current branch** at commit `b1b7cfdc71f84b8c20009ed7c5d52a80362dc0de`: Android Kotlin compilation and unit tests passed; web source verification, Prisma checks, TypeScript, lint and production build passed.
 2. Complete physical-device acceptance testing for sign-in, both staff roles, Ava microphone permission and one-tap-per-request behavior, notifications, file upload/download, backup/restore, offline queue replay, account switching and logout. CI success does not replace this device testing.
-3. Review and complete offline mutation coverage for any remaining editable screens; rejected/conflicted queue entries currently require review rather than automatic conflict resolution.
-4. Confirm the production API origin and configure release signing credentials securely outside the repository.
-5. Build and inspect a signed release APK/AAB only after the owner authorizes the release build.
+3. Confirm the production API origin and configure release signing credentials securely outside the repository.
+4. Build and inspect the APK only after the owner authorizes the build.
 
 The Android verification workflow compiles the app and runs available unit tests; it does not package or publish an APK. The separate APK workflow is manual-only. No production deployment, merge to `main`, production database mutation or APK release is authorized by this development branch.
