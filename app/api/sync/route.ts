@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireStaff, assertSameOrigin } from "@/lib/http";
+import { assertSameOrigin } from "@/lib/http";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
@@ -32,9 +32,10 @@ function validDate(value: unknown): Date | null | undefined {
 export async function POST(req: NextRequest) {  const originDenied = assertSameOrigin(req);
   if (originDenied) return originDenied;
 
-  const denied = await requireStaff();
-  if (denied) return denied;
+  // Read the session once and use that same authenticated identity for all
+  // role checks below; avoid a second lookup producing a nullable actor.
   const actor = await getSession();
+  if (!actor) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   const body = await req.json().catch(() => null);
   if (!body || !Array.isArray(body.mutations)) {
     return NextResponse.json({ error: "mutations must be an array" }, { status: 400 });
