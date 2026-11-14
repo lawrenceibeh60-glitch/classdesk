@@ -42,9 +42,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "One or more selected documents are unavailable or not ready for processing." }, { status: 404 });
   }
   const prompt = typeof body?.prompt === "string" ? body.prompt.trim().slice(0, 4000) : "";
+  const clientRequestId = typeof body?.clientRequestId === "string" ? body.clientRequestId : "";
+  if (clientRequestId && !/^[a-f0-9-]{36}$/i.test(clientRequestId)) {
+    return NextResponse.json({ error: "Invalid task request ID." }, { status: 400 });
+  }
+  if (clientRequestId) {
+    const existing = await db.aiTask.findFirst({
+      where: { id: clientRequestId, ownerId: user.id },
+      select: { id: true, kind: true, status: true, progress: true, currentStep: true, createdAt: true }
+    });
+    if (existing) return NextResponse.json({ task: existing, duplicate: true }, { status: 200 });
+  }
   const task = await db.aiTask.create({
     data: {
-      id: randomUUID(),
+      id: clientRequestId || randomUUID(),
       ownerId: user.id,
       ownerUsername: user.username,
       kind,
