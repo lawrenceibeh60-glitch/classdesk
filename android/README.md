@@ -40,7 +40,7 @@ Open the `android/` folder in Android Studio, allow Gradle sync, install the SDK
 - Native calendar/timetable entries with create, list and primary-admin delete.
 - Native document library with Android system file picker, server-side upload/indexing and primary-admin permanent deletion.
 - Encrypted local snapshots for the overview, courses, assignments, lectures, attendance, concerns, announcements and calendar; cached data is read-only while offline.
-- SQLite mutation outbox, AES-GCM payload encryption using Android Keystore, account-bound queue ownership, and WorkManager sync against the existing versioned `/api/sync` endpoint.
+- SQLite mutation outbox, AES-GCM payload encryption using Android Keystore, account-bound queue ownership, a queue review screen, and WorkManager sync against the existing versioned `/api/sync` endpoint. Offline create/delete is currently wired for calendar and timetable records; other modules still require offline mutation integration.
 - Ava graphical voice panel using Android speech recognition, ClassDesk AI chat and device text-to-speech. It does not request microphone access until Activate is tapped.
 - Custom ClassDesk launcher icon and HTTPS-only network policy.
 
