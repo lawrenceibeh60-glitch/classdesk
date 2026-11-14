@@ -132,11 +132,11 @@ assert.match(recordsManagerSource, /if \(!queuedUpload && !isPrimaryAdmin\)/, "S
 
 assert.ok(!avaWorkspace.includes("altKey") && !avaWorkspace.includes("Alt+A"), "Only the microphone button may activate Ava voice mode");
 
-assert.match(read("app/api/ai/tasks/route.ts"), /getSession[\\s\\S]*ownerId: user\\.id/, "Ava task creation and history must be scoped to the authenticated account");
-assert.match(read("app/api/ai/tasks/[id]/route.ts"), /ownerId: user\\.id/, "Ava task status and cancellation must be owner-scoped");
-assert.match(read("scripts/ava-task-worker.mjs"), /FOR UPDATE SKIP LOCKED/, "Ava workers must claim jobs transactionally without duplicate execution");
-assert.match(read("scripts/ava-task-worker.mjs"), /maxAttempts = 3/, "Ava worker retries must be bounded");
-assert.match(read("scripts/ava-task-worker.mjs"), /PutObjectCommand/, "Ava generated PDFs must be saved to object storage");
-assert.match(read("components/ai-workspace.tsx"), /AVA TASK ACTIVITY/, "Web AI workspace must show persistent Ava task progress");
-assert.match(read("android/app/src/main/java/com/kyro/classdesk/ui/AvaTasksScreen.kt"), /TASK HISTORY/, "Android must expose Ava task history");
-assert.match(read("android/app/src/main/java/com/kyro/classdesk/data/ClassDeskApi.kt"), /api\\/ai\\/tasks/, "Android must connect to Ava task APIs");
+assert.ok(read("app/api/ai/tasks/route.ts").includes("ownerId: user.id"), "Ava task creation and history must be scoped to the authenticated account");
+assert.ok(read("app/api/ai/tasks/[id]/route.ts").includes("ownerId: user.id"), "Ava task status and cancellation must be owner-scoped");
+assert.ok(read("scripts/ava-task-worker.mjs").includes("FOR UPDATE SKIP LOCKED"), "Ava workers must claim jobs transactionally without duplicate execution");
+assert.ok(read("scripts/ava-task-worker.mjs").includes("maxAttempts = 3"), "Ava worker retries must be bounded");
+assert.ok(read("scripts/ava-task-worker.mjs").includes("PutObjectCommand"), "Ava generated PDFs must be saved to object storage");
+assert.ok(read("components/ai-workspace.tsx").includes("AVA TASK ACTIVITY"), "Web AI workspace must show persistent Ava task progress");
+assert.ok(read("android/app/src/main/java/com/kyro/classdesk/ui/AvaTasksScreen.kt").includes("TASK HISTORY"), "Android must expose Ava task history");
+assert.ok(read("android/app/src/main/java/com/kyro/classdesk/data/ClassDeskApi.kt").includes("api/ai/tasks"), "Android must connect to Ava task APIs");
