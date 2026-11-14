@@ -123,7 +123,7 @@ private fun LoginScreen(error: String?, onLogin: (String, String) -> Unit) {
         }
         Spacer(Modifier.height(18.dp))
         Text("PRIVATE STAFF ACCESS  /  ENCRYPTED SESSION", color = Muted, fontSize = 10.sp, letterSpacing = 1.sp)
-        Text("API: \${BuildConfig.API_BASE_URL}", color = Muted, fontSize = 10.sp)
+        Text("API: ${BuildConfig.API_BASE_URL}", color = Muted, fontSize = 10.sp)
     }
 }
 
@@ -136,7 +136,7 @@ private fun DashboardScreen(user: UserDto, summary: SummaryDto?, upcoming: List<
             Row(Modifier.fillMaxWidth().background(Panel).padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("AFIT CLASSDESK", color = Cyan, fontSize = 11.sp, letterSpacing = 1.8.sp, fontWeight = FontWeight.Bold)
-                    Text("COMMAND / \${user.role.replace('_', ' ')}", color = Muted, fontSize = 10.sp)
+                    Text("COMMAND / ${user.role.replace('_', ' ')}", color = Muted, fontSize = 10.sp)
                 }
                 IconButton(onClick = onRefresh) { Icon(Icons.Default.Refresh, "Refresh", tint = Cyan) }
                 IconButton(onClick = onLogout) { Icon(Icons.Default.Logout, "Sign out", tint = Gold) }
@@ -158,7 +158,7 @@ private fun DashboardScreen(user: UserDto, summary: SummaryDto?, upcoming: List<
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("Good day, \${user.displayName}", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Text("Good day, ${user.displayName}", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
             Text("ND1 / ELECTRICAL & ELECTRONICS ENGINEERING", color = Muted, fontSize = 10.sp, letterSpacing = 1.sp)
             if (selected == "Overview") {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
