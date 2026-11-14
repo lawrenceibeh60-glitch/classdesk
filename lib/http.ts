@@ -8,7 +8,12 @@ export async function requireStaff() {
   return null;
 }
 
+// Backwards-compatible name: existing protected API routes are available to both authorised staff accounts.
 export async function requireAdmin() {
+  return requireStaff();
+}
+
+export async function requirePrimaryAdmin() {
   const user = await getSession();
   if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   if (user.role !== "CLASS_REP") return NextResponse.json({ error: "This action is restricted to the Class Representative" }, { status: 403 });
