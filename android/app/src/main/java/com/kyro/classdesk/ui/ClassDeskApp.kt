@@ -191,25 +191,32 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
     var moduleError by remember { mutableStateOf<String?>(null) }
     var showCourseDialog by remember { mutableStateOf(false) }
     var showAssignmentDialog by remember { mutableStateOf(false) }
+    var editingCourseId by remember { mutableStateOf<String?>(null) }
     var courseCode by remember { mutableStateOf("") }
     var courseName by remember { mutableStateOf("") }
     var lecturer by remember { mutableStateOf("") }
     var semester by remember { mutableStateOf("") }
+    var editingAssignmentId by remember { mutableStateOf<String?>(null) }
     var assignmentTitle by remember { mutableStateOf("") }
     var assignmentDetails by remember { mutableStateOf("") }
     var assignmentDueAt by remember { mutableStateOf("") }
     var showLectureDialog by remember { mutableStateOf(false) }
+    var editingLectureId by remember { mutableStateOf<String?>(null) }
     var lectureTopic by remember { mutableStateOf("") }
     var lectureSummary by remember { mutableStateOf("") }
     var lectureDate by remember { mutableStateOf("") }
     var lectureVenue by remember { mutableStateOf("") }
     var showAttendanceDialog by remember { mutableStateOf(false) }
+    var editingAttendanceId by remember { mutableStateOf<String?>(null) }
     var attendanceDate by remember { mutableStateOf("") }
     var attendancePresent by remember { mutableStateOf("") }
     var attendanceAbsent by remember { mutableStateOf("") }
+    var attendanceNote by remember { mutableStateOf("") }
     var showConcernDialog by remember { mutableStateOf(false) }
+    var editingConcernId by remember { mutableStateOf<String?>(null) }
     var concernTitle by remember { mutableStateOf("") }
     var concernDetails by remember { mutableStateOf("") }
+    var concernResolution by remember { mutableStateOf("") }
     var concernCategory by remember { mutableStateOf("GENERAL") }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
