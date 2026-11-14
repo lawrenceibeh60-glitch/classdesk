@@ -16,7 +16,7 @@ Private academic administration and intelligence workspace for the ND1 Electrica
 
 Hybrid PWA: online application with local offline drafts/queue. PostgreSQL is the authoritative shared database; browser storage is a temporary offline cache, not the only copy. AI and remote document processing require connectivity.
 
-## Planned modules
+## Application modules
 
 1. Command centre and task overview
 2. Academic assistant and grounded document retrieval
@@ -29,7 +29,7 @@ Hybrid PWA: online application with local offline drafts/queue. PostgreSQL is th
 
 ## Repository status
 
-The repository has been initialized. The application source bundle is being brought in and verified. Do not treat the product as production-ready until dependency installation, type checking, linting, tests, production build, database migration, and deployment smoke tests pass.
+The application source is present and being completed in phases. The current branch includes the two-account authentication model, academic records and document workflows, announcements, AI assistance, offline queues, shared PostgreSQL/object storage adapters, and role-aware permissions. The Ava voice interface is being updated to require explicit microphone activation. Git-based Vercel deployments are paused while implementation and verification continue. Do not treat the product as production-ready until the full test suite, production build, real database/object-storage checks, browser acceptance tests, and deployment smoke tests pass. The Android APK has not yet been packaged; website completion comes first. Desktop/EXE packaging is out of scope.
 
 ## Local setup
 
@@ -57,7 +57,7 @@ Never commit `.env.local`, API keys, database URLs, student passwords, or privat
 - Department: Electrical/Electronics Engineering Technology
 - Level: ND1
 - Session: 2026/2027
-- Access model: private, single administrator
+- Access model: private, two authorised staff accounts (Class Representative and Assistant Class Representative)
 - Primary communication channel: WhatsApp
 
 
