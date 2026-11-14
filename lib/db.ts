@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+let prismaClient: PrismaClient | undefined;
 
 function createClient() {
   // Prisma CLI migrations use DATABASE_URL (direct Neon connection).
@@ -12,5 +13,25 @@ function createClient() {
   return new PrismaClient({ adapter });
 }
 
-export const db = globalForPrisma.prisma ?? createClient();
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = db;
+/**
+ * Create Prisma lazily. Vercel/Next.js evaluates route modules during build,
+ * when production secrets are intentionally unavailable. Database credentials
+ * are required only when a request actually accesses a Prisma delegate.
+ */
+function getClient() {
+  const existing = prismaClient ?? globalForPrisma.prisma;
+  if (existing) return existing;
+
+  const created = createClient();
+  prismaClient = created;
+  if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = created;
+  return created;
+}
+
+export const db = new Proxy({} as PrismaClient, {
+  get(_target, property) {
+    const client = getClient();
+    const value = Reflect.get(client, property, client);
+    return typeof value === "function" ? value.bind(client) : value;
+  }
+});
