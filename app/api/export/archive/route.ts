@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import JSZip from "jszip";
 import { db } from "@/lib/db";
-import { requireAdmin } from "@/lib/http";
+import { requirePrimaryAdmin } from "@/lib/http";
 import { readObject } from "@/lib/storage";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 export async function GET() {
-  const denied = await requireAdmin(); if (denied) return denied;
+  const denied = await requirePrimaryAdmin(); if (denied) return denied;
   const [records, documents, announcements, courses, lectures, assignments, attendance, concerns] = await Promise.all([
     db.academicRecord.findMany({ orderBy: { createdAt: "asc" } }),
     db.document.findMany({ include: { chunks: { orderBy: { chunkIndex: "asc" } } }, orderBy: { createdAt: "asc" } }),
