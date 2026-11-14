@@ -25,7 +25,7 @@ const config: Record<Mode, { title: string; description: string; fields: Field[]
 };
 const blank = (mode: Mode) => Object.fromEntries(config[mode].fields.map((field) => [field.key, field.kind === "select" ? field.options?.[0] || "" : ""]));
 
-export default function AcademicManager({ mode }: { mode: Mode }) {
+export default function AcademicManager({ mode, isPrimaryAdmin }: { mode: Mode; isPrimaryAdmin: boolean }) {
   const meta = config[mode];
   const [items, setItems] = useState<any[]>([]);
   const [courses, setCourses] = useState<any[]>([]);
@@ -169,7 +169,7 @@ export default function AcademicManager({ mode }: { mode: Mode }) {
             {mode === "assignments" && <button className="btn" onClick={() => { const next = item.status === "TODO" ? "IN_PROGRESS" : item.status === "IN_PROGRESS" ? "DONE" : "TODO"; void update(item.id, { status: next }); }}>{item.status === "TODO" ? "Start" : item.status === "IN_PROGRESS" ? "Mark done" : "Reopen"}</button>}
             {mode === "concerns" && <button className="btn" onClick={() => void update(item.id, { status: item.status === "RESOLVED" ? "OPEN" : "RESOLVED" })}>{item.status === "RESOLVED" ? "Reopen" : "Resolve"}</button>}
             {mode === "courses" && <button className="btn" onClick={() => void update(item.id, { active: !item.active })}>{item.active ? "Deactivate" : "Activate"}</button>}
-            <button className="btn ghost" onClick={() => void remove(item.id)}>Delete</button></div>
+            {isPrimaryAdmin && <button className="btn ghost" onClick={() => void remove(item.id)}>Delete</button>}</div>
         </div>) : <div className="empty">No items yet. Add your first entry here.</div>}
       </div>
     </div>
