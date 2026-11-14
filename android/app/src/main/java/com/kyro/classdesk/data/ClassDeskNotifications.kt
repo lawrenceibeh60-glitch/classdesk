@@ -17,43 +17,54 @@ import androidx.core.content.ContextCompat
 import com.kyro.classdesk.MainActivity
 
 object ClassDeskNotifications {
-    const val CHANNEL_UPDATES = "classdesk_updates"
+    const val CHANNEL_ANNOUNCEMENTS = "classdesk_announcements"
+    const val CHANNEL_ASSIGNMENTS = "classdesk_assignments"
+    const val CHANNEL_TIMETABLE = "classdesk_timetable"
+    const val CHANNEL_ATTENDANCE = "classdesk_attendance"
+    const val CHANNEL_CONCERNS = "classdesk_concerns"
     const val CHANNEL_SYNC = "classdesk_sync"
 
     fun createChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(NotificationChannel(CHANNEL_UPDATES, "Class updates", NotificationManager.IMPORTANCE_DEFAULT).apply {
-            description = "Published announcements and important class updates"
-        })
-        manager.createNotificationChannel(NotificationChannel(CHANNEL_SYNC, "Offline sync", NotificationManager.IMPORTANCE_LOW).apply {
-            description = "Confirmation when offline changes are synchronised"
-        })
+        listOf(
+            CHANNEL_ANNOUNCEMENTS to ("Announcements" to "Newly published class announcements"),
+            CHANNEL_ASSIGNMENTS to ("Assignments" to "New and updated assignment deadlines"),
+            CHANNEL_TIMETABLE to ("Timetable" to "Class timetable and calendar changes"),
+            CHANNEL_ATTENDANCE to ("Attendance" to "New class attendance records"),
+            CHANNEL_CONCERNS to ("Class concerns" to "Updates to class concerns"),
+            CHANNEL_SYNC to ("Offline sync" to "Confirmation when offline changes are synchronised")
+        ).forEach { (id, details) ->
+            manager.createNotificationChannel(NotificationChannel(
+                id, details.first,
+                if (id == CHANNEL_SYNC) NotificationManager.IMPORTANCE_LOW else NotificationManager.IMPORTANCE_DEFAULT
+            ).apply { description = details.second })
+        }
     }
 
     fun canPost(context: Context): Boolean = Build.VERSION.SDK_INT < 33 ||
         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
     fun announcement(context: Context, id: String, title: String) {
-        post(context, id.hashCode(), CHANNEL_UPDATES, "New class announcement", title, "Announcements")
+        post(context, id.hashCode(), CHANNEL_ANNOUNCEMENTS, "New class announcement", title, "Announcements")
     }
 
     fun assignment(context: Context, id: String, title: String, dueAt: String?) {
         val detail = dueAt?.takeIf { it.isNotBlank() }?.let { "Due: $it" } ?: "A new assignment is available."
-        post(context, id.hashCode(), CHANNEL_UPDATES, "New assignment", "$title — $detail", "Tasks")
+        post(context, id.hashCode(), CHANNEL_ASSIGNMENTS, "New assignment", "$title — $detail", "Tasks")
     }
 
     fun timetable(context: Context, id: String, title: String, date: String?) {
         val detail = date?.takeIf { it.isNotBlank() } ?: "A new class event is available."
-        post(context, id.hashCode(), CHANNEL_UPDATES, "Timetable update", "$title — $detail", "Calendar")
+        post(context, id.hashCode(), CHANNEL_TIMETABLE, "Timetable update", "$title — $detail", "Calendar")
     }
 
     fun attendance(context: Context, id: String) {
-        post(context, id.hashCode(), CHANNEL_UPDATES, "Attendance updated", "A new class attendance record is available.", "Attendance")
+        post(context, id.hashCode(), CHANNEL_ATTENDANCE, "Attendance updated", "A new class attendance record is available.", "Attendance")
     }
 
     fun concern(context: Context, id: String, status: String) {
-        post(context, id.hashCode(), CHANNEL_UPDATES, "Class concern updated", "A concern status changed to ${status.lowercase()}.", "Concerns")
+        post(context, id.hashCode(), CHANNEL_CONCERNS, "Class concern updated", "A concern status changed to ${status.lowercase()}.", "Concerns")
     }
 
     fun syncCompleted(context: Context, count: Int) {
