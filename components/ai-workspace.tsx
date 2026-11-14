@@ -57,7 +57,7 @@ export default function AIWorkspace({ initialKind = "announcement" }: { initialK
       void offlineDB.aiQueue.toArray().then(requests => { if (requests.length) setMessages(current => [...current, ...requests.map(request => ({ role: "user" as const, content: request.kind === "chat" ? request.prompt : `Generate ${request.draftKind}: ${request.prompt}` }))]); });
       void offlineDB.meta.where("key").startsWith("ai-result:").toArray().then(async results => {
         if (!results.length) return;
-        setMessages(current => [...current, ...results.flatMap((entry): Message[] => { try { const result = JSON.parse(entry.value); return [{ role: "user", content: result.kind === "chat" ? result.prompt : `Generate ${result.draftKind || "draft"}: ${result.prompt}` }, { role: "assistant", content: result.answer || "No output was returned.", sources: result.sources || [] }]; } catch { return [{ role: "assistant", content: "A queued AI result was received but could not be read." }]; } })]);
+        setMessages(current => [...current, ...results.flatMap((entry): Message[] => { try { const result = JSON.parse(entry.value); return [{ role: "user", content: result.kind === "chat" ? result.prompt : `Generate ${result.draftKind || "draft"}: ${result.prompt}` }, { role: "assistant", content: result.answer || "No output was returned.", sources: result.sources || [], actionConfirmation: result.actionConfirmation }]; } catch { return [{ role: "assistant", content: "A queued AI result was received but could not be read." }]; } })]);
         await offlineDB?.meta.bulkDelete(results.map(entry => entry.key));
       });
     }
