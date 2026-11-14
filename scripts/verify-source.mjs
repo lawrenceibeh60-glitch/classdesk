@@ -25,6 +25,14 @@ assert.ok(!/NEXT_PUBLIC_(?:AI_API_KEY|OPENAI_API_KEY|SESSION_SECRET|S3_SECRET_AC
 assert.ok(sourceText.includes("assertSameOrigin") && sourceText.includes("rateLimit"), "Mutation origin checks or rate limiting are missing");
 assert.match(read("lib/storage.ts"), /requireProductionObjectStorage/, "Production uploads must fail closed without shared object storage");
 assert.match(read("lib/storage.ts"), /NODE_ENV === "production"/, "Production storage configuration must be enforced");
+assert.match(read("lib/storage.ts"), /AWS_ENDPOINT_URL_S3/, "Neon Object Storage endpoint environment variable must be supported");
+assert.match(read("lib/storage.ts"), /AWS_ACCESS_KEY_ID/, "Neon Object Storage access key environment variable must be supported");
+assert.match(read("lib/storage.ts"), /AWS_SECRET_ACCESS_KEY/, "Neon Object Storage secret environment variable must be supported");
+assert.match(read("lib/storage.ts"), /AWS_REGION/, "Neon Object Storage region environment variable must be supported");
+assert.match(read("lib/db.ts"), /DATABASE_URL_POOLED \|\| process\.env\.DATABASE_URL/, "Runtime Prisma client must prefer the pooled PostgreSQL connection");
+assert.match(read(".env.example"), /DATABASE_URL_POOLED/, "Environment example must document the pooled PostgreSQL connection");
+assert.match(read(".env.example"), /AWS_ENDPOINT_URL_S3[\s\S]*AWS_ACCESS_KEY_ID[\s\S]*AWS_SECRET_ACCESS_KEY[\s\S]*AWS_REGION[\s\S]*S3_BUCKET/, "Environment example must document all Neon Object Storage settings");
+
 assert.match(read("app/api/sync/route.ts"), /ASSISTANT_REP.*delete|ASSISTANT_REP.*operation === "delete"/s, "Offline sync must enforce assistant delete restrictions");
 assert.match(read("app/api/sync/route.ts"), /allowedStatuses/, "Offline sync must reject unknown record statuses");
 assert.match(read("app/api/sync/route.ts"), /Only the Class Representative can set approval, publication or archive states/, "Offline sync must enforce primary-only protected status changes");
