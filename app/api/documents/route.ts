@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
-import { requireAdmin, requirePrimaryAdmin, assertSameOrigin, rateLimit, clientIp } from "@/lib/http";
+import { requireStaff, requirePrimaryAdmin, assertSameOrigin, rateLimit, clientIp } from "@/lib/http";
 import { extractText, splitIntoChunks } from "@/lib/ingest";
 import { storeObject, deleteObject } from "@/lib/storage";
 import { scanWithClamAV } from "@/lib/malware";
@@ -23,7 +23,7 @@ function validateSignature(ext: string, bytes: Buffer) {
 }
 
 export async function GET() {
-  const denied = await requireAdmin();
+  const denied = await requireStaff();
   if (denied) return denied;
   const documents = await db.document.findMany({ orderBy: { createdAt: "desc" }, select: { id: true, title: true, filename: true, mimeType: true, sizeBytes: true, courseCode: true, courseName: true, lectureDate: true, topic: true, status: true, securityScanStatus: true, errorMessage: true, createdAt: true, storageKey: true } });
   return NextResponse.json({ documents: documents.map(({ storageKey, ...document }) => ({ ...document, originalAvailable: Boolean(storageKey) })) });
@@ -31,7 +31,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const originDenied = assertSameOrigin(req); if (originDenied) return originDenied;
-  const denied = await requireAdmin(); if (denied) return denied;
+  const denied = await requireStaff(); if (denied) return denied;
   if (!(await rateLimit(`upload:${clientIp(req)}`, 20, 60 * 60 * 1000))) return NextResponse.json({ error: "Upload limit reached. Try again later." }, { status: 429 });
   let storedKey: string | null = null;
   try {
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const originDenied = assertSameOrigin(req); if (originDenied) return originDenied;
-  const denied = await requireAdmin(); if (denied) return denied;
+  const denied = await requireStaff(); if (denied) return denied;
   const primaryDenied = await requirePrimaryAdmin(); if (primaryDenied) return primaryDenied;
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
