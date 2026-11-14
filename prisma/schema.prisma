@@ -259,3 +259,9 @@ model AuditLog {
   @@index([actorId, createdAt])
   @@index([targetType, targetId, createdAt])
 }
+
+model AiWorkerState {
+  id String @id
+  startedAt DateTime @default(now())
+  lastSeenAt DateTime @updatedAt
+}
