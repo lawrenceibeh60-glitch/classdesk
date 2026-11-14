@@ -1,5 +1,16 @@
 package com.kyro.classdesk.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import kotlinx.coroutines.delay
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -199,6 +210,35 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val secureStore = remember { ApiClient.cookies(context) }
+    val connectivity = remember { ClassDeskConnectivity(context) }
+    var online by remember { mutableStateOf(connectivity.isOnline()) }
+    var connectionToast by remember { mutableStateOf<String?>(null) }
+    var notificationPermissionNeeded by remember {
+        mutableStateOf(Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+    }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        notificationPermissionNeeded = !granted
+    }
+    DisposableEffect(connectivity) {
+        val callback = connectivity.register { connected ->
+            if (online != connected) {
+                online = connected
+                connectionToast = if (connected) "You're back online. ClassDesk is reconnecting."
+                    else "Still got you, boss. You're offline; saved data remains available."
+            }
+        }
+        onDispose { connectivity.unregister(callback) }
+    }
+    LaunchedEffect(Unit) {
+        if (!online) connectionToast = "Still got you, boss. You're offline; saved data remains available."
+    }
+    LaunchedEffect(connectionToast) {
+        if (connectionToast != null) {
+            delay(3000)
+            connectionToast = null
+        }
+    }
     LaunchedEffect(selected) {
         moduleError = null
         if (selected in listOf("Courses", "Tasks", "Lectures", "Attendance", "Concerns", "Announcements", "Calendar")) {
@@ -262,7 +302,16 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                 } else {
                     val response = api.announcements()
                     if (response.isSuccessful) {
-                        announcements = response.body()?.announcements.orEmpty()
+                        val fetchedAnnouncements = response.body()?.announcements.orEmpty()
+                        val previousAnnouncements = secureStore.loadSnapshot("announcements")?.let {
+                            runCatching { Gson().fromJson(it, Array<AnnouncementDto>::class.java)?.toList() }.getOrNull()
+                        }
+                        if (previousAnnouncements != null && ClassDeskNotifications.canPost(context)) {
+                            val oldIds = previousAnnouncements.map { it.id }.toSet()
+                            fetchedAnnouncements.filter { it.status.equals("PUBLISHED", true) && it.id !in oldIds }
+                                .forEach { ClassDeskNotifications.announcement(context, it.id, it.title) }
+                        }
+                        announcements = fetchedAnnouncements
                         secureStore.saveSnapshot("announcements", Gson().toJson(announcements))
                     } else {
                         announcements = secureStore.loadSnapshot("announcements")?.let { runCatching { Gson().fromJson(it, Array<AnnouncementDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
@@ -285,13 +334,29 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
     Scaffold(
         containerColor = Canvas,
         topBar = {
-            Row(Modifier.fillMaxWidth().background(Panel).padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("AFIT CLASSDESK", color = Cyan, fontSize = 11.sp, letterSpacing = 1.8.sp, fontWeight = FontWeight.Bold)
-                    Text("COMMAND / ${user.role.replace('_', ' ')}", color = Muted, fontSize = 10.sp)
+            Column(Modifier.fillMaxWidth().background(Panel)) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("AFIT CLASSDESK", color = Cyan, fontSize = 11.sp, letterSpacing = 1.8.sp, fontWeight = FontWeight.Bold)
+                        Text("COMMAND / ${user.role.replace('_', ' ')}", color = Muted, fontSize = 10.sp)
+                    }
+                    IconButton(onClick = onRefresh) { Icon(Icons.Default.Refresh, "Refresh", tint = Cyan) }
+                    IconButton(onClick = onLogout) { Icon(Icons.Default.Logout, "Sign out", tint = Gold) }
                 }
-                IconButton(onClick = onRefresh) { Icon(Icons.Default.Refresh, "Refresh", tint = Cyan) }
-                IconButton(onClick = onLogout) { Icon(Icons.Default.Logout, "Sign out", tint = Gold) }
+                AnimatedVisibility(visible = connectionToast != null, enter = fadeIn(), exit = fadeOut()) {
+                    Surface(color = Color(0xFF1B2A39), modifier = Modifier.fillMaxWidth()) {
+                        Text(connectionToast.orEmpty(), color = Color.White, fontSize = 12.sp,
+                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp))
+                    }
+                }
+                if (notificationPermissionNeeded) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Enable class notifications", color = Muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }) {
+                            Text("ENABLE", color = Cyan, fontSize = 10.sp)
+                        }
+                    }
+                }
             }
         },
         bottomBar = {
