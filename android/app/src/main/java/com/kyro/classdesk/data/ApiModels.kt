@@ -28,3 +28,6 @@ data class AttendanceDto(val id: String, val sessionDate: String, val presentCou
 data class AttendanceEnvelope(val items: List<AttendanceDto>?)
 data class ConcernDto(val id: String, val category: String, val title: String, val details: String, val status: String, val resolution: String?)
 data class ConcernsEnvelope(val items: List<ConcernDto>?)
+
+data class AnnouncementDto(val id: String, val title: String, val body: String, val category: String, val status: String, val publishedAt: String?)
+data class AnnouncementsEnvelope(val announcements: List<AnnouncementDto>?)
