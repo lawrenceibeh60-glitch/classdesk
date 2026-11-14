@@ -43,6 +43,7 @@ import com.kyro.classdesk.data.ChatHistoryItem
 import com.kyro.classdesk.data.ClassDeskApi
 import kotlinx.coroutines.launch
 import java.util.Locale
+import java.util.UUID
 
 @Composable
 fun AvaVoiceScreen(api: ClassDeskApi) {
@@ -149,7 +150,7 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
                         processing = true
                         scope.launch {
                             try {
-                                val result = api.chat(ChatRequest(message = spoken, voice = true, history = conversationHistory))
+                                val result = api.chat(ChatRequest(message = spoken, voice = true, history = conversationHistory, clientRequestId = UUID.randomUUID().toString()))
                                 val answer = result.body()?.answer
                                 if (!sessionActive) return@launch
                                 if (result.isSuccessful && !answer.isNullOrBlank()) {
