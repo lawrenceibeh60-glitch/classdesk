@@ -212,8 +212,20 @@ export function useAva(handlers: AvaHandlers) {
         setVoiceError("Microphone permission was denied. Allow microphone access in your browser settings, then tap the microphone again.");
       } else if (e.error === "language-not-supported") rec.lang = "en-US";
       else if (e.error === "network") {
-        wantRef.current = false; setListening(false);
-        setVoiceError(navigator.onLine ? "The browser speech service could not be reached. Try the cloud recording fallback in a browser without built-in recognition, or use Chrome or Edge." : "You're offline. Website speech recognition needs a connection; you can still type to Ava.");
+        if (navigator.onLine && cloudRef.current.stt) {
+          wantRef.current = false;
+          rec.onend = null;
+          rec.onerror = null;
+          rec.abort();
+          recRef.current = null;
+          wantRef.current = true;
+          setListening(false);
+          setVoiceError("Browser speech recognition is unavailable. Ava is switching to tap-to-record cloud transcription.");
+          void startCloudRecorder();
+        } else {
+          wantRef.current = false; setListening(false);
+          setVoiceError(navigator.onLine ? "The browser speech service could not be reached. Try Chrome or Edge, or configure the optional cloud transcription fallback." : "You're offline. Website speech recognition needs a connection; you can still type to Ava.");
+        }
       } else if (e.error === "audio-capture") {
         wantRef.current = false; setListening(false);
         setVoiceError("The browser could not access a microphone. Check that your microphone is connected and permitted.");
@@ -229,7 +241,7 @@ export function useAva(handlers: AvaHandlers) {
     };
     recRef.current = rec;
     try { rec.start(); setInputMode("browser"); return true; } catch { setVoiceError("Could not start the microphone."); return false; }
-  }, [handleFinal]);
+  }, [handleFinal, startCloudRecorder]);
 
   const start = useCallback(async () => {
     setVoiceError("");
