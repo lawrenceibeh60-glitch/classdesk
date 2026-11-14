@@ -57,6 +57,15 @@ interface ClassDeskApi {
     @POST("api/ai/chat")
     suspend fun chat(@Body body: ChatRequest): Response<ChatResponse>
 
+    @GET("api/ai/tasks")
+    suspend fun avaTasks(): Response<AvaTasksEnvelope>
+
+    @POST("api/ai/tasks")
+    suspend fun createAvaTask(@Body body: AvaTaskCreateRequest): Response<AvaTaskCreateEnvelope>
+
+    @DELETE("api/ai/tasks/{id}")
+    suspend fun cancelAvaTask(@Path("id") id: String): Response<Map<String, Any>>
+
     @Streaming
     @POST("api/voice/speak")
     suspend fun speak(@Body body: Map<String, String>): Response<ResponseBody>
