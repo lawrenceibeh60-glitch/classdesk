@@ -9,7 +9,9 @@ services:
     region: frankfurt
     plan: starter
     buildCommand: npm ci --include=dev
-    startCommand: npm run db:migrate && npm run worker:ava
+    preDeployCommand: npm run db:migrate
+    startCommand: npm run worker:ava
+    maxShutdownDelaySeconds: 300
     autoDeployTrigger: off
     envVars:
       - key: DATABASE_URL
