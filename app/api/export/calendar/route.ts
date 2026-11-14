@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireAdmin } from "@/lib/http";
+import { requireStaff } from "@/lib/http";
 
 export const runtime = "nodejs";
 const zone = "Africa/Lagos";
@@ -22,7 +22,7 @@ function dayDate(day: string) {
 }
 function fold(line: string) { const chunks:string[]=[];let current="";for(const char of line){if(new TextEncoder().encode(current+char).length>72){chunks.push(current);current=" ";}current+=char;}chunks.push(current);return chunks.join("\r\n"); }
 export async function GET() {
-  const denied=await requireAdmin();if(denied)return denied;
+  const denied=await requireStaff();if(denied)return denied;
   const [records,assignments,lectures]=await Promise.all([db.academicRecord.findMany({where:{type:{in:["CALENDAR","TIMETABLE"]}},orderBy:{eventDate:"asc"}}),db.assignment.findMany({where:{status:{not:"DONE"},dueAt:{not:null}},include:{course:{select:{code:true}}},orderBy:{dueAt:"asc"}}),db.lectureSession.findMany({where:{scheduledAt:{not:null}},include:{course:{select:{code:true}}},orderBy:{scheduledAt:"asc"}})]);
   const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//AFIT ClassDesk//Academic Calendar//EN","CALSCALE:GREGORIAN","METHOD:PUBLISH","BEGIN:VTIMEZONE","TZID:Africa/Lagos","BEGIN:STANDARD","DTSTART:19700101T000000","TZOFFSETFROM:+0100","TZOFFSETTO:+0100","TZNAME:WAT","END:STANDARD","END:VTIMEZONE"] ;
   for(const record of records){
