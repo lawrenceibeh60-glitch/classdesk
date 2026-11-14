@@ -96,7 +96,7 @@ assert.match(avaWorkspace, /ava-voice-readout[\s\S]*LATEST INPUT[\s\S]*LATEST RE
 assert.match(read("app/api/admin/storage/route.ts"), /requirePrimaryAdmin[\s\S]*pg_database_size[\s\S]*deleteMany/, "SQL storage inspection and cleanup must be primary-admin-only");
 assert.match(read("app/api/admin/storage/route.ts"), /CLEANUP_CLASSDESK_SQL[\s\S]*appliedAt: \{ not: null \}[\s\S]*operation: \{ not: "delete" \}/, "SQL cleanup must require confirmation, preserve pending mutations and retain deletion tombstones");
 assert.match(read("components/storage-management.tsx"), /Pending sync changes are never removed[\s\S]*not touched/, "SQL cleanup UI must explain that pending sync and class content are preserved");
-assert.match(read("app/api/sync/route.ts"), /operation: \{ not: "delete" \}/, "SQL cleanup must retain deletion tombstones for devices that reconnect after the retention window");
+assert.match(read("app/api/admin/storage/route.ts"), /operation: \{ not: "delete" \}/, "SQL cleanup must retain deletion tombstones for devices that reconnect after the retention window");
 assert.match(read("app/api/sync/route.ts"), /recreatedAt === undefined \|\| item\.appliedAt!\.getTime\(\) > recreatedAt/, "A recreated record must supersede its older deletion tombstone");
 assert.match(read("components/storage-management.tsx"), /Manage records and uploaded documents[\s\S]*Clean temporary SQL data/, "Settings must expose SQL storage inspection and cleanup controls");
 assert.match(read("components/storage-management.tsx"), /fetch\("\/api\/documents"[\s\S]*DELETE[\s\S]*Delete permanently/, "Primary settings must expose per-document deletion from SQL and shared storage");
