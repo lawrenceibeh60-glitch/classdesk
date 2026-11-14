@@ -35,6 +35,10 @@ Open the \`android/\` folder in Android Studio, allow Gradle sync, install the S
 - Native command-centre overview with live summary and upcoming assignments.
 - Native course register with list, add and primary-admin delete.
 - Native assignments with list, add, mark done/reopen and primary-admin delete.
+- Native lecture register, attendance summaries and class concerns with create/list/delete flows.
+- Native announcement studio with draft creation and Class Representative-only approve/publish actions.
+- Native calendar/timetable entries with create, list and primary-admin delete.
+- Native document library with Android system file picker, server-side upload/indexing and primary-admin permanent deletion.
 - Encrypted local snapshots for overview, courses and assignments; cached data is read-only while offline.
 - SQLite mutation outbox, AES-GCM payload encryption using Android Keystore, account-bound queue ownership, and WorkManager sync against the existing versioned \`/api/sync\` endpoint.
 - Ava graphical voice panel using Android speech recognition, ClassDesk AI chat and device text-to-speech. It does not request microphone access until Activate is tapped.
@@ -42,12 +46,11 @@ Open the \`android/\` folder in Android Studio, allow Gradle sync, install the S
 
 ## Remaining implementation slices
 
-1. Finish native lecture register, attendance, concerns and records workflows.
-2. Add offline mutation creation and a review screen for queued, rejected and conflicted changes.
-3. Add document picker, uploads, downloads, sharing and exports.
-4. Add announcement drafting, approval workflow and calendar/timetable screens.
-5. Improve Ava lifecycle recovery, speech-service fallbacks and accessibility.
-6. Add unit/instrumentation tests, API contract tests and real-device acceptance testing.
-7. Configure the production API origin, generate Gradle wrapper, sign a release build and package APK/AAB.
+1. Add offline mutation creation to each editable screen and a review/recovery screen for queued, rejected and conflicted changes.
+2. Add document downloads, sharing, preview and export flows.
+3. Add edit/update workflows for lectures, attendance, concerns and announcements, plus calendar filters.
+4. Improve Ava lifecycle recovery, speech-service fallbacks, voice selection and accessibility.
+5. Add unit/instrumentation tests, API contract tests and real-device acceptance testing.
+6. Configure the production API origin, generate Gradle wrapper, sign a release build and package APK/AAB.
 
 No deployment or production database changes are performed by this Android project. Do not treat the APK as release-ready until Gradle build, device tests, authentication, offline recovery and API integration tests pass.
