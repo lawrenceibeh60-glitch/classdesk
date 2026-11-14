@@ -16,7 +16,8 @@
     "check": "npm run typecheck && npm run lint",
     "verify:source": "node scripts/verify-source.mjs",
     "desktop:build": "npm run build && node scripts/prepare-desktop.mjs && npm --prefix desktop install --no-audit --no-fund && npm --prefix desktop run build:win",
-    "desktop:dev": "npm run build && node scripts/prepare-desktop.mjs && npm --prefix desktop install && npm --prefix desktop exec electron ."
+    "desktop:dev": "npm run build && node scripts/prepare-desktop.mjs && npm --prefix desktop install && npm --prefix desktop exec electron .",
+    "worker:ava": "node scripts/ava-task-worker.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.850.0",

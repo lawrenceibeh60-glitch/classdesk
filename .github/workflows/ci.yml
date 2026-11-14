@@ -4,7 +4,7 @@ concurrency:
   cancel-in-progress: true
 on:
   push:
-    branches: [main, work/**, feat/**]
+    branches: [main, work/**, feat/**, feature/android-parity-completion]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -36,6 +36,7 @@ jobs:
           node-version: 22
       - run: npm install --no-audit --no-fund
       - run: npm run verify:source
+      - run: node --check scripts/ava-task-worker.mjs
       - run: npx prisma validate
       - run: npx prisma generate
       - run: npx prisma migrate deploy

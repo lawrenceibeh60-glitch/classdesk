@@ -1,10 +1,22 @@
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 export async function callModel(messages: ChatMessage[], temperature = 0.3) {
-  const mistral = process.env.MISTRAL_API_KEY; const base = (process.env.AI_BASE_URL || (mistral ? "https://api.mistral.ai/v1" : "")).replace(/\/$/, ""); const key = process.env.AI_API_KEY || mistral; const model = process.env.AI_MODEL || (mistral ? process.env.MISTRAL_CHAT_MODEL || "mistral-small-latest" : "");
-  if (!base || !key || !model) throw new Error("Add your MISTRAL_API_KEY to keys/API-KEYS.env (or AI_BASE_URL, AI_API_KEY and AI_MODEL).");
+  // ClassDesk intelligence uses the explicitly configured OpenAI-compatible provider
+  // (xKiro in production). Mistral's optional speech-transcription key is never
+  // silently reused for chat or reasoning.
+  const base = (process.env.AI_BASE_URL || "").replace(/\/$/, "");
+  const key = process.env.AI_API_KEY || "";
+  const model = process.env.AI_MODEL || "";
+  if (!base || !key || !model) throw new Error("Ava's AI provider is not configured. Set AI_BASE_URL, AI_API_KEY and AI_MODEL on the server.");
+  let endpoint: URL;
+  try {
+    endpoint = new URL(`${base}/chat/completions`);
+    if (endpoint.protocol !== "https:") throw new Error("HTTPS is required");
+  } catch {
+    throw new Error("AI_BASE_URL must be a valid HTTPS OpenAI-compatible API base URL.");
+  }
   const controller = new AbortController(); const configuredTimeout = Number(process.env.AI_REQUEST_TIMEOUT_MS || 60000); const timeout = Number.isFinite(configuredTimeout) ? Math.min(Math.max(configuredTimeout, 5000), 120000) : 60000; const timer = setTimeout(() => controller.abort(), timeout);
   try {
-    const response = await fetch(`${base}/chat/completions`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` }, body: JSON.stringify({ model, messages, temperature }), signal: controller.signal, cache: "no-store" });
+    const response = await fetch(endpoint.toString(), { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` }, body: JSON.stringify({ model, messages, temperature }), signal: controller.signal, cache: "no-store" });
     const payload = await response.json(); if (!response.ok) throw new Error(payload?.error?.message || payload?.message || `AI provider returned ${response.status}`);
     const content = payload?.choices?.[0]?.message?.content; if (typeof content !== "string") throw new Error("AI provider returned no text response"); return content;
   } finally { clearTimeout(timer); }

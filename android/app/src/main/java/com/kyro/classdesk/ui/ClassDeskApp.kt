@@ -1,6 +1,18 @@
 package com.kyro.classdesk.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import kotlinx.coroutines.delay
+
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,9 +37,6 @@ import com.google.gson.Gson
 import kotlinx.coroutines.launch
 import java.util.UUID
 import java.time.Instant
-import java.time.LocalDate
-import java.time.OffsetDateTime
-import java.time.ZoneOffset
 import com.google.gson.JsonObject
 
 private val Canvas = Color(0xFF0A1019)
@@ -37,7 +46,7 @@ private val Muted = Color(0xFF91A4B8)
 private val Gold = Color(0xFFF2C94C)
 
 @Composable
-fun ClassDeskApp() {
+fun ClassDeskApp(initialDestination: String? = null) {
     val context = LocalContext.current
     val api = remember { ApiClient.get(context) }
     val scope = rememberCoroutineScope()
@@ -74,6 +83,7 @@ fun ClassDeskApp() {
                     }
                 }
             } else if (response.code() == 401) {
+                ClassDeskSyncScheduler.cancel(context)
                 secureStore.clear()
                 user = null
             } else restoreOfflineSnapshot()
@@ -109,6 +119,7 @@ fun ClassDeskApp() {
             }
         )
         else -> DashboardScreen(
+            initialDestination = initialDestination,
             user = user!!,
             api = api,
             summary = summary,
@@ -154,8 +165,8 @@ private fun LoginScreen(error: String?, onLogin: (String, String) -> Unit) {
 }
 
 @Composable
-private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDto?, upcoming: List<AssignmentDto>, onRefresh: () -> Unit, onLogout: () -> Unit) {
-    var selected by remember { mutableStateOf("Overview") }
+private fun DashboardScreen(initialDestination: String?, user: UserDto, api: ClassDeskApi, summary: SummaryDto?, upcoming: List<AssignmentDto>, onRefresh: () -> Unit, onLogout: () -> Unit) {
+    var selected by remember(initialDestination) { mutableStateOf(initialDestination ?: "Overview") }
     var courses by remember { mutableStateOf<List<CourseDto>>(emptyList()) }
     var assignments by remember { mutableStateOf<List<AssignmentDto>>(emptyList()) }
     var lectures by remember { mutableStateOf<List<LectureDto>>(emptyList()) }
@@ -168,42 +179,115 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
     var calendarContent by remember { mutableStateOf("") }
     var calendarDate by remember { mutableStateOf("") }
     var calendarType by remember { mutableStateOf("TIMETABLE") }
+    var editingCalendarId by remember { mutableStateOf<String?>(null) }
     var showAnnouncementDialog by remember { mutableStateOf(false) }
     var announcementTitle by remember { mutableStateOf("") }
     var announcementBody by remember { mutableStateOf("") }
     var announcementCategory by remember { mutableStateOf("GENERAL") }
+    var showAnnouncementEditDialog by remember { mutableStateOf(false) }
+    var editingAnnouncementId by remember { mutableStateOf<String?>(null) }
+    var editingAnnouncementTitle by remember { mutableStateOf("") }
+    var editingAnnouncementBody by remember { mutableStateOf("") }
+    var editingAnnouncementCategory by remember { mutableStateOf("GENERAL") }
+    var deleteAnnouncementTarget by remember { mutableStateOf<AnnouncementDto?>(null) }
     var moduleLoading by remember { mutableStateOf(false) }
     var moduleError by remember { mutableStateOf<String?>(null) }
     var showCourseDialog by remember { mutableStateOf(false) }
     var showAssignmentDialog by remember { mutableStateOf(false) }
+    var editingCourseId by remember { mutableStateOf<String?>(null) }
     var courseCode by remember { mutableStateOf("") }
     var courseName by remember { mutableStateOf("") }
+    var courseDescription by remember { mutableStateOf("") }
     var lecturer by remember { mutableStateOf("") }
     var semester by remember { mutableStateOf("") }
+    var editingAssignmentId by remember { mutableStateOf<String?>(null) }
+    var assignmentCourseId by remember { mutableStateOf<String?>(null) }
     var assignmentTitle by remember { mutableStateOf("") }
     var assignmentDetails by remember { mutableStateOf("") }
+    var assignmentSubmissionInstructions by remember { mutableStateOf("") }
+    var assignmentSource by remember { mutableStateOf("") }
     var assignmentDueAt by remember { mutableStateOf("") }
     var showLectureDialog by remember { mutableStateOf(false) }
+    var editingLectureId by remember { mutableStateOf<String?>(null) }
+    var lectureCourseId by remember { mutableStateOf<String?>(null) }
     var lectureTopic by remember { mutableStateOf("") }
     var lectureSummary by remember { mutableStateOf("") }
+    var lectureScheduledDate by remember { mutableStateOf("") }
     var lectureDate by remember { mutableStateOf("") }
     var lectureVenue by remember { mutableStateOf("") }
+    var lectureLecturer by remember { mutableStateOf("") }
     var showAttendanceDialog by remember { mutableStateOf(false) }
+    var editingAttendanceId by remember { mutableStateOf<String?>(null) }
+    var attendanceCourseId by remember { mutableStateOf<String?>(null) }
     var attendanceDate by remember { mutableStateOf("") }
     var attendancePresent by remember { mutableStateOf("") }
     var attendanceAbsent by remember { mutableStateOf("") }
+    var attendanceNote by remember { mutableStateOf("") }
     var showConcernDialog by remember { mutableStateOf(false) }
+    var editingConcernId by remember { mutableStateOf<String?>(null) }
     var concernTitle by remember { mutableStateOf("") }
     var concernDetails by remember { mutableStateOf("") }
+    var concernResolution by remember { mutableStateOf("") }
     var concernCategory by remember { mutableStateOf("GENERAL") }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val secureStore = remember { ApiClient.cookies(context) }
+
+    suspend fun mutateAcademic(resource: String, method: String, payload: Map<String, String>): OfflineMutationResult {
+        val result = saveAcademicMutation(context, user, api, resource, method, payload)
+        if (result.queued) moduleError = result.message ?: "Saved locally; waiting for synchronization."
+        return result
+    }
+
+    suspend fun mutateAnnouncement(method: String, payload: Map<String, String>): OfflineMutationResult {
+        val result = saveAnnouncementMutation(context, user, api, method, payload)
+        if (result.queued) moduleError = result.message ?: "Saved locally; waiting for synchronization."
+        return result
+    }
+    val connectivity = remember { ClassDeskConnectivity(context) }
+    var online by remember { mutableStateOf(connectivity.isOnline()) }
+    val currentOnline = rememberUpdatedState(online)
+    var connectionToast by remember { mutableStateOf<String?>(null) }
+    var notificationPermissionNeeded by remember {
+        mutableStateOf(Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+    }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        notificationPermissionNeeded = !granted
+    }
+    DisposableEffect(connectivity) {
+        val callback = connectivity.register { connected ->
+            if (currentOnline.value != connected) {
+                online = connected
+                connectionToast = if (connected) "You're back online. ClassDesk is reconnecting."
+                    else "Offline mode. ClassDesk will reconnect when your internet returns."
+            }
+        }
+        onDispose { connectivity.unregister(callback) }
+    }
+    LaunchedEffect(Unit) {
+        if (!online) connectionToast = "Offline mode. Your saved data remains available."
+    }
+    LaunchedEffect(connectionToast) {
+        if (connectionToast != null) {
+            delay(3000)
+            connectionToast = null
+        }
+    }
     LaunchedEffect(selected) {
         moduleError = null
         if (selected in listOf("Courses", "Tasks", "Lectures", "Attendance", "Concerns", "Announcements", "Calendar")) {
             moduleLoading = true
             try {
+                if (selected in listOf("Tasks", "Lectures", "Attendance")) {
+                    val courseResponse = api.courses()
+                    if (courseResponse.isSuccessful) {
+                        courses = courseResponse.body()?.items.orEmpty()
+                        secureStore.saveSnapshot("courses", Gson().toJson(courses))
+                    } else {
+                        courses = secureStore.loadSnapshot("courses")?.let { runCatching { Gson().fromJson(it, Array<CourseDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
+                    }
+                }
                 if (selected == "Courses") {
                     val response = api.courses()
                     if (response.isSuccessful) {
@@ -262,7 +346,16 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                 } else {
                     val response = api.announcements()
                     if (response.isSuccessful) {
-                        announcements = response.body()?.announcements.orEmpty()
+                        val fetchedAnnouncements = response.body()?.announcements.orEmpty()
+                        val previousAnnouncements = secureStore.loadSnapshot("announcements")?.let {
+                            runCatching { Gson().fromJson(it, Array<AnnouncementDto>::class.java)?.toList() }.getOrNull()
+                        }
+                        if (previousAnnouncements != null && ClassDeskNotifications.canPost(context)) {
+                            val previousById = previousAnnouncements.associateBy { it.id }
+                            fetchedAnnouncements.filter { it.status.equals("PUBLISHED", true) && previousById[it.id]?.status?.equals("PUBLISHED", true) != true }
+                                .forEach { ClassDeskNotifications.announcement(context, it.id, it.title) }
+                        }
+                        announcements = fetchedAnnouncements
                         secureStore.saveSnapshot("announcements", Gson().toJson(announcements))
                     } else {
                         announcements = secureStore.loadSnapshot("announcements")?.let { runCatching { Gson().fromJson(it, Array<AnnouncementDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
@@ -270,6 +363,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                     }
                 }
             } catch (_: Exception) {
+                if (selected in listOf("Tasks", "Lectures", "Attendance")) courses = secureStore.loadSnapshot("courses")?.let { runCatching { Gson().fromJson(it, Array<CourseDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
                 if (selected == "Courses") courses = secureStore.loadSnapshot("courses")?.let { runCatching { Gson().fromJson(it, Array<CourseDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
                 if (selected == "Tasks") assignments = secureStore.loadSnapshot("assignments")?.let { runCatching { Gson().fromJson(it, Array<AssignmentDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
                 if (selected == "Lectures") lectures = secureStore.loadSnapshot("lectures")?.let { runCatching { Gson().fromJson(it, Array<LectureDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
@@ -285,19 +379,35 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
     Scaffold(
         containerColor = Canvas,
         topBar = {
-            Row(Modifier.fillMaxWidth().background(Panel).padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("AFIT CLASSDESK", color = Cyan, fontSize = 11.sp, letterSpacing = 1.8.sp, fontWeight = FontWeight.Bold)
-                    Text("COMMAND / ${user.role.replace('_', ' ')}", color = Muted, fontSize = 10.sp)
+            Column(Modifier.fillMaxWidth().background(Panel)) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("AFIT CLASSDESK", color = Cyan, fontSize = 11.sp, letterSpacing = 1.8.sp, fontWeight = FontWeight.Bold)
+                        Text("COMMAND / ${user.role.replace('_', ' ')}", color = Muted, fontSize = 10.sp)
+                    }
+                    IconButton(onClick = onRefresh) { Icon(Icons.Default.Refresh, "Refresh", tint = Cyan) }
+                    IconButton(onClick = onLogout) { Icon(Icons.Default.Logout, "Sign out", tint = Gold) }
                 }
-                IconButton(onClick = onRefresh) { Icon(Icons.Default.Refresh, "Refresh", tint = Cyan) }
-                IconButton(onClick = onLogout) { Icon(Icons.Default.Logout, "Sign out", tint = Gold) }
+                AnimatedVisibility(visible = connectionToast != null, enter = fadeIn(), exit = fadeOut()) {
+                    Surface(color = Color(0xFF1B2A39), modifier = Modifier.fillMaxWidth()) {
+                        Text(connectionToast.orEmpty(), color = Color.White, fontSize = 12.sp,
+                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp))
+                    }
+                }
+                if (notificationPermissionNeeded) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Enable class notifications", color = Muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }) {
+                            Text("ENABLE", color = Cyan, fontSize = 10.sp)
+                        }
+                    }
+                }
             }
         },
         bottomBar = {
             NavigationBar(containerColor = Panel, contentColor = Cyan) {
                 listOf("Overview", "Courses", "Tasks", "More", "Ava").forEach { item ->
-                    NavigationBarItem(selected = selected == item || (item == "More" && selected in listOf("Lectures", "Attendance", "Concerns", "Announcements", "Calendar", "Documents", "Sync Queue")), onClick = { selected = item },
+                    NavigationBarItem(selected = selected == item || (item == "More" && selected in listOf("Lectures", "Attendance", "Concerns", "Announcements", "Calendar", "Documents", "Ava Tasks", "Ava Tools", "Sync Queue", "Catch-up Centre", "Coverage", "Class Records", "Settings", "Backup & Export")), onClick = { selected = item },
                         icon = { Icon(when (item) {
                             "Courses" -> Icons.Default.MenuBook
                             "Tasks" -> Icons.Default.CheckCircle
@@ -334,7 +444,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                 }
             } else if (selected == "Courses") {
                 Text("COURSE REGISTER", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
-                Button(onClick = { showCourseDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD COURSE") }
+                Button(onClick = { editingCourseId = null; courseCode = ""; courseName = ""; courseDescription = ""; lecturer = ""; semester = ""; showCourseDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD COURSE") }
                 if (moduleLoading) CircularProgressIndicator(color = Cyan)
                 moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
                 if (!moduleLoading && courses.isEmpty()) Text("No courses have been added yet.", color = Muted)
@@ -344,10 +454,25 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                             Text(course.code, color = Cyan, fontWeight = FontWeight.Bold)
                             Text(course.name, color = Color.White, fontWeight = FontWeight.SemiBold)
                             Text(listOfNotNull(course.lecturer, course.semester).joinToString("  /  "), color = Muted, fontSize = 12.sp)
+                            TextButton(onClick = {
+                                editingCourseId = course.id
+                                courseCode = course.code; courseName = course.name; courseDescription = course.description.orEmpty()
+                                lecturer = course.lecturer.orEmpty(); semester = course.semester.orEmpty()
+                                showCourseDialog = true
+                            }) { Text("EDIT COURSE", color = Cyan, fontSize = 10.sp) }
                             if (user.role == "CLASS_REP") TextButton(onClick = {
                                 scope.launch {
-                                    val deleted = api.deleteAcademic("courses", course.id)
-                                    if (deleted.isSuccessful) courses = api.courses().body()?.items.orEmpty()
+                                    val changed = mutateAcademic("courses", "PATCH", mapOf("id" to course.id, "active" to (!course.active).toString()))
+                                    if (changed.isSuccessful) {
+                                        if (!changed.queued) courses = api.courses().body()?.items.orEmpty()
+                                        else courses = courses.map { if (it.id == course.id) it.copy(active = !course.active) else it }
+                                    } else moduleError = "Course status could not be changed."
+                                }
+                            }) { Text(if (course.active) "DEACTIVATE" else "ACTIVATE", color = Gold, fontSize = 10.sp) }
+                            if (user.role == "CLASS_REP") TextButton(onClick = {
+                                scope.launch {
+                                    val deleted = mutateAcademic("courses", "DELETE", mapOf("id" to course.id))
+                                    if (deleted.isSuccessful) { if (deleted.queued) courses = courses.filterNot { it.id == course.id } else courses = api.courses().body()?.items.orEmpty() }
                                     else moduleError = "Could not delete this course (${deleted.code()})."
                                 }
                             }) { Text("DELETE COURSE", color = Color(0xFFFF7D78), fontSize = 10.sp) }
@@ -356,30 +481,35 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                 }
                 if (showCourseDialog) AlertDialog(
                     onDismissRequest = { showCourseDialog = false },
-                    title = { Text("Add course") },
+                    title = { Text(if (editingCourseId == null) "Add course" else "Edit course") },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(courseCode, { courseCode = it }, label = { Text("Course code") }, singleLine = true)
                             OutlinedTextField(courseName, { courseName = it }, label = { Text("Course name") }, singleLine = true)
+                            OutlinedTextField(courseDescription, { courseDescription = it }, label = { Text("Notes (optional)") }, minLines = 2)
                             OutlinedTextField(lecturer, { lecturer = it }, label = { Text("Lecturer (optional)") }, singleLine = true)
                             OutlinedTextField(semester, { semester = it }, label = { Text("Semester (optional)") }, singleLine = true)
                         }
                     },
                     confirmButton = { TextButton(onClick = {
                         scope.launch {
-                            val saved = api.createAcademic(mapOf("resource" to "courses", "code" to courseCode.trim(), "name" to courseName.trim(), "lecturer" to lecturer.trim(), "semester" to semester.trim()))
+                            val id = editingCourseId
+                            val payload = mapOf("code" to courseCode.trim(), "name" to courseName.trim(), "description" to courseDescription.trim(), "lecturer" to lecturer.trim(), "semester" to semester.trim())
+                            val saved = mutateAcademic("courses", if (id == null) "POST" else "PATCH", if (id == null) payload else payload + mapOf("id" to id))
                             if (saved.isSuccessful) {
-                                courses = api.courses().body()?.items.orEmpty()
-                                courseCode = ""; courseName = ""; lecturer = ""; semester = ""
+                                if (saved.queued && id != null) courses = courses.map { if (it.id == id) it.copy(code = courseCode.trim(), name = courseName.trim(), description = courseDescription.trim().ifBlank { null }, lecturer = lecturer.trim(), semester = semester.trim()) else it }
+                                if (!saved.queued) courses = api.courses().body()?.items.orEmpty()
+                                editingCourseId = null
+                                courseCode = ""; courseName = ""; courseDescription = ""; lecturer = ""; semester = ""
                                 showCourseDialog = false
-                            } else moduleError = "Course could not be saved (${saved.code()})."
+                            } else moduleError = saved.message ?: "Course could not be saved (${saved.code()})."
                         }
                     }, enabled = courseCode.isNotBlank() && courseName.isNotBlank()) { Text("SAVE") } },
-                    dismissButton = { TextButton(onClick = { showCourseDialog = false }) { Text("CANCEL") } }
+                    dismissButton = { TextButton(onClick = { showCourseDialog = false; editingCourseId = null }) { Text("CANCEL") } }
                 )
             } else if (selected == "Tasks") {
                 Text("ASSIGNMENTS / DEADLINES", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
-                Button(onClick = { showAssignmentDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD ASSIGNMENT") }
+                Button(onClick = { editingAssignmentId = null; assignmentCourseId = null; assignmentTitle = ""; assignmentDetails = ""; assignmentSubmissionInstructions = ""; assignmentSource = ""; assignmentDueAt = ""; showAssignmentDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD ASSIGNMENT") }
                 if (moduleLoading) CircularProgressIndicator(color = Cyan)
                 moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
                 if (!moduleLoading && assignments.isEmpty()) Text("No assignments have been recorded.", color = Muted)
@@ -390,17 +520,28 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                             Text(listOfNotNull(item.course?.code, item.dueAt, item.status).joinToString("  /  "), color = Muted, fontSize = 12.sp)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 TextButton(onClick = {
+                                    editingAssignmentId = item.id
+                                    assignmentCourseId = item.course?.id; assignmentTitle = item.title; assignmentDetails = item.details.orEmpty(); assignmentSubmissionInstructions = item.submissionInstructions.orEmpty(); assignmentSource = item.source.orEmpty(); assignmentDueAt = item.dueAt.orEmpty()
+                                    showAssignmentDialog = true
+                                }) { Text("EDIT", color = Cyan, fontSize = 10.sp) }
+                                TextButton(onClick = {
                                     scope.launch {
-                                        val next = if (item.status == "DONE") "TODO" else "DONE"
-                                        val saved = api.updateAcademic(mapOf("resource" to "assignments", "id" to item.id, "status" to next))
-                                        if (saved.isSuccessful) assignments = api.assignments().body()?.items.orEmpty()
-                                        else moduleError = "Assignment status could not be updated (${saved.code()})."
+                                        val next = when (item.status) {
+                                            "TODO" -> "IN_PROGRESS"
+                                            "IN_PROGRESS" -> "DONE"
+                                            else -> "TODO"
+                                        }
+                                        val saved = mutateAcademic("assignments", "PATCH", mapOf("id" to item.id, "status" to next))
+                                        if (saved.isSuccessful) {
+                                            if (saved.queued) assignments = assignments.map { if (it.id == item.id) it.copy(status = next) else it }
+                                            else assignments = api.assignments().body()?.items.orEmpty()
+                                        } else moduleError = "Assignment status could not be updated (${saved.code()})."
                                     }
-                                }) { Text(if (item.status == "DONE") "REOPEN" else "MARK DONE", color = Cyan, fontSize = 10.sp) }
+                                }) { Text(when (item.status) { "TODO" -> "START"; "IN_PROGRESS" -> "MARK DONE"; else -> "REOPEN" }, color = Cyan, fontSize = 10.sp) }
                                 if (user.role == "CLASS_REP") TextButton(onClick = {
                                     scope.launch {
-                                        val deleted = api.deleteAcademic("assignments", item.id)
-                                        if (deleted.isSuccessful) assignments = api.assignments().body()?.items.orEmpty()
+                                        val deleted = mutateAcademic("assignments", "DELETE", mapOf("id" to item.id))
+                                        if (deleted.isSuccessful) { if (deleted.queued) assignments = assignments.filterNot { it.id == item.id } else assignments = api.assignments().body()?.items.orEmpty() }
                                         else moduleError = "Assignment could not be deleted (${deleted.code()})."
                                     }
                                 }) { Text("DELETE", color = Color(0xFFFF7D78), fontSize = 10.sp) }
@@ -410,37 +551,46 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                 }
                 if (showAssignmentDialog) AlertDialog(
                     onDismissRequest = { showAssignmentDialog = false },
-                    title = { Text("Add assignment") },
+                    title = { Text(if (editingAssignmentId == null) "Add assignment" else "Edit assignment") },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            CoursePicker(courses, assignmentCourseId) { assignmentCourseId = it }
                             OutlinedTextField(assignmentTitle, { assignmentTitle = it }, label = { Text("Assignment title") }, singleLine = true)
                             OutlinedTextField(assignmentDetails, { assignmentDetails = it }, label = { Text("Details") }, minLines = 2)
+                            OutlinedTextField(assignmentSubmissionInstructions, { assignmentSubmissionInstructions = it }, label = { Text("Submission instructions (optional)") }, minLines = 2)
+                            OutlinedTextField(assignmentSource, { assignmentSource = it }, label = { Text("Source / confirmation (optional)") }, singleLine = true)
                             OutlinedTextField(assignmentDueAt, { assignmentDueAt = it }, label = { Text("Due date (ISO date/time, optional)") }, singleLine = true)
                         }
                     },
                     confirmButton = { TextButton(onClick = {
                         scope.launch {
-                            val saved = api.createAcademic(mapOf("resource" to "assignments", "title" to assignmentTitle.trim(), "details" to assignmentDetails.trim(), "dueAt" to assignmentDueAt.trim()))
+                            val id = editingAssignmentId
+                            val payload = mapOf("courseId" to assignmentCourseId.orEmpty(), "title" to assignmentTitle.trim(), "details" to assignmentDetails.trim(), "submissionInstructions" to assignmentSubmissionInstructions.trim(), "source" to assignmentSource.trim(), "dueAt" to assignmentDueAt.trim())
+                            val saved = mutateAcademic("assignments", if (id == null) "POST" else "PATCH", if (id == null) payload else payload + mapOf("id" to id))
                             if (saved.isSuccessful) {
-                                assignments = api.assignments().body()?.items.orEmpty()
-                                assignmentTitle = ""; assignmentDetails = ""; assignmentDueAt = ""
+                                if (saved.queued && id != null) assignments = assignments.map { if (it.id == id) it.copy(title = assignmentTitle.trim(), details = assignmentDetails.trim(), submissionInstructions = assignmentSubmissionInstructions.trim().ifBlank { null }, source = assignmentSource.trim().ifBlank { null }, dueAt = assignmentDueAt.trim().ifBlank { null }, course = courses.firstOrNull { course -> course.id == assignmentCourseId }?.let { course -> CourseRef(course.id, course.code, course.name) }) else it }
+                                if (!saved.queued) assignments = api.assignments().body()?.items.orEmpty()
+                                editingAssignmentId = null
+                                assignmentCourseId = null; assignmentTitle = ""; assignmentDetails = ""; assignmentSubmissionInstructions = ""; assignmentSource = ""; assignmentDueAt = ""
                                 showAssignmentDialog = false
-                            } else moduleError = "Assignment could not be saved (${saved.code()}). Check the due date format."
+                            } else moduleError = saved.message ?: "Assignment could not be saved (${saved.code()}). Check the due date format."
                         }
                     }, enabled = assignmentTitle.isNotBlank()) { Text("SAVE") } },
-                    dismissButton = { TextButton(onClick = { showAssignmentDialog = false }) { Text("CANCEL") } }
+                    dismissButton = { TextButton(onClick = { showAssignmentDialog = false; editingAssignmentId = null }) { Text("CANCEL") } }
                 )
             } else if (selected == "More") {
                 Text("CLASS OPERATIONS", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
-                listOf("Lectures", "Attendance", "Concerns", "Announcements", "Calendar", "Documents", "Sync Queue").forEach { module ->
+                listOf("Lectures", "Attendance", "Concerns", "Announcements", "Calendar", "Documents", "Sync Queue", "Catch-up Centre", "Coverage", "Class Records", "Settings", "Backup & Export")
+                    .filter { it != "Settings" || user.role == "CLASS_REP" }
+                    .forEach { module ->
                     OutlinedButton(onClick = { selected = module }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(6.dp)) {
                         Text(module.uppercase(), color = Cyan, modifier = Modifier.fillMaxWidth())
                     }
                 }
-                Text("More modules will be added here as their native workflows are completed.", color = Muted, fontSize = 12.sp)
+                Text("Native academic tools, records, catch-up views and account diagnostics.", color = Muted, fontSize = 12.sp)
             } else if (selected == "Lectures") {
                 Text("LECTURE REGISTER", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
-                Button(onClick = { showLectureDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD LECTURE") }
+                Button(onClick = { editingLectureId = null; lectureCourseId = null; lectureTopic = ""; lectureSummary = ""; lectureScheduledDate = ""; lectureDate = ""; lectureVenue = ""; lectureLecturer = ""; showLectureDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD LECTURE") }
                 if (moduleLoading) CircularProgressIndicator(color = Cyan)
                 moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
                 if (!moduleLoading && lectures.isEmpty()) Text("No lectures have been recorded.", color = Muted)
@@ -450,10 +600,16 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                             Text(item.topic, color = Color.White, fontWeight = FontWeight.SemiBold)
                             Text(listOfNotNull(item.course?.code, item.heldAt ?: item.scheduledAt, item.venue).joinToString("  /  "), color = Muted, fontSize = 12.sp)
                             if (item.summary.orEmpty().isNotBlank()) Text(item.summary.orEmpty(), color = Muted, fontSize = 12.sp)
+                            TextButton(onClick = {
+                                editingLectureId = item.id
+                                lectureCourseId = item.course?.id; lectureTopic = item.topic; lectureSummary = item.summary.orEmpty()
+                                lectureScheduledDate = item.scheduledAt.orEmpty(); lectureDate = item.heldAt.orEmpty(); lectureVenue = item.venue.orEmpty(); lectureLecturer = item.lecturer.orEmpty()
+                                showLectureDialog = true
+                            }) { Text("EDIT", color = Cyan, fontSize = 10.sp) }
                             if (user.role == "CLASS_REP") TextButton(onClick = {
                                 scope.launch {
-                                    val deleted = api.deleteAcademic("lectures", item.id)
-                                    if (deleted.isSuccessful) lectures = api.lectures().body()?.items.orEmpty()
+                                    val deleted = mutateAcademic("lectures", "DELETE", mapOf("id" to item.id))
+                                    if (deleted.isSuccessful) { if (deleted.queued) lectures = lectures.filterNot { it.id == item.id } else lectures = api.lectures().body()?.items.orEmpty() }
                                     else moduleError = "Could not delete lecture (${deleted.code()})."
                                 }
                             }) { Text("DELETE", color = Color(0xFFFF7D78), fontSize = 10.sp) }
@@ -462,26 +618,33 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                 }
                 if (showLectureDialog) AlertDialog(
                     onDismissRequest = { showLectureDialog = false },
-                    title = { Text("Add lecture") },
+                    title = { Text(if (editingLectureId == null) "Add lecture" else "Edit lecture") },
                     text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CoursePicker(courses, lectureCourseId) { lectureCourseId = it }
                         OutlinedTextField(lectureTopic, { lectureTopic = it }, label = { Text("Topic") }, singleLine = true)
                         OutlinedTextField(lectureSummary, { lectureSummary = it }, label = { Text("Summary") }, minLines = 2)
+                        OutlinedTextField(lectureScheduledDate, { lectureScheduledDate = it }, label = { Text("Scheduled date/time (ISO, optional)") }, singleLine = true)
                         OutlinedTextField(lectureDate, { lectureDate = it }, label = { Text("Held date/time (ISO, optional)") }, singleLine = true)
                         OutlinedTextField(lectureVenue, { lectureVenue = it }, label = { Text("Venue (optional)") }, singleLine = true)
+                        OutlinedTextField(lectureLecturer, { lectureLecturer = it }, label = { Text("Lecturer (optional)") }, singleLine = true)
                     } },
                     confirmButton = { TextButton(onClick = { scope.launch {
-                        val saved = api.createAcademic(mapOf("resource" to "lectures", "topic" to lectureTopic.trim(), "summary" to lectureSummary.trim(), "heldAt" to lectureDate.trim(), "venue" to lectureVenue.trim()))
+                        val id = editingLectureId
+                        val payload = mapOf("courseId" to lectureCourseId.orEmpty(), "topic" to lectureTopic.trim(), "summary" to lectureSummary.trim(), "scheduledAt" to lectureScheduledDate.trim(), "heldAt" to lectureDate.trim(), "venue" to lectureVenue.trim(), "lecturer" to lectureLecturer.trim())
+                        val saved = mutateAcademic("lectures", if (id == null) "POST" else "PATCH", if (id == null) payload else payload + mapOf("id" to id))
                         if (saved.isSuccessful) {
-                            lectures = api.lectures().body()?.items.orEmpty()
-                            lectureTopic = ""; lectureSummary = ""; lectureDate = ""; lectureVenue = ""
+                            if (saved.queued && id != null) lectures = lectures.map { if (it.id == id) it.copy(topic = lectureTopic.trim(), summary = lectureSummary.trim(), scheduledAt = lectureScheduledDate.trim().ifBlank { null }, heldAt = lectureDate.trim().ifBlank { null }, venue = lectureVenue.trim().ifBlank { null }, lecturer = lectureLecturer.trim().ifBlank { null }, course = courses.firstOrNull { course -> course.id == lectureCourseId }?.let { course -> CourseRef(course.id, course.code, course.name) }) else it }
+                            if (!saved.queued) lectures = api.lectures().body()?.items.orEmpty()
+                            editingLectureId = null
+                            lectureCourseId = null; lectureTopic = ""; lectureSummary = ""; lectureScheduledDate = ""; lectureDate = ""; lectureVenue = ""; lectureLecturer = ""
                             showLectureDialog = false
-                        } else moduleError = "Lecture could not be saved. Check the date format."
+                        } else moduleError = saved.message ?: "Lecture could not be saved. Check the date format."
                     } }, enabled = lectureTopic.isNotBlank()) { Text("SAVE") } },
-                    dismissButton = { TextButton(onClick = { showLectureDialog = false }) { Text("CANCEL") } }
+                    dismissButton = { TextButton(onClick = { showLectureDialog = false; editingLectureId = null }) { Text("CANCEL") } }
                 )
             } else if (selected == "Attendance") {
                 Text("ATTENDANCE SUMMARIES", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
-                Button(onClick = { showAttendanceDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD SUMMARY") }
+                Button(onClick = { editingAttendanceId = null; attendanceCourseId = null; attendanceDate = ""; attendancePresent = ""; attendanceAbsent = ""; attendanceNote = ""; showAttendanceDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD SUMMARY") }
                 if (moduleLoading) CircularProgressIndicator(color = Cyan)
                 moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
                 if (!moduleLoading && attendance.isEmpty()) Text("No attendance summaries have been recorded.", color = Muted)
@@ -492,10 +655,19 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                             Text(item.sessionDate, color = Color.White)
                             Text("PRESENT  ${item.presentCount}     ABSENT  ${item.absentCount}", color = Muted, fontSize = 12.sp)
                             item.note?.let { Text(it, color = Muted, fontSize = 12.sp) }
+                            TextButton(onClick = {
+                                editingAttendanceId = item.id
+                                attendanceCourseId = item.course?.id
+                                attendanceDate = item.sessionDate.take(10)
+                                attendancePresent = item.presentCount.toString()
+                                attendanceAbsent = item.absentCount.toString()
+                                attendanceNote = item.note.orEmpty()
+                                showAttendanceDialog = true
+                            }) { Text("EDIT", color = Cyan, fontSize = 10.sp) }
                             if (user.role == "CLASS_REP") TextButton(onClick = {
                                 scope.launch {
-                                    val deleted = api.deleteAcademic("attendance", item.id)
-                                    if (deleted.isSuccessful) attendance = api.attendance().body()?.items.orEmpty()
+                                    val deleted = mutateAcademic("attendance", "DELETE", mapOf("id" to item.id))
+                                    if (deleted.isSuccessful) { if (deleted.queued) attendance = attendance.filterNot { it.id == item.id } else attendance = api.attendance().body()?.items.orEmpty() }
                                     else moduleError = "Could not delete attendance summary (${deleted.code()})."
                                 }
                             }) { Text("DELETE", color = Color(0xFFFF7D78), fontSize = 10.sp) }
@@ -504,25 +676,31 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                 }
                 if (showAttendanceDialog) AlertDialog(
                     onDismissRequest = { showAttendanceDialog = false },
-                    title = { Text("Add attendance summary") },
+                    title = { Text(if (editingAttendanceId == null) "Add attendance summary" else "Edit attendance summary") },
                     text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CoursePicker(courses, attendanceCourseId) { attendanceCourseId = it }
                         OutlinedTextField(attendanceDate, { attendanceDate = it }, label = { Text("Session date (YYYY-MM-DD)") }, singleLine = true)
                         OutlinedTextField(attendancePresent, { attendancePresent = it }, label = { Text("Present count") }, singleLine = true)
                         OutlinedTextField(attendanceAbsent, { attendanceAbsent = it }, label = { Text("Absent count") }, singleLine = true)
+                        OutlinedTextField(attendanceNote, { attendanceNote = it }, label = { Text("Note (optional)") }, minLines = 2)
                     } },
                     confirmButton = { TextButton(onClick = { scope.launch {
-                        val saved = api.createAcademic(mapOf("resource" to "attendance", "sessionDate" to attendanceDate.trim(), "presentCount" to attendancePresent.trim(), "absentCount" to attendanceAbsent.trim()))
+                        val id = editingAttendanceId
+                        val payload = mapOf("courseId" to attendanceCourseId.orEmpty(), "sessionDate" to attendanceDate.trim(), "presentCount" to attendancePresent.trim(), "absentCount" to attendanceAbsent.trim(), "note" to attendanceNote.trim())
+                        val saved = mutateAcademic("attendance", if (id == null) "POST" else "PATCH", if (id == null) payload else payload + mapOf("id" to id))
                         if (saved.isSuccessful) {
-                            attendance = api.attendance().body()?.items.orEmpty()
-                            attendanceDate = ""; attendancePresent = ""; attendanceAbsent = ""
+                            if (saved.queued && id != null) attendance = attendance.map { if (it.id == id) it.copy(sessionDate = attendanceDate.trim(), presentCount = attendancePresent.toInt(), absentCount = attendanceAbsent.toInt(), note = attendanceNote.trim().ifBlank { null }, course = courses.firstOrNull { course -> course.id == attendanceCourseId }?.let { course -> CourseRef(course.id, course.code, course.name) }) else it }
+                            if (!saved.queued) attendance = api.attendance().body()?.items.orEmpty()
+                            editingAttendanceId = null
+                            attendanceCourseId = null; attendanceDate = ""; attendancePresent = ""; attendanceAbsent = ""; attendanceNote = ""
                             showAttendanceDialog = false
-                        } else moduleError = "Attendance could not be saved. Check date and whole-number counts."
+                        } else moduleError = saved.message ?: "Attendance could not be saved. Check date and whole-number counts."
                     } }, enabled = attendanceDate.isNotBlank() && attendancePresent.toIntOrNull() != null && attendanceAbsent.toIntOrNull() != null) { Text("SAVE") } },
-                    dismissButton = { TextButton(onClick = { showAttendanceDialog = false }) { Text("CANCEL") } }
+                    dismissButton = { TextButton(onClick = { showAttendanceDialog = false; editingAttendanceId = null }) { Text("CANCEL") } }
                 )
             } else if (selected == "Concerns") {
                 Text("CLASS CONCERNS", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
-                Button(onClick = { showConcernDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD CONCERN") }
+                Button(onClick = { editingConcernId = null; concernCategory = "GENERAL"; concernTitle = ""; concernDetails = ""; concernResolution = ""; showConcernDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD CONCERN") }
                 if (moduleLoading) CircularProgressIndicator(color = Cyan)
                 moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
                 if (!moduleLoading && concerns.isEmpty()) Text("No class concerns have been recorded.", color = Muted)
@@ -533,37 +711,60 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                             Text(item.title, color = Color.White, fontWeight = FontWeight.SemiBold)
                             Text(item.details, color = Muted, fontSize = 12.sp)
                             item.resolution?.let { Text("RESOLUTION: $it", color = Gold, fontSize = 12.sp) }
-                            if (user.role == "CLASS_REP") TextButton(onClick = {
+                            TextButton(onClick = {
+                                editingConcernId = item.id
+                                concernCategory = item.category; concernTitle = item.title
+                                concernDetails = item.details; concernResolution = item.resolution.orEmpty()
+                                showConcernDialog = true
+                            }) { Text("EDIT", color = Cyan, fontSize = 10.sp) }
+                            if (user.role == "CLASS_REP") {
+                                TextButton(onClick = {
+                                    scope.launch {
+                                        val next = if (item.status == "RESOLVED") "OPEN" else "RESOLVED"
+                                        val updated = mutateAcademic("concerns", "PATCH", mapOf("id" to item.id, "status" to next, "resolution" to item.resolution.orEmpty()))
+                                        if (updated.isSuccessful) {
+                                            if (updated.queued) concerns = concerns.map { if (it.id == item.id) it.copy(status = next) else it }
+                                            else concerns = api.concerns().body()?.items.orEmpty()
+                                        } else moduleError = "Concern status could not be updated."
+                                    }
+                                }) { Text(if (item.status == "RESOLVED") "REOPEN" else "RESOLVE", color = Gold, fontSize = 10.sp) }
+                                TextButton(onClick = {
                                 scope.launch {
-                                    val deleted = api.deleteAcademic("concerns", item.id)
-                                    if (deleted.isSuccessful) concerns = api.concerns().body()?.items.orEmpty()
+                                    val deleted = mutateAcademic("concerns", "DELETE", mapOf("id" to item.id))
+                                    if (deleted.isSuccessful) { if (deleted.queued) concerns = concerns.filterNot { it.id == item.id } else concerns = api.concerns().body()?.items.orEmpty() }
                                     else moduleError = "Could not delete concern (${deleted.code()})."
                                 }
                             }) { Text("DELETE", color = Color(0xFFFF7D78), fontSize = 10.sp) }
+                            }
                         }
                     }
                 }
                 if (showConcernDialog) AlertDialog(
                     onDismissRequest = { showConcernDialog = false },
-                    title = { Text("Add class concern") },
+                    title = { Text(if (editingConcernId == null) "Add class concern" else "Edit class concern") },
                     text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(concernCategory, { concernCategory = it }, label = { Text("Category") }, singleLine = true)
                         OutlinedTextField(concernTitle, { concernTitle = it }, label = { Text("Title") }, singleLine = true)
                         OutlinedTextField(concernDetails, { concernDetails = it }, label = { Text("Details") }, minLines = 3)
+                        OutlinedTextField(concernResolution, { concernResolution = it }, label = { Text("Resolution (optional)") }, minLines = 2)
                     } },
                     confirmButton = { TextButton(onClick = { scope.launch {
-                        val saved = api.createAcademic(mapOf("resource" to "concerns", "category" to concernCategory.trim(), "title" to concernTitle.trim(), "details" to concernDetails.trim()))
+                        val id = editingConcernId
+                        val payload = mapOf("category" to concernCategory.trim(), "title" to concernTitle.trim(), "details" to concernDetails.trim(), "resolution" to concernResolution.trim())
+                        val saved = mutateAcademic("concerns", if (id == null) "POST" else "PATCH", if (id == null) payload else payload + mapOf("id" to id))
                         if (saved.isSuccessful) {
-                            concerns = api.concerns().body()?.items.orEmpty()
-                            concernCategory = "GENERAL"; concernTitle = ""; concernDetails = ""
+                            if (saved.queued && id != null) concerns = concerns.map { if (it.id == id) it.copy(category = concernCategory.trim(), title = concernTitle.trim(), details = concernDetails.trim(), resolution = concernResolution.trim().ifBlank { null }) else it }
+                            if (!saved.queued) concerns = api.concerns().body()?.items.orEmpty()
+                            editingConcernId = null
+                            concernCategory = "GENERAL"; concernTitle = ""; concernDetails = ""; concernResolution = ""
                             showConcernDialog = false
-                        } else moduleError = "Concern could not be saved."
+                        } else moduleError = saved.message ?: "Concern could not be saved."
                     } }, enabled = concernTitle.isNotBlank() && concernDetails.isNotBlank()) { Text("SAVE") } },
-                    dismissButton = { TextButton(onClick = { showConcernDialog = false }) { Text("CANCEL") } }
+                    dismissButton = { TextButton(onClick = { showConcernDialog = false; editingConcernId = null }) { Text("CANCEL") } }
                 )
             } else if (selected == "Calendar") {
                 Text("CALENDAR / TIMETABLE", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
-                Button(onClick = { showCalendarDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD EVENT") }
+                Button(onClick = { editingCalendarId = null; calendarTitle = ""; calendarContent = ""; calendarDate = ""; calendarType = "TIMETABLE"; showCalendarDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD EVENT") }
                 if (moduleLoading) CircularProgressIndicator(color = Cyan)
                 moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
                 if (!moduleLoading && calendarItems.isEmpty()) Text("No upcoming class events are recorded.", color = Muted)
@@ -574,6 +775,14 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                             Text(item.title, color = Color.White, fontWeight = FontWeight.SemiBold)
                             Text(item.eventDate.orEmpty(), color = Gold, fontSize = 12.sp)
                             if (item.content.isNotBlank()) Text(item.content, color = Muted, fontSize = 12.sp)
+                            TextButton(onClick = {
+                                editingCalendarId = item.id
+                                calendarType = item.type
+                                calendarTitle = item.title
+                                calendarContent = item.content
+                                calendarDate = item.eventDate.orEmpty().take(10)
+                                showCalendarDialog = true
+                            }) { Text("EDIT EVENT", color = Cyan, fontSize = 10.sp) }
                             if (user.role == "CLASS_REP") TextButton(onClick = {
                                 scope.launch {
                                     val deleted = try { api.deleteRecord(item.id) } catch (_: Exception) { null }
@@ -584,6 +793,8 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                                             calendarItems = calendarItems.filterNot { it.id == item.id }
                                             secureStore.saveSnapshot("calendar", Gson().toJson(calendarItems))
                                             moduleError = "Deletion saved on this device and queued for synchronization."
+                                        } catch (e: Exception) {
+                                            moduleError = e.message ?: "Could not save this deletion to the offline queue."
                                         } finally { store.closeStore() }
                                     } else if (deleted.isSuccessful) {
                                         calendarItems = calendarItems.filterNot { it.id == item.id }
@@ -597,7 +808,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                 }
                 if (showCalendarDialog) AlertDialog(
                     onDismissRequest = { showCalendarDialog = false },
-                    title = { Text("Add timetable event") },
+                    title = { Text(if (editingCalendarId == null) "Add timetable event" else "Edit timetable event") },
                     text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(calendarType, { calendarType = it.uppercase() }, label = { Text("Type: TIMETABLE or CALENDAR") }, singleLine = true)
                         OutlinedTextField(calendarTitle, { calendarTitle = it }, label = { Text("Event title") }, singleLine = true)
@@ -605,52 +816,66 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                         OutlinedTextField(calendarContent, { calendarContent = it }, label = { Text("Details / venue") }, minLines = 2)
                     } },
                     confirmButton = { TextButton(onClick = { scope.launch {
-                        val normalizedDate = runCatching { Instant.parse(calendarDate.trim()).toString() }.getOrNull()
-                            ?: runCatching { OffsetDateTime.parse(calendarDate.trim()).toInstant().toString() }.getOrNull()
-                            ?: runCatching { LocalDate.parse(calendarDate.trim()).atStartOfDay(ZoneOffset.UTC).toInstant().toString() }.getOrNull()
+                        val normalizedDate = normalizeCalendarDate(calendarDate)
                         if (normalizedDate == null) {
                             moduleError = "Enter a valid date such as YYYY-MM-DD or an ISO date/time."
                             return@launch
                         }
+                        val existing = editingCalendarId?.let { id -> calendarItems.firstOrNull { it.id == id } }
+                        val id = editingCalendarId
+                        val localId = id ?: UUID.randomUUID().toString()
+                        val payloadMap = mapOf("id" to localId, "type" to calendarType, "title" to calendarTitle.trim(), "content" to calendarContent.trim(), "eventDate" to normalizedDate)
                         val saved = try {
-                            api.createRecord(mapOf("type" to calendarType, "title" to calendarTitle.trim(), "content" to calendarContent.trim(), "eventDate" to normalizedDate))
+                            if (id == null) api.createRecord(payloadMap) else api.updateRecord(payloadMap)
                         } catch (_: Exception) { null }
                         if (saved == null) {
-                            val localId = UUID.randomUUID().toString()
                             val payload = JsonObject().apply {
                                 addProperty("type", calendarType)
                                 addProperty("title", calendarTitle.trim())
                                 addProperty("content", calendarContent.trim())
                                 addProperty("eventDate", normalizedDate)
                                 add("metadata", JsonObject())
-                                addProperty("status", "ACTIVE")
+                                addProperty("status", existing?.status ?: "ACTIVE")
                                 addProperty("updatedAt", Instant.now().toString())
                             }
                             val store = OfflineStore(context)
                             try {
-                                store.enqueue(PendingMutation(UUID.randomUUID().toString(), user.username, localId, "upsert", 0, Gson().toJson(payload)))
-                                calendarItems = listOf(AcademicRecordDto(localId, calendarType, calendarTitle.trim(), calendarContent.trim(), normalizedDate, "ACTIVE", 1)) + calendarItems
+                                store.enqueue(PendingMutation(UUID.randomUUID().toString(), user.username, localId, "upsert", existing?.version ?: 0, Gson().toJson(payload)))
+                                val updated = AcademicRecordDto(localId, calendarType, calendarTitle.trim(), calendarContent.trim(), normalizedDate, existing?.status ?: "ACTIVE", (existing?.version ?: 0) + 1)
+                                calendarItems = if (id == null) listOf(updated) + calendarItems else calendarItems.map { if (it.id == id) updated else it }
                                 secureStore.saveSnapshot("calendar", Gson().toJson(calendarItems))
                                 moduleError = "Saved on this device. It will sync when the network returns."
+                                editingCalendarId = null
                                 calendarTitle = ""; calendarContent = ""; calendarDate = ""; calendarType = "TIMETABLE"
                                 showCalendarDialog = false
+                            } catch (e: Exception) {
+                                moduleError = e.message ?: "Could not save this event to the offline queue."
                             } finally { store.closeStore() }
                         } else if (saved.isSuccessful) {
                             try { val refreshed = api.records(); if (refreshed.isSuccessful) calendarItems = refreshed.body()?.records.orEmpty() } catch (_: Exception) { /* retain the current local view */ }
                             secureStore.saveSnapshot("calendar", Gson().toJson(calendarItems))
+                            editingCalendarId = null
                             calendarTitle = ""; calendarContent = ""; calendarDate = ""; calendarType = "TIMETABLE"
                             showCalendarDialog = false
                         } else moduleError = "Event could not be saved. Use TIMETABLE or CALENDAR and a valid ISO date."
                     } }, enabled = calendarTitle.isNotBlank() && calendarDate.isNotBlank() && calendarType in listOf("TIMETABLE", "CALENDAR")) { Text("SAVE") } },
-                    dismissButton = { TextButton(onClick = { showCalendarDialog = false }) { Text("CANCEL") } }
+                    dismissButton = { TextButton(onClick = { showCalendarDialog = false; editingCalendarId = null }) { Text("CANCEL") } }
                 )
+            } else if (selected == "Ava Tasks") {
+                AvaTasksScreen(api)
+            } else if (selected == "Ava Tools") {
+                AvaToolsScreen(api, user.role == "CLASS_REP")
             } else if (selected == "Sync Queue") {
                 OfflineQueueScreen(user)
             } else if (selected == "Documents") {
                 DocumentLibraryScreen(api, user.role == "CLASS_REP")
+            } else if (selected in listOf("Catch-up Centre", "Coverage", "Class Records", "Settings")) {
+                NativeParityScreen(selected, api, user)
+            } else if (selected == "Backup & Export") {
+                BackupToolsScreen(api, user.role == "CLASS_REP")
             } else if (selected == "Announcements") {
                 Text("ANNOUNCEMENT STUDIO", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
-                Button(onClick = { showAnnouncementDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ NEW DRAFT") }
+                Button(onClick = { announcementTitle = ""; announcementBody = ""; announcementCategory = "GENERAL"; showAnnouncementDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ NEW DRAFT") }
                 if (moduleLoading) CircularProgressIndicator(color = Cyan)
                 moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
                 if (!moduleLoading && announcements.isEmpty()) Text("No announcements have been drafted.", color = Muted)
@@ -660,20 +885,63 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                             Text(item.status.uppercase() + " / " + item.category.uppercase(), color = Cyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             Text(item.title, color = Color.White, fontWeight = FontWeight.SemiBold)
                             Text(item.body, color = Muted, fontSize = 12.sp, maxLines = 5)
+                            if (item.status == "DRAFT") TextButton(onClick = {
+                                editingAnnouncementId = item.id
+                                editingAnnouncementTitle = item.title
+                                editingAnnouncementBody = item.body
+                                editingAnnouncementCategory = item.category
+                                showAnnouncementEditDialog = true
+                            }) { Text("EDIT DRAFT", color = Cyan, fontSize = 10.sp) }
                             if (user.role == "CLASS_REP" && item.status == "DRAFT") TextButton(onClick = {
                                 scope.launch {
-                                    val approved = api.updateAnnouncement(mapOf("id" to item.id, "action" to "approve"))
-                                    if (approved.isSuccessful) announcements = api.announcements().body()?.announcements.orEmpty()
-                                    else moduleError = "Announcement approval failed. Resolve placeholders and try again."
+                                    val approved = mutateAnnouncement("PATCH", mapOf("id" to item.id, "action" to "approve"))
+                                    if (approved.isSuccessful) {
+                                        val refreshed = api.announcements()
+                                        if (refreshed.isSuccessful) announcements = refreshed.body()?.announcements.orEmpty()
+                                    } else moduleError = "Announcement approval requires a connection and all placeholders must be resolved."
                                 }
                             }) { Text("APPROVE", color = Gold, fontSize = 10.sp) }
-                            if (user.role == "CLASS_REP" && item.status == "APPROVED") TextButton(onClick = {
+                            if (user.role == "CLASS_REP" && item.status == "APPROVED") {
+                                TextButton(onClick = {
+                                    scope.launch {
+                                        val published = mutateAnnouncement("PATCH", mapOf("id" to item.id, "action" to "publish"))
+                                        if (published.isSuccessful) {
+                                            val refreshed = api.announcements()
+                                            if (refreshed.isSuccessful) announcements = refreshed.body()?.announcements.orEmpty()
+                                        } else moduleError = "Announcement publication requires a live connection."
+                                    }
+                                }) { Text("PUBLISH", color = Cyan, fontSize = 10.sp) }
+                                TextButton(onClick = {
+                                    scope.launch {
+                                        val reverted = mutateAnnouncement("PATCH", mapOf("id" to item.id, "action" to "backToDraft"))
+                                        if (reverted.isSuccessful) {
+                                            val refreshed = api.announcements()
+                                            if (refreshed.isSuccessful) announcements = refreshed.body()?.announcements.orEmpty()
+                                        } else moduleError = "Could not return this announcement to draft."
+                                    }
+                                }) { Text("RETURN TO DRAFT", color = Gold, fontSize = 10.sp) }
+                            }
+                            if (user.role == "CLASS_REP" && item.status == "PUBLISHED") TextButton(onClick = {
                                 scope.launch {
-                                    val published = api.updateAnnouncement(mapOf("id" to item.id, "action" to "publish"))
-                                    if (published.isSuccessful) announcements = api.announcements().body()?.announcements.orEmpty()
-                                    else moduleError = "Announcement could not be published."
+                                    val archived = mutateAnnouncement("PATCH", mapOf("id" to item.id, "action" to "archive"))
+                                    if (archived.isSuccessful) {
+                                        val refreshed = api.announcements()
+                                        if (refreshed.isSuccessful) announcements = refreshed.body()?.announcements.orEmpty()
+                                    } else moduleError = "Archiving requires a live connection."
                                 }
-                            }) { Text("PUBLISH", color = Cyan, fontSize = 10.sp) }
+                            }) { Text("ARCHIVE", color = Gold, fontSize = 10.sp) }
+                            if (user.role == "CLASS_REP" && item.status == "ARCHIVED") TextButton(onClick = {
+                                scope.launch {
+                                    val reverted = mutateAnnouncement("PATCH", mapOf("id" to item.id, "action" to "backToDraft"))
+                                    if (reverted.isSuccessful) {
+                                        val refreshed = api.announcements()
+                                        if (refreshed.isSuccessful) announcements = refreshed.body()?.announcements.orEmpty()
+                                    } else moduleError = "Could not return this announcement to draft."
+                                }
+                            }) { Text("RESTORE TO DRAFT", color = Cyan, fontSize = 10.sp) }
+                            if (user.role == "CLASS_REP") TextButton(onClick = { deleteAnnouncementTarget = item }) {
+                                Text("DELETE", color = Color(0xFFFF7D78), fontSize = 10.sp)
+                            }
                         }
                     }
                 }
@@ -686,17 +954,106 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                         OutlinedTextField(announcementBody, { announcementBody = it }, label = { Text("Announcement") }, minLines = 4)
                     } },
                     confirmButton = { TextButton(onClick = { scope.launch {
-                        val saved = api.createAnnouncement(mapOf("title" to announcementTitle.trim(), "category" to announcementCategory.trim(), "body" to announcementBody.trim()))
+                        val saved = mutateAnnouncement("POST", mapOf("title" to announcementTitle.trim(), "category" to announcementCategory.trim(), "body" to announcementBody.trim()))
                         if (saved.isSuccessful) {
-                            announcements = api.announcements().body()?.announcements.orEmpty()
+                            if (!saved.queued) {
+                                val refreshed = api.announcements()
+                                if (refreshed.isSuccessful) announcements = refreshed.body()?.announcements.orEmpty()
+                            }
                             announcementTitle = ""; announcementBody = ""; announcementCategory = "GENERAL"
                             showAnnouncementDialog = false
-                        } else moduleError = "Announcement draft could not be saved."
+                        } else moduleError = saved.message ?: "Announcement draft could not be saved."
                     } }, enabled = announcementTitle.isNotBlank() && announcementBody.isNotBlank()) { Text("SAVE DRAFT") } },
                     dismissButton = { TextButton(onClick = { showAnnouncementDialog = false }) { Text("CANCEL") } }
                 )
+                if (showAnnouncementEditDialog) AlertDialog(
+                    onDismissRequest = { showAnnouncementEditDialog = false },
+                    title = { Text("Edit announcement draft") },
+                    text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(editingAnnouncementTitle, { editingAnnouncementTitle = it }, label = { Text("Title") }, singleLine = true)
+                        OutlinedTextField(editingAnnouncementCategory, { editingAnnouncementCategory = it }, label = { Text("Category") }, singleLine = true)
+                        OutlinedTextField(editingAnnouncementBody, { editingAnnouncementBody = it }, label = { Text("Announcement") }, minLines = 4)
+                    } },
+                    confirmButton = { TextButton(onClick = { scope.launch {
+                        val id = editingAnnouncementId ?: return@launch
+                        val saved = mutateAnnouncement("PATCH", mapOf(
+                            "id" to id, "action" to "edit",
+                            "title" to editingAnnouncementTitle.trim(),
+                            "category" to editingAnnouncementCategory.trim(),
+                            "body" to editingAnnouncementBody.trim()
+                        ))
+                        if (saved.isSuccessful) {
+                            if (saved.queued) {
+                                announcements = announcements.map { item ->
+                                    if (item.id == id) item.copy(
+                                        title = editingAnnouncementTitle.trim(),
+                                        category = editingAnnouncementCategory.trim(),
+                                        body = editingAnnouncementBody.trim(),
+                                        status = "DRAFT"
+                                    ) else item
+                                }
+                            } else {
+                                val refreshed = api.announcements()
+                                if (refreshed.isSuccessful) announcements = refreshed.body()?.announcements.orEmpty()
+                            }
+                            showAnnouncementEditDialog = false
+                            editingAnnouncementId = null
+                        } else moduleError = saved.message ?: "Announcement draft could not be updated."
+                    } }, enabled = editingAnnouncementTitle.isNotBlank() && editingAnnouncementBody.isNotBlank()) { Text("SAVE CHANGES") } },
+                    dismissButton = { TextButton(onClick = { showAnnouncementEditDialog = false }) { Text("CANCEL") } }
+                )
+                deleteAnnouncementTarget?.let { target ->
+                    AlertDialog(
+                        onDismissRequest = { deleteAnnouncementTarget = null },
+                        title = { Text("Delete announcement?") },
+                        text = { Text("Permanently delete ${target.title}? This action cannot be undone.") },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                scope.launch {
+                                    try {
+                                        val deleted = api.deleteAnnouncement(target.id)
+                                        if (deleted.isSuccessful) {
+                                            announcements = announcements.filterNot { it.id == target.id }
+                                            deleteAnnouncementTarget = null
+                                        } else moduleError = "Announcement could not be deleted (HTTP ${deleted.code()})."
+                                    } catch (_: Exception) {
+                                        moduleError = "Deletion requires a live connection. The announcement was not removed locally."
+                                    }
+                                }
+                            }) { Text("DELETE PERMANENTLY", color = Color(0xFFFF7D78)) }
+                        },
+                        dismissButton = { TextButton(onClick = { deleteAnnouncementTarget = null }) { Text("CANCEL") } }
+                    )
+                }
             } else {
                 AvaVoiceScreen(api)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CoursePicker(courses: List<CourseDto>, selectedId: String?, onSelected: (String?) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val selected = courses.firstOrNull { it.id == selectedId }
+    Box {
+        OutlinedTextField(
+            value = selected?.let { "${it.code} / ${it.name}" } ?: "No course linked",
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Course (optional)") },
+            modifier = Modifier.fillMaxWidth().clickable { expanded = true }
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("No course linked") },
+                onClick = { onSelected(null); expanded = false }
+            )
+            courses.forEach { course ->
+                DropdownMenuItem(
+                    text = { Text("${course.code} / ${course.name}") },
+                    onClick = { onSelected(course.id); expanded = false }
+                )
             }
         }
     }

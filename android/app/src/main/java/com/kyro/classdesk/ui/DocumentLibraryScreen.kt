@@ -1,8 +1,10 @@
 package com.kyro.classdesk.ui
 
 import android.provider.OpenableColumns
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,15 +33,38 @@ fun DocumentLibraryScreen(api: ClassDeskApi, isPrimaryAdmin: Boolean) {
     var loading by remember { mutableStateOf(true) }
     var uploading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var downloadId by remember { mutableStateOf<String?>(null) }
+    var downloadName by remember { mutableStateOf("class-material") }
+    var courseCode by remember { mutableStateOf("") }
+    var courseName by remember { mutableStateOf("") }
+    var topic by remember { mutableStateOf("") }
+    var lectureDate by remember { mutableStateOf("") }
+    var deleteTarget by remember { mutableStateOf<DocumentDto?>(null) }
+    var deleting by remember { mutableStateOf(false) }
 
     suspend fun reload() {
         loading = true
         try {
             val result = api.documents()
             if (result.isSuccessful) documents = result.body()?.documents.orEmpty()
-            else error = "Could not load documents (\${result.code()})."
+            else error = "Could not load documents (${result.code()})."
         } catch (_: Exception) { error = "Document service is unavailable. Check your connection." }
         finally { loading = false }
+    }
+
+    val saveDownload = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        val id = downloadId
+        if (uri != null && id != null) scope.launch {
+            try {
+                val result = api.downloadDocument(id)
+                if (!result.isSuccessful) throw IllegalStateException("Download failed (${result.code()}).")
+                val bytes = result.body()?.bytes() ?: throw IllegalStateException("The server returned an empty file.")
+                context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) } ?: throw IllegalStateException("Could not save the downloaded file.")
+                error = null
+                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, context.contentResolver.getType(uri) ?: "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) }
+            } catch (e: Exception) { error = e.message ?: "Download failed." }
+            finally { downloadId = null }
+        }
     }
 
     LaunchedEffect(Unit) { reload() }
@@ -58,14 +83,63 @@ fun DocumentLibraryScreen(api: ClassDeskApi, isPrimaryAdmin: Boolean) {
                     ?: throw IllegalStateException("Could not read the selected file.")
                 require(bytes.isNotEmpty() && bytes.size <= 20 * 1024 * 1024) { "Choose a non-empty file under 20 MB." }
                 val filePart = MultipartBody.Part.createFormData("file", filename, bytes.toRequestBody(mime.toMediaType()))
-                val fields = mapOf("title" to filename.toRequestBody("text/plain".toMediaType()))
+                val fields = mapOf(
+                    "title" to filename.toRequestBody("text/plain".toMediaType()),
+                    "courseCode" to courseCode.trim().toRequestBody("text/plain".toMediaType()),
+                    "courseName" to courseName.trim().toRequestBody("text/plain".toMediaType()),
+                    "topic" to topic.trim().toRequestBody("text/plain".toMediaType()),
+                    "lectureDate" to lectureDate.trim().toRequestBody("text/plain".toMediaType())
+                )
                 val result = api.uploadDocument(filePart, fields)
                 if (result.isSuccessful) reload()
-                else error = "Upload failed (\${result.code()}). Check the file type and server storage."
+                else error = "Upload failed (${result.code()}). Check the file type and server storage."
             } catch (e: Exception) {
                 error = e.message ?: "Upload failed."
             } finally { uploading = false }
         }
+    }
+
+    deleteTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { if (!deleting) deleteTarget = null },
+            title = { Text("Permanently delete document?") },
+            text = { Text("This will remove ${target.title} from ClassDesk's database and shared object storage. This action cannot be undone.") },
+            confirmButton = {
+                TextButton(enabled = !deleting, onClick = {
+                    if (deleting) return@TextButton
+                    scope.launch {
+                        deleting = true
+                        error = null
+                        try {
+                            val preview = api.avaTool(mapOf("action" to "preview_delete_document", "documentId" to target.id))
+                            if (!preview.isSuccessful) throw IllegalStateException(preview.body()?.get("error")?.toString() ?: "Could not verify the deletion target.")
+                            val previewDetails = preview.body()?.get("preview") as? Map<*, *>
+                                ?: throw IllegalStateException("The server did not return a deletion preview.")
+                            val originalInStorage = previewDetails["originalInSharedStorage"] == true
+                            val result = api.avaTool(mapOf(
+                                "action" to "delete_document",
+                                "documentId" to target.id,
+                                "confirmPermanent" to true,
+                                "confirmTitle" to target.title
+                            ))
+                            if (!result.isSuccessful) throw IllegalStateException(result.body()?.get("error")?.toString() ?: "Document deletion failed (HTTP ${result.code()}).")
+                            val deleted = result.body()?.get("deleted") as? Map<*, *>
+                                ?: throw IllegalStateException("Deletion could not be verified.")
+                            if (deleted["databaseRecord"] != true || (originalInStorage && deleted["sharedStorageObject"] != true)) {
+                                throw IllegalStateException("Deletion returned an incomplete verification result. Check the audit log.")
+                            }
+                            documents = documents.filterNot { it.id == target.id }
+                            deleteTarget = null
+                        } catch (e: Exception) {
+                            error = e.message ?: "Document deletion failed. The document list has not been changed."
+                        } finally {
+                            deleting = false
+                        }
+                    }
+                }) { Text(if (deleting) "DELETING…" else "DELETE PERMANENTLY", color = Color(0xFFFF7D78)) }
+            },
+            dismissButton = { TextButton(enabled = !deleting, onClick = { deleteTarget = null }) { Text("CANCEL") } }
+        )
     }
 
     Column(
@@ -77,6 +151,10 @@ fun DocumentLibraryScreen(api: ClassDeskApi, isPrimaryAdmin: Boolean) {
             Text(if (uploading) "UPLOADING / INDEXING…" else "＋ UPLOAD DOCUMENT", fontWeight = FontWeight.Bold)
         }
         Text("PDF, DOCX, PPTX, TXT, Markdown and supported images. Files are scanned and indexed by the ClassDesk server.", color = Color(0xFF91A4B8), fontSize = 11.sp)
+        OutlinedTextField(courseCode, { courseCode = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Course code (optional)") }, singleLine = true)
+        OutlinedTextField(courseName, { courseName = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Course name (optional)") }, singleLine = true)
+        OutlinedTextField(topic, { topic = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Topic (optional)") }, singleLine = true)
+        OutlinedTextField(lectureDate, { lectureDate = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Lecture date (optional)") }, singleLine = true)
         if (loading) CircularProgressIndicator(color = Color(0xFF42D9F5))
         error?.let { Text(it, color = Color(0xFFFF7D78), fontSize = 12.sp) }
         if (!loading && documents.isEmpty()) Text("No lecture materials uploaded yet.", color = Color(0xFF91A4B8))
@@ -85,15 +163,12 @@ fun DocumentLibraryScreen(api: ClassDeskApi, isPrimaryAdmin: Boolean) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text(document.title, color = Color.White, fontWeight = FontWeight.SemiBold)
                     Text(document.filename, color = Color(0xFF91A4B8), fontSize = 11.sp)
-                    Text("\${document.status} / \${document.securityScanStatus} / \${(document.sizeBytes / 1024).coerceAtLeast(1)} KB", color = Color(0xFF42D9F5), fontSize = 10.sp)
+                    Text("${document.status} / ${document.securityScanStatus} / ${(document.sizeBytes / 1024).coerceAtLeast(1)} KB", color = Color(0xFF42D9F5), fontSize = 10.sp)
                     listOfNotNull(document.courseCode, document.topic).takeIf { it.isNotEmpty() }?.let { Text(it.joinToString(" / "), color = Color(0xFF91A4B8), fontSize = 11.sp) }
-                    if (isPrimaryAdmin) TextButton(onClick = {
-                        scope.launch {
-                            val result = api.deleteDocument(document.id)
-                            if (result.isSuccessful) documents = api.documents().body()?.documents.orEmpty()
-                            else error = "Document deletion failed (\${result.code()})."
-                        }
-                    }) { Text("DELETE PERMANENTLY", color = Color(0xFFFF7D78), fontSize = 10.sp) }
+                    TextButton(onClick = { downloadId = document.id; downloadName = document.filename; saveDownload.launch(document.filename) }) { Text("DOWNLOAD / OPEN", color = Color(0xFF42D9F5), fontSize = 10.sp) }
+                    if (isPrimaryAdmin) TextButton(onClick = { deleteTarget = document }) {
+                        Text("DELETE PERMANENTLY", color = Color(0xFFFF7D78), fontSize = 10.sp)
+                    }
                 }
             }
         }

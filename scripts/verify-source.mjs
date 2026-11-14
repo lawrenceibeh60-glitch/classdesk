@@ -7,9 +7,9 @@ const pkg = JSON.parse(read("package.json"));
 const schema = read("prisma/schema.prisma");
 const migrationDirs = readdirSync(join(root, "prisma/migrations")).filter((name) => !name.startsWith(".") && statSync(join(root, "prisma/migrations", name)).isDirectory());
 const migrationSql = migrationDirs.map((name) => read(`prisma/migrations/${name}/migration.sql`)).join("\n");
-const requiredModels = ["AcademicRecord", "Document", "DocumentChunk", "Announcement", "AnnouncementVersion", "AnnouncementEvent", "SyncMutation", "Course", "LectureSession", "Assignment", "AttendanceSummary", "ClassConcern", "RateLimitBucket"];
+const requiredModels = ["AcademicRecord", "Document", "DocumentChunk", "Announcement", "AnnouncementVersion", "AnnouncementEvent", "SyncMutation", "Course", "LectureSession", "Assignment", "AttendanceSummary", "ClassConcern", "RateLimitBucket", "AiTask", "AuditLog", "AiWorkerState"];
 for (const model of requiredModels) assert.match(schema, new RegExp(`model\\s+${model}\\s*\\{`), `Missing Prisma model: ${model}`);
-for (const table of ["Course", "LectureSession", "Assignment", "AttendanceSummary", "ClassConcern", "AnnouncementVersion", "AnnouncementEvent", "RateLimitBucket"]) assert.ok(migrationSql.includes(`CREATE TABLE "${table}"`), `Missing SQL migration table: ${table}`);
+for (const table of ["Course", "LectureSession", "Assignment", "AttendanceSummary", "ClassConcern", "AnnouncementVersion", "AnnouncementEvent", "RateLimitBucket", "AiTask", "AuditLog", "AiWorkerState"]) assert.ok(migrationSql.includes(`CREATE TABLE "${table}"`), `Missing SQL migration table: ${table}`);
 assert.match(migrationSql, /ALTER TABLE "AcademicRecord" ADD COLUMN "version" INTEGER NOT NULL DEFAULT 1/, "Missing optimistic record version migration");
 assert.match(read("app/api/sync/route.ts"), /baseVersion/, "Sync optimistic version checks are missing");
 assert.match(read("app/api/sync/route.ts"), /const actor = await getSession\(\);[\s\S]*if \(!actor\)[\s\S]*actor\?\.role === "ASSISTANT_REP"/, "Offline sync role restrictions must use the same authenticated session that passed authorization");
@@ -100,7 +100,7 @@ assert.match(read("components/storage-management.tsx"), /Pending sync changes ar
 assert.match(read("app/api/admin/storage/route.ts"), /operation: \{ not: "delete" \}/, "SQL cleanup must retain deletion tombstones for devices that reconnect after the retention window");
 assert.match(read("app/api/sync/route.ts"), /recreatedAt === undefined \|\| item\.appliedAt!\.getTime\(\) > recreatedAt/, "A recreated record must supersede its older deletion tombstone");
 assert.match(read("components/storage-management.tsx"), /Manage records and uploaded documents[\s\S]*Clean temporary SQL data/, "Settings must expose SQL storage inspection and cleanup controls");
-assert.match(read("components/storage-management.tsx"), /fetch\("\/api\/documents"[\s\S]*DELETE[\s\S]*Delete permanently/, "Primary settings must expose per-document deletion from SQL and shared storage");
+assert.match(read("components/storage-management.tsx"), /preview_delete_document[\s\S]*action: "delete_document"[\s\S]*confirmPermanent: true/, "Primary settings must preview and confirm per-document deletion through audited storage tools");
 assert.match(read("app/api/documents/route.ts"), /requirePrimaryAdmin[\s\S]*await deleteObject[\s\S]*db\.document\.delete/, "Document deletion must confirm shared-object removal before deleting the SQL row");
 assert.match(read("app/settings/page.tsx"), /StorageManagement/, "Primary settings page must include SQL storage management");
 assert.match(read("components/section-shell.tsx"), /Calendar & timetable.*\/calendar/, "Calendar and timetable must be reachable from workspace navigation");
@@ -131,3 +131,58 @@ assert.match(recordsManagerSource, /if \(!isPrimaryAdmin\).*Only the Class Repre
 assert.match(recordsManagerSource, /if \(!queuedUpload && !isPrimaryAdmin\)/, "Stored document deletion must be restricted to the primary account");
 
 assert.ok(!avaWorkspace.includes("altKey") && !avaWorkspace.includes("Alt+A"), "Only the microphone button may activate Ava voice mode");
+
+assert.ok(read("app/api/ai/tasks/route.ts").includes("ownerId: user.id"), "Ava task creation and history must be scoped to the authenticated account");
+assert.ok(read("app/api/ai/tasks/[id]/route.ts").includes("ownerId: user.id"), "Ava task status and cancellation must be owner-scoped");
+assert.ok(read("scripts/ava-task-worker.mjs").includes("FOR UPDATE SKIP LOCKED"), "Ava workers must claim jobs transactionally without duplicate execution");
+assert.ok(read("scripts/ava-task-worker.mjs").includes("maxAttempts = 3"), "Ava worker retries must be bounded");
+assert.ok(read("scripts/ava-task-worker.mjs").includes("PutObjectCommand"), "Ava generated PDFs must be saved to object storage");
+assert.ok(read("components/ai-workspace.tsx").includes("AVA TASK ACTIVITY"), "Web AI workspace must show persistent Ava task progress");
+assert.ok(read("android/app/src/main/java/com/kyro/classdesk/ui/AvaTasksScreen.kt").includes("TASK HISTORY"), "Android must expose Ava task history");
+assert.ok(read("android/app/src/main/java/com/kyro/classdesk/data/ClassDeskApi.kt").includes("api/ai/tasks"), "Android must connect to Ava task APIs");
+
+assert.ok(read("app/api/ai/tools/route.ts").includes("SET TRANSACTION READ ONLY"), "Ava SQL tools must run inside read-only transactions");
+assert.ok(read("app/api/ai/tools/route.ts").includes("requirePrimaryAdmin"), "Destructive and SQL tools must require primary-admin permissions");
+assert.ok(read("app/api/ai/tools/route.ts").includes("DOCUMENT_DELETE_SUCCEEDED"), "Successful permanent document deletions must be audited");
+assert.ok(read("components/storage-management.tsx").includes("Ava SQL editor / read-only"), "Primary settings must expose the guarded SQL editor");
+assert.ok(read("components/storage-management.tsx").includes("Privileged action audit log"), "Primary settings must expose privileged-action audit history");
+
+assert.ok(read("app/api/ai/chat/route.ts").includes("actionConfirmation"), "Ava chat must return a confirmation preview before document deletion");
+assert.ok(read("app/api/ai/tools/route.ts").includes("confirmPermanent:") === false, "The server must require an explicit permanent-deletion confirmation flag from the client");
+assert.ok(read("app/api/ai/tools/route.ts").includes("body?.confirmPermanent !== true"), "The document deletion tool must reject missing confirmation");
+assert.ok(read("android/app/src/main/java/com/kyro/classdesk/ui/AvaVoiceScreen.kt").includes("pendingDelete?.let"), "Android Ava voice must show a deletion confirmation dialog");
+assert.ok(read("components/ai-workspace.tsx").includes("PERMANENT DELETION CONFIRMATION"), "Web Ava chat must show a deletion confirmation card");
+
+assert.ok(read("android/app/src/main/java/com/kyro/classdesk/ui/AvaToolsScreen.kt").includes("SQL SELECT CONSOLE"), "Android must expose the Ava read-only SQL console");
+assert.ok(read("android/app/src/main/java/com/kyro/classdesk/ui/ClassDeskApp.kt").includes("AvaToolsScreen(api, user.role == \"CLASS_REP\")"), "Android Ava tools must be role-gated in navigation");
+
+assert.ok(read("scripts/ava-task-worker.mjs").includes("aiWorkerState.upsert"), "Ava worker must publish a database heartbeat");
+assert.ok(read("app/api/ai/tasks/route.ts").includes("Ava's background worker is not online yet"), "Ava must not accept background tasks without a live worker");
+assert.ok(read("app/api/health/route.ts").includes("avaWorkerOnline"), "Health status must expose Ava worker availability");
+
+const androidOfflineStore = read("android/app/src/main/java/com/kyro/classdesk/data/OfflineStore.kt");
+const androidSyncWorker = read("android/app/src/main/java/com/kyro/classdesk/data/ClassDeskSyncWorker.kt");
+const androidQueueScreen = read("android/app/src/main/java/com/kyro/classdesk/ui/OfflineQueueScreen.kt");
+const androidAppShell = read("android/app/src/main/java/com/kyro/classdesk/ui/ClassDeskApp.kt");
+assert.match(androidOfflineStore, /SQLiteOpenHelper\(context, "classdesk-offline\.db", null, 4\)/, "Android offline queue schema must include the conflict-recovery migration");
+assert.match(androidOfflineStore, /OfflineCrypto\.encrypt\(serverRecordJson\)/, "Cloud conflict snapshots must be encrypted at rest");
+assert.match(androidOfflineStore, /rebaseForRetry\(id: String, latestVersion: Int\)/, "Android must support explicit version rebasing for local conflict resolution");
+assert.match(androidSyncWorker, /store\.markConflict\(conflict\.id, conflict\.reason, conflict\.serverRecord\?\.let/, "Android sync must preserve the server version returned for a conflict");
+assert.match(androidQueueScreen, /SYNC NOW[\s\S]*USE CLOUD[\s\S]*KEEP LOCAL[\s\S]*DISCARD LOCAL CHANGE/, "Android offline queue must expose cloud/local conflict resolution and recovery controls");
+assert.match(androidAppShell, /filter \{ it != "Settings" \|\| user\.role == "CLASS_REP" \}/, "Android settings navigation must be restricted to the primary account");
+
+const androidAnnouncementUi = androidAppShell;
+const androidAnnouncementHelpers = read("android/app/src/main/java/com/kyro/classdesk/data/OfflineMutationHelpers.kt");
+const androidApi = read("android/app/src/main/java/com/kyro/classdesk/data/ClassDeskApi.kt");
+assert.match(androidAnnouncementUi, /EDIT DRAFT[\s\S]*APPROVE[\s\S]*PUBLISH[\s\S]*ARCHIVE[\s\S]*DELETE PERMANENTLY/, "Android announcement studio must cover the draft-to-publication lifecycle");
+assert.match(androidAnnouncementHelpers, /isEditableDraft[\s\S]*clientMutationId/, "Offline announcement edits must carry a stable idempotency receipt");
+assert.match(androidAnnouncementHelpers, /requires a live connection\. Nothing was queued/, "Approval and publication transitions must not be replayed as unsafe offline writes");
+assert.match(androidApi, /deleteAnnouncement\(@Query\("id"\) id: String\)/, "Android must expose the protected announcement deletion endpoint");
+
+assert.match(androidAppShell, /EDIT COURSE[\s\S]*EDIT[\s\S]*EDIT EVENT/, "Android academic records must support editing, not only creation and deletion");
+assert.match(androidAppShell, /RESOLVE[\s\S]*EDIT class concern|EDIT[\s\S]*RESOLVE/, "Android concern management must support editing and resolution");
+assert.match(androidApi, /updateRecord\(@Body body: Map<String, String>\)/, "Android calendar must support record updates");
+assert.match(read("app/api/academic/route.ts"), /body\.active === "false"/, "Native course deactivation must be parsed as a boolean by the API");
+
+assert.match(androidAppShell, /CoursePicker\(courses, assignmentCourseId\)[\s\S]*CoursePicker\(courses, lectureCourseId\)[\s\S]*CoursePicker\(courses, attendanceCourseId\)/, "Android assignments, lectures and attendance must link to courses");
+assert.match(androidAppShell, /scheduledAt" to lectureScheduledDate[\s\S]*heldAt" to lectureDate/, "Android lecture records must preserve scheduled and actually-held dates separately");

@@ -4,6 +4,9 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Build
+import android.media.MediaPlayer
+import java.io.File
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -35,9 +38,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.kyro.classdesk.data.ChatRequest
+import com.kyro.classdesk.data.AvaActionConfirmationDto
+import com.kyro.classdesk.data.ChatHistoryItem
 import com.kyro.classdesk.data.ClassDeskApi
 import kotlinx.coroutines.launch
 import java.util.Locale
+import java.util.UUID
 
 @Composable
 fun AvaVoiceScreen(api: ClassDeskApi) {
@@ -45,6 +51,8 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
     val scope = rememberCoroutineScope()
     var recognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
     var speech by remember { mutableStateOf<TextToSpeech?>(null) }
+    var audioPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+    var audioFile by remember { mutableStateOf<File?>(null) }
     var ttsReady by remember { mutableStateOf(false) }
     var sessionActive by remember { mutableStateOf(false) }
     var listening by remember { mutableStateOf(false) }
@@ -53,19 +61,41 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
     var userStopped by remember { mutableStateOf(false) }
     var transcript by remember { mutableStateOf("Your spoken instruction will appear here.") }
     var response by remember { mutableStateOf("Ava's response will appear here.") }
+    var conversationHistory by remember { mutableStateOf<List<ChatHistoryItem>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
+    var pendingDelete by remember { mutableStateOf<AvaActionConfirmationDto?>(null) }
 
     fun stopSession() {
         sessionActive = false
         userStopped = true
         recognizer?.cancel()
         speech?.stop()
+        runCatching { audioPlayer?.stop() }
+        runCatching { audioPlayer?.release() }
+        audioPlayer = null
+        audioFile?.let { runCatching { it.delete() } }
+        audioFile = null
         listening = false
         processing = false
         speaking = false
     }
 
+    fun speakOnDevice(text: String) {
+        if (ttsReady) {
+            speaking = true
+            speech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "classdesk-ava-fallback")
+        } else {
+            speaking = false
+            error = "Ava voice service is unavailable and device speech output is not ready."
+        }
+    }
     fun startRecognition() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            sessionActive = false
+            listening = false
+            error = "Microphone permission is required. Tap Activate to grant access before Ava listens."
+            return
+        }
         val engine = recognizer
         if (engine == null) {
             error = "Speech recognition is unavailable on this device."
@@ -74,7 +104,6 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
         sessionActive = true
         userStopped = false
         error = null
-        transcript = "Listening for your instruction…"
         listening = true
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -97,7 +126,14 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
 
     DisposableEffect(Unit) {
         if (SpeechRecognizer.isRecognitionAvailable(context)) {
-            recognizer = SpeechRecognizer.createSpeechRecognizer(context).also { engine ->
+            // Prefer Android's on-device engine when the OS and installed language pack support it.
+            // Fall back to the platform recognition service on older or unsupported devices.
+            val speechEngine = if (
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+            ) SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+            else SpeechRecognizer.createSpeechRecognizer(context)
+            recognizer = speechEngine.also { engine ->
                 engine.setRecognitionListener(object : RecognitionListener {
                     override fun onReadyForSpeech(params: Bundle?) { listening = true }
                     override fun onBeginningOfSpeech() { listening = true }
@@ -123,16 +159,53 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
                         processing = true
                         scope.launch {
                             try {
-                                val result = api.chat(ChatRequest(message = spoken, voice = true))
+                                val result = api.chat(ChatRequest(message = spoken, voice = true, history = conversationHistory, clientRequestId = UUID.randomUUID().toString()))
                                 val answer = result.body()?.answer
                                 if (!sessionActive) return@launch
                                 if (result.isSuccessful && !answer.isNullOrBlank()) {
                                     response = answer
+                                    pendingDelete = result.body()?.actionConfirmation
+                                    conversationHistory = (conversationHistory + listOf(ChatHistoryItem("user", spoken), ChatHistoryItem("assistant", answer))).takeLast(6)
                                     processing = false
-                                    if (ttsReady) {
-                                        speaking = true
-                                        speech?.speak(answer, TextToSpeech.QUEUE_FLUSH, null, "classdesk-ava-response")
-                                    } else error = "Ava replied, but text-to-speech is not ready on this device."
+                                    try {
+                                        val voiceResult = api.speak(mapOf("text" to answer))
+                                        val audioBytes = if (voiceResult.isSuccessful) voiceResult.body()?.bytes() else null
+                                        if (audioBytes != null && audioBytes.isNotEmpty()) {
+                                            val outputFile = File.createTempFile("classdesk-ava-", ".mp3", context.cacheDir)
+                                            outputFile.writeBytes(audioBytes)
+                                            audioFile = outputFile
+                                            val player = MediaPlayer()
+                                            audioPlayer = player
+                                            player.setDataSource(outputFile.absolutePath)
+                                            player.setOnPreparedListener { prepared ->
+                                                if (sessionActive) { speaking = true; prepared.start() }
+                                                else {
+                                                    runCatching { prepared.release() }
+                                                    audioPlayer = null
+                                                    runCatching { outputFile.delete() }
+                                                    audioFile = null
+                                                }
+                                            }
+                                            player.setOnCompletionListener { completed ->
+                                                speaking = false
+                                                runCatching { completed.release() }
+                                                audioPlayer = null
+                                                runCatching { outputFile.delete() }
+                                                audioFile = null
+                                                sessionActive = false
+                                            }
+                                            player.setOnErrorListener { failed, _, _ ->
+                                                speaking = false
+                                                runCatching { failed.release() }
+                                                audioPlayer = null
+                                                runCatching { outputFile.delete() }
+                                                audioFile = null
+                                                if (sessionActive) speakOnDevice(answer)
+                                                true
+                                            }
+                                            player.prepareAsync()
+                                        } else speakOnDevice(answer)
+                                    } catch (_: Exception) { speakOnDevice(answer) }
                                 } else {
                                     processing = false
                                     error = result.body()?.error ?: "Ava could not complete that request."
@@ -149,22 +222,51 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
                 })
             }
         }
-        val engine = TextToSpeech(context) { status ->
-            ttsReady = status == TextToSpeech.SUCCESS
-            if (status == TextToSpeech.SUCCESS) speech?.language = Locale.UK
-        }
+        val engine = TextToSpeech(context) { status -> ttsReady = status == TextToSpeech.SUCCESS }
         speech = engine
         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) { speaking = true }
-            override fun onDone(utteranceId: String?) { speaking = false }
-            override fun onError(utteranceId: String?) { speaking = false; error = "Ava's speech output failed." }
+            override fun onDone(utteranceId: String?) {
+                // One tap authorizes one spoken request. The next request requires another tap.
+                speaking = false
+                sessionActive = false
+            }
+            override fun onError(utteranceId: String?) {
+                speaking = false
+                sessionActive = false
+                error = "Ava's speech output failed."
+            }
         })
         onDispose {
-            recognizer?.destroy()
+            // Leaving the voice screen always ends the user-started session. Never let a late
+            // speech/media callback reopen the microphone after navigation or disposal.
+            sessionActive = false
+            userStopped = true
+            runCatching { recognizer?.cancel() }
+            runCatching { recognizer?.destroy() }
             recognizer = null
-            speech?.stop()
-            speech?.shutdown()
+            runCatching { speech?.stop() }
+            runCatching { speech?.shutdown() }
             speech = null
+            runCatching { audioPlayer?.stop() }
+            runCatching { audioPlayer?.release() }
+            audioPlayer = null
+            audioFile?.let { runCatching { it.delete() } }
+            audioFile = null
+            listening = false
+            processing = false
+            speaking = false
+        }
+    }
+
+    LaunchedEffect(ttsReady) {
+        if (ttsReady) {
+            speech?.language = Locale.UK
+            val britishVoices = speech?.voices?.filter { it.locale.language == "en" && it.locale.country == "GB" }.orEmpty()
+            val preferredVoice = britishVoices.firstOrNull { it.name.contains("female", ignoreCase = true) }
+                ?: britishVoices.firstOrNull { !it.isNetworkConnectionRequired }
+                ?: britishVoices.firstOrNull()
+            if (preferredVoice != null) speech?.voice = preferredVoice
         }
     }
 
@@ -224,6 +326,46 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
         OutlinedButton(onClick = { stopSession(); error = null }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(6.dp)) {
             Text("END VOICE SESSION", color = Color(0xFFF2C94C))
         }
-        Text("MICROPHONE IS ONLY USED AFTER YOU TAP ACTIVATE. NO BACKGROUND LISTENING.", color = Color(0xFF91A4B8), fontSize = 9.sp, letterSpacing = 0.6.sp)
+        Text("ONE TAP / ONE VOICE REQUEST. TAP ACTIVATE AGAIN FOR YOUR NEXT REQUEST. NO BACKGROUND LISTENING.", color = Color(0xFF91A4B8), fontSize = 9.sp, letterSpacing = 0.6.sp)
+    }
+    pendingDelete?.let { action ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null; sessionActive = false },
+            title = { Text("Confirm permanent deletion") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(action.title, fontWeight = FontWeight.Bold)
+                    Text(action.filename, color = Color(0xFF91A4B8))
+                    Text("This will delete the database record, extracted text, indexed chunks" + if (action.originalInSharedStorage) " and original shared-storage file." else ".")
+                    Text("This action cannot be undone.", color = Color(0xFFFF7D78))
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        try {
+                            val result = api.avaTool(mapOf(
+                                "action" to "delete_document",
+                                "documentId" to action.documentId,
+                                "confirmPermanent" to true,
+                                "confirmTitle" to action.title
+                            ))
+                            if (!result.isSuccessful) throw IllegalStateException(result.body()?.get("error")?.toString() ?: "Deletion failed (HTTP " + result.code() + ").")
+                            val deleted = result.body()?.get("deleted") as? Map<*, *>
+                                ?: throw IllegalStateException("The server did not return a deletion verification result.")
+                            if (deleted["databaseRecord"] != true || (action.originalInSharedStorage && deleted["sharedStorageObject"] != true)) {
+                                throw IllegalStateException("Deletion was not fully verified. Check the audit log.")
+                            }
+                            response = "Verified: " + action.title + " was deleted from the ClassDesk database" + if (action.originalInSharedStorage) " and shared storage." else "."
+                            pendingDelete = null
+                            sessionActive = false
+                        } catch (e: Exception) {
+                            error = e.message ?: "Permanent deletion failed."
+                        }
+                    }
+                }) { Text("DELETE PERMANENTLY", color = Color(0xFFFF7D78)) }
+            },
+            dismissButton = { TextButton(onClick = { pendingDelete = null; sessionActive = false }) { Text("CANCEL") } }
+        )
     }
 }

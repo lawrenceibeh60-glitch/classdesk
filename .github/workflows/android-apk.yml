@@ -2,11 +2,12 @@ name: Android APK build
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "android/**"
-      - ".github/workflows/android-apk.yml"
+    inputs:
+      api_base_url:
+        description: "HTTPS URL of the deployed ClassDesk website/API (include the host only; trailing slash is optional)"
+        required: false
+        default: "https://afit-classdesk.vercel.app/"
+        type: string
 
 permissions:
   contents: read
@@ -35,14 +36,30 @@ jobs:
         with:
           gradle-version: "8.11.1"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Configure the runner Android SDK
+        shell: bash
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          if [ ! -x "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+            echo "Android SDK command-line tools not found at $SDK_ROOT" >&2
+            find /usr/local/lib/android/sdk -maxdepth 4 -name sdkmanager -type f 2>/dev/null | head -20
+            exit 1
+          fi
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "$SDK_ROOT/platform-tools" >> "$GITHUB_PATH"
+          echo "$SDK_ROOT/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          set +o pipefail
+          yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses
+          set -o pipefail
 
       - name: Install Android SDK 35
         run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Build debug APK
         working-directory: android
+        env:
+          CLASSDESK_API_BASE_URL: ${{ inputs.api_base_url }}
         run: gradle assembleDebug --stacktrace
 
       - name: Upload APK artifact

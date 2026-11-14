@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
+import { getSession } from "@/lib/auth";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireStaff, requirePrimaryAdmin, assertSameOrigin, rateLimit, clientIp } from "@/lib/http";
 import { extractText, splitIntoChunks } from "@/lib/ingest";
@@ -92,19 +94,52 @@ export async function DELETE(req: NextRequest) {
   const originDenied = assertSameOrigin(req); if (originDenied) return originDenied;
   const denied = await requireStaff(); if (denied) return denied;
   const primaryDenied = await requirePrimaryAdmin(); if (primaryDenied) return primaryDenied;
+  const actor = await getSession();
+  if (!actor) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
-  const doc = await db.document.findUnique({ where: { id }, select: { storageKey: true } });
+  const doc = await db.document.findUnique({ where: { id }, select: { id: true, title: true, filename: true, sizeBytes: true, storageKey: true } });
   if (!doc) return NextResponse.json({ error: "Document not found" }, { status: 404 });
-  // Delete the original object first. If the storage provider rejects the
-  // request, keep the SQL row and its metadata so the administrator can retry.
+  await db.auditLog.create({
+    data: {
+      id: randomUUID(), actorId: actor.id, actorUsername: actor.username, actorRole: actor.role,
+      action: "DOCUMENT_DELETE_STARTED", targetType: "Document", targetId: id,
+      details: { title: doc.title, filename: doc.filename, sizeBytes: doc.sizeBytes } as Prisma.InputJsonValue
+    }
+  });
   if (doc.storageKey) {
     try {
       await deleteObject(doc.storageKey);
-    } catch {
+      await db.document.update({ where: { id }, data: { storageKey: null } });
+    } catch (error) {
+      await db.auditLog.create({
+        data: {
+          id: randomUUID(), actorId: actor.id, actorUsername: actor.username, actorRole: actor.role,
+          action: "DOCUMENT_DELETE_FAILED", targetType: "Document", targetId: id,
+          details: { title: doc.title, error: error instanceof Error ? error.message.slice(0, 500) : "Storage deletion failed" } as Prisma.InputJsonValue
+        }
+      }).catch(() => undefined);
       return NextResponse.json({ error: "The original file could not be deleted from shared storage. The SQL record was kept; retry after checking storage connectivity." }, { status: 502 });
     }
   }
-  await db.document.delete({ where: { id } });
-  return NextResponse.json({ ok: true });
+  try {
+    await db.document.delete({ where: { id } });
+    await db.auditLog.create({
+      data: {
+        id: randomUUID(), actorId: actor.id, actorUsername: actor.username, actorRole: actor.role,
+        action: "DOCUMENT_DELETE_SUCCEEDED", targetType: "Document", targetId: id,
+        details: { title: doc.title, storageObjectDeleted: Boolean(doc.storageKey), databaseRecordDeleted: true } as Prisma.InputJsonValue
+      }
+    });
+    return NextResponse.json({ ok: true, deleted: { databaseRecord: true, sharedStorageObject: Boolean(doc.storageKey) } });
+  } catch (error) {
+    await db.auditLog.create({
+      data: {
+        id: randomUUID(), actorId: actor.id, actorUsername: actor.username, actorRole: actor.role,
+        action: "DOCUMENT_DELETE_FAILED", targetType: "Document", targetId: id,
+        details: { title: doc.title, error: error instanceof Error ? error.message.slice(0, 500) : "Database deletion failed" } as Prisma.InputJsonValue
+      }
+    }).catch(() => undefined);
+    return NextResponse.json({ error: "The storage object was deleted, but the SQL record remains. Review the audit log and retry the record deletion." }, { status: 502 });
+  }
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 type StoredDocument = { id: string; title: string; filename: string; sizeBytes: number; status: string; createdAt: string };
+type AuditEvent = { id: string; actorUsername: string; actorRole: string; action: string; targetType: string; targetId: string | null; details: unknown; createdAt: string };
 
 type StorageData = {
   counts: Record<string, number>;
@@ -28,6 +29,9 @@ const labels: Record<string, string> = {
   syncApplied: "Applied sync history",
   rateLimitBuckets: "Rate-limit entries",
   aiReceipts: "AI request receipts",
+  aiTasks: "Ava background tasks",
+  auditLogs: "Privileged-action audit entries",
+  workerStates: "Ava worker instances",
 };
 
 function formatBytes(value: number | null) {
@@ -47,6 +51,10 @@ export default function StorageManagement() {
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [sql, setSql] = useState('SELECT "id", "title", "status", "createdAt" FROM "Document" ORDER BY "createdAt" DESC');
+  const [sqlRows, setSqlRows] = useState<unknown[]>([]);
+  const [sqlBusy, setSqlBusy] = useState(false);
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
 
   const refresh = useCallback(async () => {
     try {
@@ -64,24 +72,71 @@ export default function StorageManagement() {
     }
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
-
   async function deleteDocument(document: StoredDocument) {
-    if (!window.confirm(`Permanently delete "${document.title}"? This removes its SQL document row, extracted text, search chunks and stored original file.`)) return;
     setBusy(true);
     setMessage("");
     try {
-      const response = await fetch(`/api/documents?id=${encodeURIComponent(document.id)}`, { method: "DELETE" });
+      const previewResponse = await fetch("/api/ai/tools", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "preview_delete_document", documentId: document.id })
+      });
+      const previewData = await previewResponse.json();
+      if (!previewResponse.ok) throw new Error(previewData.error || "Could not inspect deletion target");
+      const preview = previewData.preview;
+      const confirmed = window.confirm(
+        "PERMANENT DELETION\n\n" + preview.title + "\n" + preview.filename + "\n" + formatBytes(preview.sizeBytes) + "\n\n" + preview.action + "\n\nContinue?"
+      );
+      if (!confirmed) return;
+      const response = await fetch("/api/ai/tools", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete_document", documentId: document.id, confirmPermanent: true, confirmTitle: document.title })
+      });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Could not delete stored document");
-      setMessage(`Deleted "${document.title}" from SQL and shared file storage.`);
+      if (!result.deleted?.databaseRecord || (preview.originalInSharedStorage && !result.deleted?.sharedStorageObject)) {
+        throw new Error("Deletion returned an incomplete verification result. Check the audit log before retrying.");
+      }
+      setMessage("Verified deletion of \"" + document.title + "\" from the database and shared storage.");
       await refresh();
+      await loadAuditEvents();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not delete stored document");
     } finally {
       setBusy(false);
     }
   }
+
+  async function runSql() {
+    setSqlBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/ai/tools", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "sql_select", query: sql })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "SQL query failed");
+      setSqlRows(result.rows || []);
+      setMessage("Read-only SQL completed. Returned " + result.rowCount + " row(s)" + (result.limited ? " (100-row display limit)" : "") + ".");
+      await loadAuditEvents();
+    } catch (error) {
+      setSqlRows([]);
+      setMessage(error instanceof Error ? error.message : "SQL query failed");
+    } finally { setSqlBusy(false); }
+  }
+
+  const loadAuditEvents = useCallback(async () => {
+    try {
+      const response = await fetch("/api/ai/tools", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "list_audit_logs" })
+      });
+      const result = await response.json();
+      if (response.ok) setAuditEvents(result.events || []);
+    } catch { /* The audit history can be refreshed separately. */ }
+  }, []);
+
+  useEffect(() => { void refresh(); void loadAuditEvents(); }, [refresh, loadAuditEvents]);
 
   async function cleanup() {
     if (confirmation !== "CLEANUP_CLASSDESK_SQL") return;
@@ -139,6 +194,23 @@ export default function StorageManagement() {
       {!documents.length ? <p className="sub">No stored documents were returned.</p> : documents.map((document) => <div className="row" key={document.id} style={{ justifyContent: "space-between", gap: 12, padding: "10px 0", borderBottom: "1px solid var(--border, #333)" }}>
         <div style={{ minWidth: 0 }}><strong>{document.title}</strong><p className="sub">{document.filename} · {formatBytes(document.sizeBytes)} · {document.status}</p></div>
         <button className="btn ghost" type="button" disabled={busy} onClick={() => void deleteDocument(document)}>Delete permanently</button>
+      </div>)}
+    </div>
+    <div style={{ borderTop: "1px solid var(--border, #333)", marginTop: 18, paddingTop: 16 }}>
+      <h3>Ava SQL editor / read-only</h3>
+      <p className="sub">Run approved SELECT queries against ClassDesk tables. The server enforces a read-only transaction, a 3-second timeout and a 100-row result cap. Write or destructive SQL is not exposed to the model.</p>
+      <div className="field">
+        <label htmlFor="ava-sql-query">SQL SELECT</label>
+        <textarea id="ava-sql-query" value={sql} onChange={event => setSql(event.target.value)} rows={5} spellCheck={false} style={{ width: "100%", fontFamily: "monospace" }} />
+      </div>
+      <button className="btn" type="button" onClick={() => void runSql()} disabled={sqlBusy || busy || !sql.trim()}>{sqlBusy ? "Running read-only query…" : "Execute SELECT"}</button>
+      {!!sqlRows.length && <pre style={{ overflowX: "auto", maxHeight: 360, padding: 12, background: "#0A1019", color: "#CFD9E4", fontSize: 11 }}>{JSON.stringify(sqlRows, null, 2)}</pre>}
+    </div>
+    <div style={{ borderTop: "1px solid var(--border, #333)", marginTop: 18, paddingTop: 16 }}>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}><h3>Privileged action audit log</h3><button className="btn ghost" type="button" onClick={() => void loadAuditEvents()}>Refresh log</button></div>
+      <p className="sub">Permanent document deletions and SQL editor executions are recorded with the acting account.</p>
+      {!auditEvents.length ? <p className="sub">No privileged events recorded yet.</p> : auditEvents.slice(0, 30).map(event => <div key={event.id} style={{ padding: "8px 0", borderBottom: "1px solid var(--border, #333)" }}>
+        <strong>{event.action}</strong><p className="sub">{event.actorUsername} · {event.actorRole} · {event.targetType} · {new Date(event.createdAt).toLocaleString("en-GB")}</p>
       </div>)}
     </div>
     <div style={{ borderTop: "1px solid var(--border, #333)", marginTop: 18, paddingTop: 16 }}>

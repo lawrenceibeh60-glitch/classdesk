@@ -20,10 +20,12 @@ data class OfflineQueueEntry(
     val operation: String,
     val status: String,
     val lastError: String?,
-    val createdAt: Long
+    val createdAt: Long,
+    val serverRecordJson: String? = null,
+    val serverRecordPresent: Boolean = false
 )
 
-class OfflineStore(private val context: Context) : SQLiteOpenHelper(context, "classdesk-offline.db", null, 2) {
+class OfflineStore(private val context: Context) : SQLiteOpenHelper(context, "classdesk-offline.db", null, 4) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("""CREATE TABLE pending_mutations (
             id TEXT PRIMARY KEY NOT NULL,
@@ -34,6 +36,8 @@ class OfflineStore(private val context: Context) : SQLiteOpenHelper(context, "cl
             payload_json TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'PENDING',
             last_error TEXT,
+            server_record_json TEXT,
+            server_record_present INTEGER NOT NULL DEFAULT 0,
             created_at INTEGER NOT NULL
         )""")
         db.execSQL("CREATE INDEX pending_mutations_status_created ON pending_mutations(status, created_at)")
@@ -41,6 +45,8 @@ class OfflineStore(private val context: Context) : SQLiteOpenHelper(context, "cl
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) db.execSQL("ALTER TABLE pending_mutations ADD COLUMN owner_username TEXT NOT NULL DEFAULT ''")
+        if (oldVersion < 3) db.execSQL("ALTER TABLE pending_mutations ADD COLUMN server_record_json TEXT")
+        if (oldVersion < 4) db.execSQL("ALTER TABLE pending_mutations ADD COLUMN server_record_present INTEGER NOT NULL DEFAULT 0")
         // Schema migrations are additive; never drop queued offline work.
     }
 
@@ -56,8 +62,11 @@ class OfflineStore(private val context: Context) : SQLiteOpenHelper(context, "cl
             put("status", "PENDING")
             put("created_at", System.currentTimeMillis())
         }
-        writableDatabase.insertWithOnConflict("pending_mutations", null, values, SQLiteDatabase.CONFLICT_REPLACE)
-        ClassDeskSyncScheduler.scheduleNow(context)
+        val inserted = writableDatabase.insertWithOnConflict("pending_mutations", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        check(inserted != -1L) { "Could not persist the offline change." }
+        // The durable queue entry must survive even if WorkManager cannot be scheduled
+        // at this moment; login also installs periodic network-constrained sync.
+        runCatching { ClassDeskSyncScheduler.scheduleNow(context) }
     }
 
     @Synchronized
@@ -90,14 +99,15 @@ class OfflineStore(private val context: Context) : SQLiteOpenHelper(context, "cl
         val result = mutableListOf<OfflineQueueEntry>()
         readableDatabase.query(
             "pending_mutations",
-            arrayOf("id", "entity_id", "operation", "status", "last_error", "created_at"),
+            arrayOf("id", "entity_id", "operation", "status", "last_error", "created_at", "server_record_json", "server_record_present"),
             "owner_username = ?",
             arrayOf(ownerUsername),
             null, null, "created_at DESC"
         ).use { cursor ->
             while (cursor.moveToNext()) result += OfflineQueueEntry(
                 cursor.getString(0), cursor.getString(1), cursor.getString(2),
-                cursor.getString(3), cursor.getString(4), cursor.getLong(5)
+                cursor.getString(3), cursor.getString(4), cursor.getLong(5),
+                cursor.getString(6)?.let { runCatching { OfflineCrypto.decrypt(it) }.getOrNull() }, cursor.getInt(7) == 1
             )
         }
         return result
@@ -107,6 +117,39 @@ class OfflineStore(private val context: Context) : SQLiteOpenHelper(context, "cl
     fun mark(id: String, status: String, error: String?) {
         val values = ContentValues().apply { put("status", status); put("last_error", error) }
         writableDatabase.update("pending_mutations", values, "id = ?", arrayOf(id))
+    }
+
+    @Synchronized
+    fun markConflict(id: String, error: String, serverRecordJson: String?) {
+        val values = ContentValues().apply {
+            put("status", "CONFLICT")
+            put("last_error", error)
+            if (serverRecordJson == null) {
+                putNull("server_record_json")
+                put("server_record_present", 0)
+            } else {
+                put("server_record_json", OfflineCrypto.encrypt(serverRecordJson))
+                put("server_record_present", 1)
+            }
+        }
+        writableDatabase.update("pending_mutations", values, "id = ?", arrayOf(id))
+    }
+
+    @Synchronized
+    fun rebaseForRetry(id: String, latestVersion: Int) {
+        val values = ContentValues().apply {
+            put("base_version", latestVersion.coerceAtLeast(0))
+            put("status", "PENDING")
+            putNull("last_error")
+            putNull("server_record_json")
+            put("server_record_present", 0)
+        }
+        writableDatabase.update("pending_mutations", values, "id = ?", arrayOf(id))
+    }
+
+    @Synchronized
+    fun removeEntry(id: String) {
+        writableDatabase.delete("pending_mutations", "id = ?", arrayOf(id))
     }
 
     @Synchronized
