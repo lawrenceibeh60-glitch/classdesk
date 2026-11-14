@@ -132,7 +132,7 @@ export async function POST(req: NextRequest) {
       const rows = await db.$transaction(async tx => {
         await tx.$executeRawUnsafe("SET TRANSACTION READ ONLY");
         await tx.$executeRawUnsafe("SET LOCAL statement_timeout = '3000ms'");
-        return tx.$queryRawUnsafe(query + " LIMIT 100");
+        return tx.$queryRawUnsafe("SELECT * FROM (" + query + ") AS ava_read_only_result LIMIT 100");
       });
       const digest = createHash("sha256").update(query).digest("hex");
       await db.auditLog.create({
