@@ -41,6 +41,7 @@ assert.match(read("app/api/backup/restore/route.ts"), /requirePrimaryAdmin/, "Ba
 assert.match(read("app/api/export/route.ts"), /requirePrimaryAdmin/, "Full JSON backup export must be restricted to the primary account");
 assert.match(read("app/api/announcements/route.ts"), /requirePrimaryAdmin/, "Announcement approval and publication must be restricted to the primary account");
 assert.match(read("app/api/academic/route.ts"), /requirePrimaryAdmin/, "Academic record deletion must be restricted to the primary account");
+assert.match(read("app/api/academic/route.ts"), /resource === "courses" && body\.active === false[\s\S]*requirePrimaryAdmin/, "Course deactivation must be restricted to the primary account");
 assert.ok(read("components/records-manager.tsx").includes("isPrimaryAdmin &&"), "Primary-only record/document delete controls must be hidden from the assistant");
 assert.ok(read("components/academic-manager.tsx").includes("isPrimaryAdmin &&"), "Primary-only academic delete controls must be hidden from the assistant");
 assert.ok(read("components/announcement-studio.tsx").includes("isPrimaryAdmin &&"), "Primary-only announcement actions must be hidden from the assistant");
