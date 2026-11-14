@@ -12,6 +12,7 @@ import androidx.compose.animation.fadeOut
 import kotlinx.coroutines.delay
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -199,17 +200,20 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
     var lecturer by remember { mutableStateOf("") }
     var semester by remember { mutableStateOf("") }
     var editingAssignmentId by remember { mutableStateOf<String?>(null) }
+    var assignmentCourseId by remember { mutableStateOf<String?>(null) }
     var assignmentTitle by remember { mutableStateOf("") }
     var assignmentDetails by remember { mutableStateOf("") }
     var assignmentDueAt by remember { mutableStateOf("") }
     var showLectureDialog by remember { mutableStateOf(false) }
     var editingLectureId by remember { mutableStateOf<String?>(null) }
+    var lectureCourseId by remember { mutableStateOf<String?>(null) }
     var lectureTopic by remember { mutableStateOf("") }
     var lectureSummary by remember { mutableStateOf("") }
     var lectureDate by remember { mutableStateOf("") }
     var lectureVenue by remember { mutableStateOf("") }
     var showAttendanceDialog by remember { mutableStateOf(false) }
     var editingAttendanceId by remember { mutableStateOf<String?>(null) }
+    var attendanceCourseId by remember { mutableStateOf<String?>(null) }
     var attendanceDate by remember { mutableStateOf("") }
     var attendancePresent by remember { mutableStateOf("") }
     var attendanceAbsent by remember { mutableStateOf("") }
@@ -270,6 +274,15 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
         if (selected in listOf("Courses", "Tasks", "Lectures", "Attendance", "Concerns", "Announcements", "Calendar")) {
             moduleLoading = true
             try {
+                if (selected in listOf("Tasks", "Lectures", "Attendance")) {
+                    val courseResponse = api.courses()
+                    if (courseResponse.isSuccessful) {
+                        courses = courseResponse.body()?.items.orEmpty()
+                        secureStore.saveSnapshot("courses", Gson().toJson(courses))
+                    } else {
+                        courses = secureStore.loadSnapshot("courses")?.let { runCatching { Gson().fromJson(it, Array<CourseDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
+                    }
+                }
                 if (selected == "Courses") {
                     val response = api.courses()
                     if (response.isSuccessful) {
@@ -501,7 +514,7 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 TextButton(onClick = {
                                     editingAssignmentId = item.id
-                                    assignmentTitle = item.title; assignmentDetails = item.details.orEmpty(); assignmentDueAt = item.dueAt.orEmpty()
+                                    assignmentCourseId = item.course?.id; assignmentTitle = item.title; assignmentDetails = item.details.orEmpty(); assignmentDueAt = item.dueAt.orEmpty()
                                     showAssignmentDialog = true
                                 }) { Text("EDIT", color = Cyan, fontSize = 10.sp) }
                                 TextButton(onClick = {
@@ -534,6 +547,7 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                     title = { Text(if (editingAssignmentId == null) "Add assignment" else "Edit assignment") },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            CoursePicker(courses, assignmentCourseId) { assignmentCourseId = it }
                             OutlinedTextField(assignmentTitle, { assignmentTitle = it }, label = { Text("Assignment title") }, singleLine = true)
                             OutlinedTextField(assignmentDetails, { assignmentDetails = it }, label = { Text("Details") }, minLines = 2)
                             OutlinedTextField(assignmentDueAt, { assignmentDueAt = it }, label = { Text("Due date (ISO date/time, optional)") }, singleLine = true)
@@ -542,13 +556,13 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                     confirmButton = { TextButton(onClick = {
                         scope.launch {
                             val id = editingAssignmentId
-                            val payload = mapOf("title" to assignmentTitle.trim(), "details" to assignmentDetails.trim(), "dueAt" to assignmentDueAt.trim())
+                            val payload = mapOf("courseId" to assignmentCourseId.orEmpty(), "title" to assignmentTitle.trim(), "details" to assignmentDetails.trim(), "dueAt" to assignmentDueAt.trim())
                             val saved = mutateAcademic("assignments", if (id == null) "POST" else "PATCH", if (id == null) payload else payload + mapOf("id" to id))
                             if (saved.isSuccessful) {
-                                if (saved.queued && id != null) assignments = assignments.map { if (it.id == id) it.copy(title = assignmentTitle.trim(), details = assignmentDetails.trim(), dueAt = assignmentDueAt.trim().ifBlank { null }) else it }
+                                if (saved.queued && id != null) assignments = assignments.map { if (it.id == id) it.copy(title = assignmentTitle.trim(), details = assignmentDetails.trim(), dueAt = assignmentDueAt.trim().ifBlank { null }, course = courses.firstOrNull { course -> course.id == assignmentCourseId }?.let { course -> CourseRef(course.id, course.code, course.name) }) else it }
                                 if (!saved.queued) assignments = api.assignments().body()?.items.orEmpty()
                                 editingAssignmentId = null
-                                assignmentTitle = ""; assignmentDetails = ""; assignmentDueAt = ""
+                                assignmentCourseId = null; assignmentTitle = ""; assignmentDetails = ""; assignmentDueAt = ""
                                 showAssignmentDialog = false
                             } else moduleError = saved.message ?: "Assignment could not be saved (${saved.code()}). Check the due date format."
                         }
@@ -579,7 +593,7 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                             if (item.summary.orEmpty().isNotBlank()) Text(item.summary.orEmpty(), color = Muted, fontSize = 12.sp)
                             TextButton(onClick = {
                                 editingLectureId = item.id
-                                lectureTopic = item.topic; lectureSummary = item.summary.orEmpty()
+                                lectureCourseId = item.course?.id; lectureTopic = item.topic; lectureSummary = item.summary.orEmpty()
                                 lectureDate = item.heldAt ?: item.scheduledAt.orEmpty(); lectureVenue = item.venue.orEmpty()
                                 showLectureDialog = true
                             }) { Text("EDIT", color = Cyan, fontSize = 10.sp) }
@@ -604,13 +618,13 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                     } },
                     confirmButton = { TextButton(onClick = { scope.launch {
                         val id = editingLectureId
-                        val payload = mapOf("topic" to lectureTopic.trim(), "summary" to lectureSummary.trim(), "heldAt" to lectureDate.trim(), "venue" to lectureVenue.trim())
+                        val payload = mapOf("courseId" to lectureCourseId.orEmpty(), "topic" to lectureTopic.trim(), "summary" to lectureSummary.trim(), "heldAt" to lectureDate.trim(), "venue" to lectureVenue.trim())
                         val saved = mutateAcademic("lectures", if (id == null) "POST" else "PATCH", if (id == null) payload else payload + mapOf("id" to id))
                         if (saved.isSuccessful) {
-                            if (saved.queued && id != null) lectures = lectures.map { if (it.id == id) it.copy(topic = lectureTopic.trim(), summary = lectureSummary.trim(), heldAt = lectureDate.trim().ifBlank { null }, venue = lectureVenue.trim().ifBlank { null }) else it }
+                            if (saved.queued && id != null) lectures = lectures.map { if (it.id == id) it.copy(topic = lectureTopic.trim(), summary = lectureSummary.trim(), heldAt = lectureDate.trim().ifBlank { null }, venue = lectureVenue.trim().ifBlank { null }, course = courses.firstOrNull { course -> course.id == lectureCourseId }?.let { course -> CourseRef(course.id, course.code, course.name) }) else it }
                             if (!saved.queued) lectures = api.lectures().body()?.items.orEmpty()
                             editingLectureId = null
-                            lectureTopic = ""; lectureSummary = ""; lectureDate = ""; lectureVenue = ""
+                            lectureCourseId = null; lectureTopic = ""; lectureSummary = ""; lectureDate = ""; lectureVenue = ""
                             showLectureDialog = false
                         } else moduleError = saved.message ?: "Lecture could not be saved. Check the date format."
                     } }, enabled = lectureTopic.isNotBlank()) { Text("SAVE") } },
@@ -631,6 +645,7 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                             item.note?.let { Text(it, color = Muted, fontSize = 12.sp) }
                             TextButton(onClick = {
                                 editingAttendanceId = item.id
+                                attendanceCourseId = item.course?.id
                                 attendanceDate = item.sessionDate.take(10)
                                 attendancePresent = item.presentCount.toString()
                                 attendanceAbsent = item.absentCount.toString()
@@ -658,13 +673,13 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                     } },
                     confirmButton = { TextButton(onClick = { scope.launch {
                         val id = editingAttendanceId
-                        val payload = mapOf("sessionDate" to attendanceDate.trim(), "presentCount" to attendancePresent.trim(), "absentCount" to attendanceAbsent.trim(), "note" to attendanceNote.trim())
+                        val payload = mapOf("courseId" to attendanceCourseId.orEmpty(), "sessionDate" to attendanceDate.trim(), "presentCount" to attendancePresent.trim(), "absentCount" to attendanceAbsent.trim(), "note" to attendanceNote.trim())
                         val saved = mutateAcademic("attendance", if (id == null) "POST" else "PATCH", if (id == null) payload else payload + mapOf("id" to id))
                         if (saved.isSuccessful) {
-                            if (saved.queued && id != null) attendance = attendance.map { if (it.id == id) it.copy(sessionDate = attendanceDate.trim(), presentCount = attendancePresent.toInt(), absentCount = attendanceAbsent.toInt(), note = attendanceNote.trim().ifBlank { null }) else it }
+                            if (saved.queued && id != null) attendance = attendance.map { if (it.id == id) it.copy(sessionDate = attendanceDate.trim(), presentCount = attendancePresent.toInt(), absentCount = attendanceAbsent.toInt(), note = attendanceNote.trim().ifBlank { null }, course = courses.firstOrNull { course -> course.id == attendanceCourseId }?.let { course -> CourseRef(course.id, course.code, course.name) }) else it }
                             if (!saved.queued) attendance = api.attendance().body()?.items.orEmpty()
                             editingAttendanceId = null
-                            attendanceDate = ""; attendancePresent = ""; attendanceAbsent = ""; attendanceNote = ""
+                            attendanceCourseId = null; attendanceDate = ""; attendancePresent = ""; attendanceAbsent = ""; attendanceNote = ""
                             showAttendanceDialog = false
                         } else moduleError = saved.message ?: "Attendance could not be saved. Check date and whole-number counts."
                     } }, enabled = attendanceDate.isNotBlank() && attendancePresent.toIntOrNull() != null && attendanceAbsent.toIntOrNull() != null) { Text("SAVE") } },
@@ -999,6 +1014,33 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                 }
             } else {
                 AvaVoiceScreen(api)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CoursePicker(courses: List<CourseDto>, selectedId: String?, onSelected: (String?) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val selected = courses.firstOrNull { it.id == selectedId }
+    Box {
+        OutlinedTextField(
+            value = selected?.let { "${it.code} / ${it.name}" } ?: "No course linked",
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Course (optional)") },
+            modifier = Modifier.fillMaxWidth().clickable { expanded = true }
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text("No course linked") },
+                onClick = { onSelected(null); expanded = false }
+            )
+            courses.forEach { course ->
+                DropdownMenuItem(
+                    text = { Text("${course.code} / ${course.name}") },
+                    onClick = { onSelected(course.id); expanded = false }
+                )
             }
         }
     }
