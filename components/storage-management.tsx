@@ -69,8 +69,6 @@ export default function StorageManagement() {
     }
   }, []);
 
-  useEffect(() => { void refresh(); void loadAuditEvents(); }, [refresh, loadAuditEvents]);
-
   async function deleteDocument(document: StoredDocument) {
     setBusy(true);
     setMessage("");
@@ -134,6 +132,8 @@ export default function StorageManagement() {
       if (response.ok) setAuditEvents(result.events || []);
     } catch { /* The audit history can be refreshed separately. */ }
   }, []);
+
+  useEffect(() => { void refresh(); void loadAuditEvents(); }, [refresh, loadAuditEvents]);
 
   async function cleanup() {
     if (confirmation !== "CLEANUP_CLASSDESK_SQL") return;
