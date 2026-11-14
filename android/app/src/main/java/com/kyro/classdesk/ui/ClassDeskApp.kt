@@ -82,6 +82,7 @@ fun ClassDeskApp(initialDestination: String? = null) {
                     }
                 }
             } else if (response.code() == 401) {
+                ClassDeskSyncScheduler.cancel(context)
                 secureStore.clear()
                 user = null
             } else restoreOfflineSnapshot()
