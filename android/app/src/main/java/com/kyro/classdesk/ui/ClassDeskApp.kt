@@ -151,6 +151,9 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
     var selected by remember { mutableStateOf("Overview") }
     var courses by remember { mutableStateOf<List<CourseDto>>(emptyList()) }
     var assignments by remember { mutableStateOf<List<AssignmentDto>>(emptyList()) }
+    var lectures by remember { mutableStateOf<List<LectureDto>>(emptyList()) }
+    var attendance by remember { mutableStateOf<List<AttendanceDto>>(emptyList()) }
+    var concerns by remember { mutableStateOf<List<ConcernDto>>(emptyList()) }
     var moduleLoading by remember { mutableStateOf(false) }
     var moduleError by remember { mutableStateOf<String?>(null) }
     var showCourseDialog by remember { mutableStateOf(false) }
@@ -167,7 +170,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
     val secureStore = remember { ApiClient.cookies(context) }
     LaunchedEffect(selected) {
         moduleError = null
-        if (selected == "Courses" || selected == "Tasks") {
+        if (selected in listOf("Courses", "Tasks", "Lectures", "Attendance", "Concerns")) {
             moduleLoading = true
             try {
                 if (selected == "Courses") {
@@ -179,7 +182,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                         courses = secureStore.loadSnapshot("courses")?.let { runCatching { Gson().fromJson(it, Array<CourseDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
                         moduleError = "Could not refresh courses; showing the last saved copy."
                     }
-                } else {
+                } else if (selected == "Tasks") {
                     val response = api.assignments()
                     if (response.isSuccessful) {
                         assignments = response.body()?.items.orEmpty()
@@ -188,10 +191,40 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                         assignments = secureStore.loadSnapshot("assignments")?.let { runCatching { Gson().fromJson(it, Array<AssignmentDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
                         moduleError = "Could not refresh assignments; showing the last saved copy."
                     }
+                } else if (selected == "Lectures") {
+                    val response = api.lectures()
+                    if (response.isSuccessful) {
+                        lectures = response.body()?.items.orEmpty()
+                        secureStore.saveSnapshot("lectures", Gson().toJson(lectures))
+                    } else {
+                        lectures = secureStore.loadSnapshot("lectures")?.let { runCatching { Gson().fromJson(it, Array<LectureDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
+                        moduleError = "Could not refresh lectures; showing the last saved copy."
+                    }
+                } else if (selected == "Attendance") {
+                    val response = api.attendance()
+                    if (response.isSuccessful) {
+                        attendance = response.body()?.items.orEmpty()
+                        secureStore.saveSnapshot("attendance", Gson().toJson(attendance))
+                    } else {
+                        attendance = secureStore.loadSnapshot("attendance")?.let { runCatching { Gson().fromJson(it, Array<AttendanceDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
+                        moduleError = "Could not refresh attendance; showing the last saved copy."
+                    }
+                } else {
+                    val response = api.concerns()
+                    if (response.isSuccessful) {
+                        concerns = response.body()?.items.orEmpty()
+                        secureStore.saveSnapshot("concerns", Gson().toJson(concerns))
+                    } else {
+                        concerns = secureStore.loadSnapshot("concerns")?.let { runCatching { Gson().fromJson(it, Array<ConcernDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
+                        moduleError = "Could not refresh concerns; showing the last saved copy."
+                    }
                 }
             } catch (_: Exception) {
                 if (selected == "Courses") courses = secureStore.loadSnapshot("courses")?.let { runCatching { Gson().fromJson(it, Array<CourseDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
                 if (selected == "Tasks") assignments = secureStore.loadSnapshot("assignments")?.let { runCatching { Gson().fromJson(it, Array<AssignmentDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
+                if (selected == "Lectures") lectures = secureStore.loadSnapshot("lectures")?.let { runCatching { Gson().fromJson(it, Array<LectureDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
+                if (selected == "Attendance") attendance = secureStore.loadSnapshot("attendance")?.let { runCatching { Gson().fromJson(it, Array<AttendanceDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
+                if (selected == "Concerns") concerns = secureStore.loadSnapshot("concerns")?.let { runCatching { Gson().fromJson(it, Array<ConcernDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
                 moduleError = "OFFLINE / Showing the last saved copy where available."
             }
             finally { moduleLoading = false }
@@ -211,11 +244,12 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
         },
         bottomBar = {
             NavigationBar(containerColor = Panel, contentColor = Cyan) {
-                listOf("Overview", "Courses", "Tasks", "Ava").forEach { item ->
-                    NavigationBarItem(selected = selected == item, onClick = { selected = item },
+                listOf("Overview", "Courses", "Tasks", "More", "Ava").forEach { item ->
+                    NavigationBarItem(selected = selected == item || (item == "More" && selected in listOf("Lectures", "Attendance", "Concerns")), onClick = { selected = item },
                         icon = { Icon(when (item) {
                             "Courses" -> Icons.Default.MenuBook
                             "Tasks" -> Icons.Default.CheckCircle
+                            "More" -> Icons.Default.MoreHoriz
                             "Ava" -> Icons.Default.GraphicEq
                             else -> Icons.Default.Dashboard
                         }, contentDescription = item) },
@@ -344,6 +378,79 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                     }, enabled = assignmentTitle.isNotBlank()) { Text("SAVE") } },
                     dismissButton = { TextButton(onClick = { showAssignmentDialog = false }) { Text("CANCEL") } }
                 )
+            } else if (selected == "More") {
+                Text("CLASS OPERATIONS", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
+                listOf("Lectures", "Attendance", "Concerns").forEach { module ->
+                    OutlinedButton(onClick = { selected = module }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(6.dp)) {
+                        Text(module.uppercase(), color = Cyan, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+                Text("More modules will be added here as their native workflows are completed.", color = Muted, fontSize = 12.sp)
+            } else if (selected == "Lectures") {
+                Text("LECTURE REGISTER", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
+                if (moduleLoading) CircularProgressIndicator(color = Cyan)
+                moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
+                if (!moduleLoading && lectures.isEmpty()) Text("No lectures have been recorded.", color = Muted)
+                lectures.forEach { item ->
+                    Surface(color = Panel, shape = RoundedCornerShape(6.dp), modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(14.dp)) {
+                            Text(item.topic, color = Color.White, fontWeight = FontWeight.SemiBold)
+                            Text(listOfNotNull(item.course?.code, item.heldAt ?: item.scheduledAt, item.venue).joinToString("  /  "), color = Muted, fontSize = 12.sp)
+                            if (item.summary.orEmpty().isNotBlank()) Text(item.summary.orEmpty(), color = Muted, fontSize = 12.sp)
+                            if (user.role == "CLASS_REP") TextButton(onClick = {
+                                scope.launch {
+                                    val deleted = api.deleteAcademic("lectures", item.id)
+                                    if (deleted.isSuccessful) lectures = api.lectures().body()?.items.orEmpty()
+                                    else moduleError = "Could not delete lecture (${deleted.code()})."
+                                }
+                            }) { Text("DELETE", color = Color(0xFFFF7D78), fontSize = 10.sp) }
+                        }
+                    }
+                }
+            } else if (selected == "Attendance") {
+                Text("ATTENDANCE SUMMARIES", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
+                if (moduleLoading) CircularProgressIndicator(color = Cyan)
+                moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
+                if (!moduleLoading && attendance.isEmpty()) Text("No attendance summaries have been recorded.", color = Muted)
+                attendance.forEach { item ->
+                    Surface(color = Panel, shape = RoundedCornerShape(6.dp), modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(14.dp)) {
+                            Text(item.course?.code ?: "CLASS SESSION", color = Cyan, fontWeight = FontWeight.Bold)
+                            Text(item.sessionDate, color = Color.White)
+                            Text("PRESENT  ${item.presentCount}     ABSENT  ${item.absentCount}", color = Muted, fontSize = 12.sp)
+                            item.note?.let { Text(it, color = Muted, fontSize = 12.sp) }
+                            if (user.role == "CLASS_REP") TextButton(onClick = {
+                                scope.launch {
+                                    val deleted = api.deleteAcademic("attendance", item.id)
+                                    if (deleted.isSuccessful) attendance = api.attendance().body()?.items.orEmpty()
+                                    else moduleError = "Could not delete attendance summary (${deleted.code()})."
+                                }
+                            }) { Text("DELETE", color = Color(0xFFFF7D78), fontSize = 10.sp) }
+                        }
+                    }
+                }
+            } else if (selected == "Concerns") {
+                Text("CLASS CONCERNS", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
+                if (moduleLoading) CircularProgressIndicator(color = Cyan)
+                moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
+                if (!moduleLoading && concerns.isEmpty()) Text("No class concerns have been recorded.", color = Muted)
+                concerns.forEach { item ->
+                    Surface(color = Panel, shape = RoundedCornerShape(6.dp), modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(14.dp)) {
+                            Text(item.category.uppercase() + " / " + item.status.uppercase(), color = Cyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text(item.title, color = Color.White, fontWeight = FontWeight.SemiBold)
+                            Text(item.details, color = Muted, fontSize = 12.sp)
+                            item.resolution?.let { Text("RESOLUTION: $it", color = Gold, fontSize = 12.sp) }
+                            if (user.role == "CLASS_REP") TextButton(onClick = {
+                                scope.launch {
+                                    val deleted = api.deleteAcademic("concerns", item.id)
+                                    if (deleted.isSuccessful) concerns = api.concerns().body()?.items.orEmpty()
+                                    else moduleError = "Could not delete concern (${deleted.code()})."
+                                }
+                            }) { Text("DELETE", color = Color(0xFFFF7D78), fontSize = 10.sp) }
+                        }
+                    }
+                }
             } else {
                 AvaVoiceScreen(api)
             }
