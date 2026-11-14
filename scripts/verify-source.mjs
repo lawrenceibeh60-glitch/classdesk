@@ -85,6 +85,9 @@ assert.match(avaSource, /setSupported\(hasBrowserRec\)/, "Website Ava must use b
 assert.match(avaSource, /SpeechRecognition\?: RecCtor; webkitSpeechRecognition\?: RecCtor/, "Website Ava must support standard and WebKit browser speech recognition");
 assert.ok(!avaSource.includes("MISTRAL_API_KEY"), "Website Ava must not depend on a hard-coded transcription vendor key");
 assert.match(avaSource, /MediaRecorder/, "Website Ava must support tap-to-record audio when browser speech recognition is unavailable");
+assert.match(avaSource, /getUserMedia/, "Cloud fallback must request microphone access only when recording is started");
+assert.match(avaSource, /e\.error === "network"[\s\S]*startCloudRecorder/, "Browser speech network failures must fall back to optional cloud recording");
+assert.match(avaSource, /recorder\.onstop[\s\S]*fetch\("\/api\/voice\/transcribe"/, "Cloud audio must only upload after the user stops recording");
 assert.match(avaSource, /fetch\("\/api\/voice\/transcribe"/, "Website Ava must submit recorded audio through the authenticated transcription route");
 assert.match(avaSource, /flags\.stt/, "Website Ava must only enable cloud recording when the server reports transcription configured");
 const transcriptionRoute = read("app/api/voice/transcribe/route.ts");
