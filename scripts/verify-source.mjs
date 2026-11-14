@@ -101,6 +101,7 @@ assert.match(academicManagerSource, /error instanceof TypeError/, "Academic offl
 assert.match(announcementStudioSource, /error instanceof TypeError/, "Announcement offline cache must be used only for network failures");
 assert.match(recordsManagerSource, /error instanceof TypeError && offlineDB/, "Record cache must not be shown after an authentication failure");
 assert.match(dashboardSource, /error instanceof TypeError && offlineDB/, "Dashboard cache must not be shown after an authentication failure");
+assert.match(dashboardSource, /pendingDeleteIds[\s\S]*mutation\.operation === "delete"[\s\S]*!pendingDeleteIds\.has\(record\.id\)/, "Dashboard delta pulls must not resurrect locally queued deletions");
 
 const calendarViewSource = read("components/calendar-view.tsx");
 assert.ok(calendarViewSource.includes("if (!isPrimaryAdmin)"), "Calendar deletion must be guarded in the UI as well as the API");
