@@ -92,7 +92,7 @@ class ClassDeskSyncWorker(context: Context, params: WorkerParameters) : Coroutin
                     }
                     if (previous != null && ClassDeskNotifications.canPost(applicationContext)) {
                         val oldById = previous.associateBy { it.id }
-                        latest.filter { oldById[it.id]?.status != null && oldById[it.id]?.status != it.status }
+                        latest.filter { oldById[it.id]?.status != it.status }
                             .forEach { ClassDeskNotifications.concern(applicationContext, it.id, it.status) }
                     }
                     cookies.saveSnapshot("concerns", Gson().toJson(latest))
