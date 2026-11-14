@@ -44,6 +44,7 @@ class OfflineStore(context: Context) : SQLiteOpenHelper(context, "classdesk-offl
             put("created_at", System.currentTimeMillis())
         }
         writableDatabase.insertWithOnConflict("pending_mutations", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        ClassDeskSyncScheduler.scheduleNow(context)
     }
 
     @Synchronized
