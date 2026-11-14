@@ -168,5 +168,5 @@ assert.match(androidOfflineStore, /SQLiteOpenHelper\(context, "classdesk-offline
 assert.match(androidOfflineStore, /OfflineCrypto\.encrypt\(serverRecordJson\)/, "Cloud conflict snapshots must be encrypted at rest");
 assert.match(androidOfflineStore, /rebaseForRetry\(id: String, latestVersion: Int\)/, "Android must support explicit version rebasing for local conflict resolution");
 assert.match(androidSyncWorker, /store\.markConflict\(conflict\.id, conflict\.reason, conflict\.serverRecord\?\.let/, "Android sync must preserve the server version returned for a conflict");
-assert.match(androidQueueScreen, /SYNC NOW[\\s\\S]*USE CLOUD[\\s\\S]*KEEP LOCAL[\\s\\S]*DISCARD LOCAL CHANGE/, "Android offline queue must expose cloud/local conflict resolution and recovery controls");
+assert.match(androidQueueScreen, /SYNC NOW[\s\S]*USE CLOUD[\s\S]*KEEP LOCAL[\s\S]*DISCARD LOCAL CHANGE/, "Android offline queue must expose cloud/local conflict resolution and recovery controls");
 assert.match(androidAppShell, /filter \{ it != "Settings" \|\| user\.role == "CLASS_REP" \}/, "Android settings navigation must be restricted to the primary account");
