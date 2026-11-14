@@ -90,7 +90,12 @@ for (const queue of ["outbox", "academicQueue", "aiQueue", "uploads"]) assert.ma
 
 assert.match(avaSource, /const \[speaking, setSpeaking\] = useState\(false\)/, "Ava must expose an explicit speaking state");
 assert.match(avaSource, /const \[processing, setProcessing\] = useState\(false\)/, "Ava must expose an explicit processing state");
-assert.match(avaWorkspace, /ava\.speaking \? "Ava is speaking" : ava\.processing \? "Working on your request"/, "Ava voice interface must show speaking and processing feedback");
+assert.match(avaWorkspace, /ava\.speaking \? "SPEAKING" : ava\.processing \? "PROCESSING"/, "Ava voice interface must show explicit speaking and processing states");
+assert.match(avaWorkspace, /ava-voice-readout[\s\S]*LATEST INPUT[\s\S]*LATEST RESPONSE/, "Ava graphical interface must show input and response readouts");
+assert.match(read("app/api/admin/storage/route.ts"), /requirePrimaryAdmin[\s\S]*pg_database_size[\s\S]*deleteMany/, "SQL storage inspection and cleanup must be primary-admin-only");
+assert.match(read("app/api/admin/storage/route.ts"), /CLEANUP_CLASSDESK_SQL[\s\S]*appliedAt: \{ not: null \}[\s\S]*Pending sync changes are never removed/, "SQL cleanup must require explicit confirmation and preserve pending sync and class content");
+assert.match(read("components/storage-management.tsx"), /Manage records and uploaded documents[\s\S]*Clean temporary SQL data/, "Settings must expose SQL storage inspection and cleanup controls");
+assert.match(read("app/settings/page.tsx"), /StorageManagement/, "Primary settings page must include SQL storage management");
 assert.match(read("components/section-shell.tsx"), /Calendar & timetable.*\/calendar/, "Calendar and timetable must be reachable from workspace navigation");
 assert.match(healthRoute, /NODE_ENV !== "production" && process\.env\.LOCAL_STORAGE_DIR/, "Local disk storage must not be reported as production shared storage");
 
