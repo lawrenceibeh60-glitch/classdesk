@@ -12,6 +12,7 @@ for (const model of requiredModels) assert.match(schema, new RegExp(`model\\s+${
 for (const table of ["Course", "LectureSession", "Assignment", "AttendanceSummary", "ClassConcern", "AnnouncementVersion", "AnnouncementEvent", "RateLimitBucket"]) assert.ok(migrationSql.includes(`CREATE TABLE "${table}"`), `Missing SQL migration table: ${table}`);
 assert.match(migrationSql, /ALTER TABLE "AcademicRecord" ADD COLUMN "version" INTEGER NOT NULL DEFAULT 1/, "Missing optimistic record version migration");
 assert.match(read("app/api/sync/route.ts"), /baseVersion/, "Sync optimistic version checks are missing");
+assert.match(read("app/api/sync/route.ts"), /const actor = await getSession\(\);[\s\S]*if \(!actor\)[\s\S]*actor\?\.role === "ASSISTANT_REP"/, "Offline sync role restrictions must use the same authenticated session that passed authorization");
 assert.match(read("app/api/sync/route.ts"), /Number\.isSafeInteger\(raw\.baseVersion\)[\s\S]*if \(baseVersion === undefined\)[\s\S]*Missing or invalid base version/, "Offline sync must reject unversioned mutations rather than overwrite newer cloud data");
 assert.match(schema, /CALENDAR\s+TIMETABLE/, "Calendar and timetable record types are missing");
 assert.match(migrationSql, /ALTER TYPE "RecordType" ADD VALUE IF NOT EXISTS 'CALENDAR'/, "Calendar record migration is missing");
