@@ -55,9 +55,16 @@ export async function POST(req: NextRequest) {  const originDenied = assertSameO
       continue;
     }
     const operation = raw.operation === "delete" ? "delete" : raw.operation === "upsert" ? "upsert" : "";
-    const baseVersion = Number.isInteger(raw.baseVersion) && Number(raw.baseVersion) >= 0 ? Number(raw.baseVersion) : undefined;
+    const baseVersion = Number.isSafeInteger(raw.baseVersion) && Number(raw.baseVersion) >= 0 ? Number(raw.baseVersion) : undefined;
     if (!operation) {
       rejected.push({ id, reason: "Unsupported operation" });
+      continue;
+    }
+    // Every queued mutation is created with a base version (including new records at 0).
+    // Never fall back to timestamp-only or unconditional writes: an old offline client
+    // without a version must be reviewed/recreated rather than overwrite newer cloud data.
+    if (baseVersion === undefined) {
+      rejected.push({ id, reason: "Missing or invalid base version; refresh the record before syncing" });
       continue;
     }
     if (actor?.role === "ASSISTANT_REP" && operation === "delete") {
