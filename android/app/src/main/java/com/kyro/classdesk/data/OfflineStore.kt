@@ -14,7 +14,7 @@ data class PendingMutation(
     val payloadJson: String
 )
 
-class OfflineStore(context: Context) : SQLiteOpenHelper(context, "classdesk-offline.db", null, 2) {
+class OfflineStore(private val context: Context) : SQLiteOpenHelper(context, "classdesk-offline.db", null, 2) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("""CREATE TABLE pending_mutations (
             id TEXT PRIMARY KEY NOT NULL,
