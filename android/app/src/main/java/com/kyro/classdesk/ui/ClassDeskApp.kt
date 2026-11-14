@@ -694,8 +694,10 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                                     scope.launch {
                                         val next = if (item.status == "RESOLVED") "OPEN" else "RESOLVED"
                                         val updated = mutateAcademic("concerns", "PATCH", mapOf("id" to item.id, "status" to next, "resolution" to item.resolution.orEmpty()))
-                                        if (updated.isSuccessful && !updated.queued) concerns = api.concerns().body()?.items.orEmpty()
-                                        else if (!updated.isSuccessful) moduleError = "Concern status could not be updated."
+                                        if (updated.isSuccessful) {
+                                            if (updated.queued) concerns = concerns.map { if (it.id == item.id) it.copy(status = next) else it }
+                                            else concerns = api.concerns().body()?.items.orEmpty()
+                                        } else moduleError = "Concern status could not be updated."
                                     }
                                 }) { Text(if (item.status == "RESOLVED") "REOPEN" else "RESOLVE", color = Gold, fontSize = 10.sp) }
                                 TextButton(onClick = {
