@@ -133,10 +133,19 @@ export default function Dashboard() {
         const delta = await pulled.json();
         const pendingRecords = await offlineDB.records.where("syncState").equals("pending").toArray();
         const pendingIds = new Set(pendingRecords.map((item) => item.id));
+        // A locally queued deletion removes its cached row immediately. Keep the
+        // tombstone in mind during pulls or a stale cloud copy can reappear offline.
+        const pendingDeleteIds = new Set((await offlineDB.outbox.toArray())
+          .filter((mutation) => mutation.operation === "delete")
+          .map((mutation) => mutation.entityId));
         for (const record of (delta.records || []) as RecordItem[]) {
-          if (!pendingIds.has(record.id)) await offlineDB.records.put({ ...record, metadata: record.metadata || {}, syncState: "synced" });
+          if (!pendingIds.has(record.id) && !pendingDeleteIds.has(record.id)) {
+            await offlineDB.records.put({ ...record, metadata: record.metadata || {}, syncState: "synced" });
+          }
         }
-        for (const id of (delta.deletedIds || []) as string[]) if (!pendingIds.has(id)) await offlineDB.records.delete(id);
+        for (const id of (delta.deletedIds || []) as string[]) {
+          if (!pendingIds.has(id) && !pendingDeleteIds.has(id)) await offlineDB.records.delete(id);
+        }
         await offlineDB.meta.put({ key: "lastSync", value: delta.serverTime || new Date().toISOString() });
       }
       await load();
