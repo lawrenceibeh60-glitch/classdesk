@@ -5,7 +5,7 @@ import { offlineDB } from "@/lib/offline-db";
 type Version = { id: string; version: number; title: string; body: string; status: string; createdAt: string };
 type AnnouncementEvent = { id: string; action: string; details?: string | null; createdAt: string };
 type Announcement = { id: string; title: string; body: string; category: string; source?: string | null; status: string; publishedAt?: string | null; updatedAt: string; versions: Version[]; events: AnnouncementEvent[] };
-export default function AnnouncementStudio() {
+export default function AnnouncementStudio({ isPrimaryAdmin }: { isPrimaryAdmin: boolean }) {
   const [items, setItems] = useState<Announcement[]>([]);
   const [title, setTitle] = useState(""); const [body, setBody] = useState(""); const [category, setCategory] = useState("GENERAL"); const [source, setSource] = useState("");
   const [editId, setEditId] = useState<string | null>(null); const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false); const [expanded, setExpanded] = useState<string | null>(null);
@@ -95,14 +95,14 @@ export default function AnnouncementStudio() {
           {item.source && <p>Source: {item.source}</p>}
           {item.status === "DRAFT" && unresolved(item) && <p className="error-text">Contains unresolved [PLACEHOLDER] fields. Approval is blocked.</p>}
           <div className="actions" style={{ marginTop: 10 }}>
-            {item.status === "DRAFT" && <button className="btn" onClick={() => void action(item, "approve")} disabled={unresolved(item)}>Approve</button>}
-            {item.status === "APPROVED" && <button className="btn primary" onClick={() => void action(item, "publish")}>Mark published</button>}
+            {isPrimaryAdmin && item.status === "DRAFT" && <button className="btn" onClick={() => void action(item, "approve")} disabled={unresolved(item)}>Approve</button>}
+            {isPrimaryAdmin && item.status === "APPROVED" && <button className="btn primary" onClick={() => void action(item, "publish")}>Mark published</button>}
             {item.status === "PUBLISHED" && <a className="btn" href={share(item)} target="_blank" rel="noreferrer">Share on WhatsApp</a>}
             {item.status !== "ARCHIVED" && <button className="btn ghost" onClick={() => edit(item)}>Edit / revise</button>}
-            {item.status !== "ARCHIVED" && <button className="btn ghost" onClick={() => void action(item, "archive")}>Archive</button>}
-            {item.status !== "DRAFT" && item.status !== "ARCHIVED" && <button className="btn ghost" onClick={() => void action(item, "backToDraft")}>Return to draft</button>}
+            {isPrimaryAdmin && item.status !== "ARCHIVED" && <button className="btn ghost" onClick={() => void action(item, "archive")}>Archive</button>}
+            {isPrimaryAdmin && item.status !== "DRAFT" && item.status !== "ARCHIVED" && <button className="btn ghost" onClick={() => void action(item, "backToDraft")}>Return to draft</button>}
             <button className="btn ghost" onClick={() => setExpanded(expanded === item.id ? null : item.id)}>History ({item.versions?.length || 0})</button>
-            <button className="btn ghost" onClick={() => void remove(item)}>Delete</button>
+            {isPrimaryAdmin && <button className="btn ghost" onClick={() => void remove(item)}>Delete</button>}
           </div>
           {expanded === item.id && <div className="notice" style={{ marginTop: 12 }}><strong>Approval / publication activity</strong>{item.events?.map((event) => <div className="item" key={event.id}><div className="row"><strong>{event.action.replaceAll("_", " ")}</strong><span className="tag">{new Date(event.createdAt).toLocaleString("en-GB")}</span></div><p>{event.details}</p></div>)}<strong>Content version history</strong>{item.versions?.map((version) => <div className="item" key={version.id}><div className="row"><strong>Version {version.version}</strong><span className="tag">{version.status}</span></div><p>{new Date(version.createdAt).toLocaleString("en-GB")}</p><p style={{ whiteSpace: "pre-wrap" }}>{version.title}<br />{version.body}</p></div>)}</div>}
         </article>) : <div className="empty">No announcements yet. Create your first draft.</div>}
