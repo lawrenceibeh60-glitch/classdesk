@@ -1,8 +1,7 @@
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 export async function callModel(messages: ChatMessage[], temperature = 0.3) {
   // ClassDesk intelligence uses the explicitly configured OpenAI-compatible provider
-  // (xKiro in production). Mistral's optional speech-transcription key is never
-  // silently reused for chat or reasoning.
+  // (xKiro in production). Speech recognition is handled by the client platform.
   const base = (process.env.AI_BASE_URL || "").replace(/\/$/, "");
   const key = process.env.AI_API_KEY || "";
   const model = process.env.AI_MODEL || "";
