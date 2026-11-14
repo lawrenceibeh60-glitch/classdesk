@@ -177,6 +177,7 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
     var calendarContent by remember { mutableStateOf("") }
     var calendarDate by remember { mutableStateOf("") }
     var calendarType by remember { mutableStateOf("TIMETABLE") }
+    var editingCalendarId by remember { mutableStateOf<String?>(null) }
     var showAnnouncementDialog by remember { mutableStateOf(false) }
     var announcementTitle by remember { mutableStateOf("") }
     var announcementBody by remember { mutableStateOf("") }
@@ -728,6 +729,14 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                             Text(item.title, color = Color.White, fontWeight = FontWeight.SemiBold)
                             Text(item.eventDate.orEmpty(), color = Gold, fontSize = 12.sp)
                             if (item.content.isNotBlank()) Text(item.content, color = Muted, fontSize = 12.sp)
+                            TextButton(onClick = {
+                                editingCalendarId = item.id
+                                calendarType = item.type
+                                calendarTitle = item.title
+                                calendarContent = item.content
+                                calendarDate = item.eventDate.orEmpty().take(10)
+                                showCalendarDialog = true
+                            }) { Text("EDIT EVENT", color = Cyan, fontSize = 10.sp) }
                             if (user.role == "CLASS_REP") TextButton(onClick = {
                                 scope.launch {
                                     val deleted = try { api.deleteRecord(item.id) } catch (_: Exception) { null }
@@ -753,7 +762,7 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                 }
                 if (showCalendarDialog) AlertDialog(
                     onDismissRequest = { showCalendarDialog = false },
-                    title = { Text("Add timetable event") },
+                    title = { Text(if (editingCalendarId == null) "Add timetable event" else "Edit timetable event") },
                     text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(calendarType, { calendarType = it.uppercase() }, label = { Text("Type: TIMETABLE or CALENDAR") }, singleLine = true)
                         OutlinedTextField(calendarTitle, { calendarTitle = it }, label = { Text("Event title") }, singleLine = true)
@@ -766,26 +775,31 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                             moduleError = "Enter a valid date such as YYYY-MM-DD or an ISO date/time."
                             return@launch
                         }
+                        val existing = editingCalendarId?.let { id -> calendarItems.firstOrNull { it.id == id } }
+                        val id = editingCalendarId
+                        val payloadMap = mapOf("type" to calendarType, "title" to calendarTitle.trim(), "content" to calendarContent.trim(), "eventDate" to normalizedDate)
                         val saved = try {
-                            api.createRecord(mapOf("type" to calendarType, "title" to calendarTitle.trim(), "content" to calendarContent.trim(), "eventDate" to normalizedDate))
+                            if (id == null) api.createRecord(payloadMap) else api.updateRecord(payloadMap + mapOf("id" to id))
                         } catch (_: Exception) { null }
                         if (saved == null) {
-                            val localId = UUID.randomUUID().toString()
+                            val localId = id ?: UUID.randomUUID().toString()
                             val payload = JsonObject().apply {
                                 addProperty("type", calendarType)
                                 addProperty("title", calendarTitle.trim())
                                 addProperty("content", calendarContent.trim())
                                 addProperty("eventDate", normalizedDate)
                                 add("metadata", JsonObject())
-                                addProperty("status", "ACTIVE")
+                                addProperty("status", existing?.status ?: "ACTIVE")
                                 addProperty("updatedAt", Instant.now().toString())
                             }
                             val store = OfflineStore(context)
                             try {
-                                store.enqueue(PendingMutation(UUID.randomUUID().toString(), user.username, localId, "upsert", 0, Gson().toJson(payload)))
-                                calendarItems = listOf(AcademicRecordDto(localId, calendarType, calendarTitle.trim(), calendarContent.trim(), normalizedDate, "ACTIVE", 1)) + calendarItems
+                                store.enqueue(PendingMutation(UUID.randomUUID().toString(), user.username, localId, "upsert", existing?.version ?: 0, Gson().toJson(payload)))
+                                val updated = AcademicRecordDto(localId, calendarType, calendarTitle.trim(), calendarContent.trim(), normalizedDate, existing?.status ?: "ACTIVE", (existing?.version ?: 0) + 1)
+                                calendarItems = if (id == null) listOf(updated) + calendarItems else calendarItems.map { if (it.id == id) updated else it }
                                 secureStore.saveSnapshot("calendar", Gson().toJson(calendarItems))
                                 moduleError = "Saved on this device. It will sync when the network returns."
+                                editingCalendarId = null
                                 calendarTitle = ""; calendarContent = ""; calendarDate = ""; calendarType = "TIMETABLE"
                                 showCalendarDialog = false
                             } catch (e: Exception) {
@@ -794,11 +808,12 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                         } else if (saved.isSuccessful) {
                             try { val refreshed = api.records(); if (refreshed.isSuccessful) calendarItems = refreshed.body()?.records.orEmpty() } catch (_: Exception) { /* retain the current local view */ }
                             secureStore.saveSnapshot("calendar", Gson().toJson(calendarItems))
+                            editingCalendarId = null
                             calendarTitle = ""; calendarContent = ""; calendarDate = ""; calendarType = "TIMETABLE"
                             showCalendarDialog = false
                         } else moduleError = "Event could not be saved. Use TIMETABLE or CALENDAR and a valid ISO date."
                     } }, enabled = calendarTitle.isNotBlank() && calendarDate.isNotBlank() && calendarType in listOf("TIMETABLE", "CALENDAR")) { Text("SAVE") } },
-                    dismissButton = { TextButton(onClick = { showCalendarDialog = false }) { Text("CANCEL") } }
+                    dismissButton = { TextButton(onClick = { showCalendarDialog = false; editingCalendarId = null }) { Text("CANCEL") } }
                 )
             } else if (selected == "Ava Tasks") {
                 AvaTasksScreen(api)
