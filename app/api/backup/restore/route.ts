@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireAdmin, assertSameOrigin } from "@/lib/http";
+import { requirePrimaryAdmin, assertSameOrigin } from "@/lib/http";
 import { Prisma } from "@prisma/client";
 import JSZip from "jszip";
 import { storeObject } from "@/lib/storage";
@@ -11,7 +11,7 @@ const array = (value: unknown): any[] => Array.isArray(value) ? value : [];
 const validId = (value: any) => typeof value?.id === "string" && value.id.length > 0 && value.id.length <= 100;
 export async function POST(req: NextRequest) {
   const originDenied = assertSameOrigin(req); if (originDenied) return originDenied;
-  const denied = await requireAdmin(); if (denied) return denied;
+  const denied = await requirePrimaryAdmin(); if (denied) return denied;
   const length = Number(req.headers.get("content-length") || 0);
   const isZipRequest = (req.headers.get("content-type") || "").includes("application/zip");
   const maxBackupBytes = isZipRequest ? 100 * 1024 * 1024 : 25 * 1024 * 1024;
