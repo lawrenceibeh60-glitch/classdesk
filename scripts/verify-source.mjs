@@ -96,3 +96,9 @@ assert.match(academicManagerSource, /error instanceof TypeError/, "Academic offl
 assert.match(announcementStudioSource, /error instanceof TypeError/, "Announcement offline cache must be used only for network failures");
 assert.match(recordsManagerSource, /error instanceof TypeError && offlineDB/, "Record cache must not be shown after an authentication failure");
 assert.match(dashboardSource, /error instanceof TypeError && offlineDB/, "Dashboard cache must not be shown after an authentication failure");
+
+const calendarViewSource = read("components/calendar-view.tsx");
+assert.ok(calendarViewSource.includes("if (!isPrimaryAdmin)"), "Calendar deletion must be guarded in the UI as well as the API");
+assert.ok(calendarViewSource.includes('{isPrimaryAdmin&&<button className="btn" onClick={()=>void remove(r)}>Delete</button>}'), "Calendar delete controls must be hidden from the assistant account");
+assert.ok(calendarViewSource.includes('nav.filter(([label])=>label!=="Settings"||isPrimaryAdmin)'), "Calendar navigation must hide primary-only settings from the assistant account");
+assert.match(read("app/calendar/page.tsx"), /isPrimaryAdmin=\{user\.role === "CLASS_REP"\}/, "Calendar page must pass the authenticated primary-admin role");
