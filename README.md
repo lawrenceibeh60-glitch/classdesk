@@ -20,7 +20,7 @@ Hybrid PWA: online application with local offline drafts/queue. PostgreSQL is th
 
 - **AI reasoning:** Ava sends chat requests to the configured xKiro-compatible endpoint through the server-side AI_BASE_URL, AI_API_KEY, and AI_MODEL settings.
 - **Website speech-to-text:** the browser's Web Speech API (SpeechRecognition / webkitSpeechRecognition) handles transcription. It starts only after the user taps the microphone; no paid transcription API or server-side audio-upload route is used.
-- **Android speech-to-text:** the native Android SpeechRecognizer is used, preferring Android's on-device recognizer when the device and installed language pack support it, with the platform recognition service as fallback. Microphone permission is requested only after the user taps Activate.
+- **Android speech-to-text:** the native Android SpeechRecognizer is used, preferring Android's on-device recognizer when available. English tries Nigerian, British, American, general English, then the device default. Hausa, Yoruba, and Igbo are selectable profiles with regional, generic, and device-default fallbacks. Unsupported-language responses automatically advance to the next locale. Microphone permission is requested only after the user taps Activate.
 - **Spoken responses:** ElevenLabs is used when configured; browser speech synthesis and Android TextToSpeech provide device-native fallbacks.
 - **Voice privacy:** the microphone is not activated automatically on page load or app launch. The user explicitly starts and ends each voice session.
 ## Application modules
@@ -75,4 +75,4 @@ Production deployments must configure the two authorised accounts and session se
 
 Ava assignment-solution and study-summary PDFs are submitted as durable Vercel Workflows. The workflow stores task progress in PostgreSQL, retries failed processing steps, and saves generated PDFs through the configured S3-compatible object storage. A permanently running polling worker is not required on Vercel.
 
-The production environment must provide the pooled/direct database URL, AI endpoint/key/model, and S3-compatible bucket, endpoint, access key, and secret key. The API checks these dependencies before accepting a background task. The legacy `npm run worker:ava` script remains available for local worker-based development only; it is not part of the Vercel production path.
+Vercel runs `npm run vercel-build`, which applies all pending Prisma migrations using the direct `DATABASE_URL` before generating Prisma Client and compiling Next.js. Runtime Prisma queries continue to prefer `DATABASE_URL_POOLED`. The production environment must provide the direct and pooled database URLs, AI endpoint/key/model, and S3-compatible bucket, endpoint, access key, and secret key. The API checks these dependencies before accepting a background task. The legacy `npm run worker:ava` script remains available for local worker-based development only; it is not part of the Vercel production path.
