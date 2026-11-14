@@ -15,7 +15,8 @@ export async function GET() {
     take: 30,
     select: { id: true, kind: true, status: true, progress: true, currentStep: true, errorMessage: true, resultDocumentId: true, createdAt: true, startedAt: true, completedAt: true, updatedAt: true }
   });
-  return NextResponse.json({ tasks });
+  const workerOnline = await db.aiWorkerState.count({ where: { lastSeenAt: { gt: new Date(Date.now() - 90_000) } } }) > 0;
+  return NextResponse.json({ tasks, workerOnline });
 }
 
 export async function POST(req: NextRequest) {
@@ -24,6 +25,10 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   if (!(await rateLimit(`ava-task:${user.id}:${clientIp(req)}`, 10, 60 * 60 * 1000))) {
     return NextResponse.json({ error: "Ava task limit reached. Try again later." }, { status: 429 });
+  }
+  const workerOnline = await db.aiWorkerState.count({ where: { lastSeenAt: { gt: new Date(Date.now() - 90_000) } } }) > 0;
+  if (!workerOnline) {
+    return NextResponse.json({ error: "Ava's background worker is not online yet. Your task was not queued; the worker must be started before background processing is available." }, { status: 503 });
   }
   const body = await req.json().catch(() => null);
   const kind = String(body?.kind || "");
