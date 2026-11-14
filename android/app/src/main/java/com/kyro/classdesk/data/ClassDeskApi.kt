@@ -63,6 +63,9 @@ interface ClassDeskApi {
     @POST("api/ai/tasks")
     suspend fun createAvaTask(@Body body: AvaTaskCreateRequest): Response<AvaTaskCreateEnvelope>
 
+    @POST("api/ai/tools")
+    suspend fun avaTool(@Body body: Map<String, @JvmSuppressWildcards Any>): Response<Map<String, Any>>
+
     @DELETE("api/ai/tasks/{id}")
     suspend fun cancelAvaTask(@Path("id") id: String): Response<Map<String, Any>>
 
