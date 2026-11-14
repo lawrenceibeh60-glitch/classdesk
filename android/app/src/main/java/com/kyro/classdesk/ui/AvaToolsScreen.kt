@@ -31,7 +31,6 @@ fun AvaToolsScreen(api: ClassDeskApi, isPrimaryAdmin: Boolean) {
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var documents by remember { mutableStateOf<List<Map<*, *>>>(emptyList()) }
-    var selectedDocumentId by remember { mutableStateOf<String?>(null) }
     var documentText by remember { mutableStateOf("") }
     var auditText by remember { mutableStateOf("") }
 
@@ -70,7 +69,6 @@ fun AvaToolsScreen(api: ClassDeskApi, isPrimaryAdmin: Boolean) {
                     Text(document["filename"]?.toString() ?: "", color = ToolMuted, fontSize = 10.sp)
                     TextButton(onClick = {
                         val id = document["id"]?.toString() ?: return@TextButton
-                        selectedDocumentId = id
                         scope.launch {
                             busy = true; error = null
                             try {
