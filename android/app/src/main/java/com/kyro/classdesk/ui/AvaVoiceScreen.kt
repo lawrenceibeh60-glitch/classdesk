@@ -46,6 +46,7 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
     var recognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
     var speech by remember { mutableStateOf<TextToSpeech?>(null) }
     var ttsReady by remember { mutableStateOf(false) }
+    var sessionActive by remember { mutableStateOf(false) }
     var listening by remember { mutableStateOf(false) }
     var processing by remember { mutableStateOf(false) }
     var speaking by remember { mutableStateOf(false) }
@@ -55,6 +56,7 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
     var error by remember { mutableStateOf<String?>(null) }
 
     fun stopSession() {
+        sessionActive = false
         userStopped = true
         recognizer?.cancel()
         speech?.stop()
@@ -69,6 +71,7 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
             error = "Speech recognition is unavailable on this device."
             return
         }
+        sessionActive = true
         userStopped = false
         error = null
         transcript = "Listening for your instruction…"
@@ -122,6 +125,7 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
                             try {
                                 val result = api.chat(ChatRequest(message = spoken, voice = true))
                                 val answer = result.body()?.answer
+                                if (!sessionActive) return@launch
                                 if (result.isSuccessful && !answer.isNullOrBlank()) {
                                     response = answer
                                     processing = false
@@ -134,6 +138,7 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
                                     error = result.body()?.error ?: "Ava could not complete that request."
                                 }
                             } catch (_: Exception) {
+                                if (!sessionActive) return@launch
                                 processing = false
                                 error = "Could not reach Ava. Check your connection."
                             }
