@@ -30,6 +30,8 @@ assert.match(read("lib/storage.ts"), /AWS_ACCESS_KEY_ID/, "Neon Object Storage a
 assert.match(read("lib/storage.ts"), /AWS_SECRET_ACCESS_KEY/, "Neon Object Storage secret environment variable must be supported");
 assert.match(read("lib/storage.ts"), /AWS_REGION/, "Neon Object Storage region environment variable must be supported");
 assert.match(read("lib/db.ts"), /DATABASE_URL_POOLED \|\| process\.env\.DATABASE_URL/, "Runtime Prisma client must prefer the pooled PostgreSQL connection");
+assert.match(read("lib/db.ts"), /function getClient\(\)/, "Prisma client must initialize lazily so builds do not require production database secrets");
+assert.match(read("lib/db.ts"), /new Proxy\(\{\} as PrismaClient/, "Database access must be deferred until a request uses Prisma");
 assert.match(read(".env.example"), /DATABASE_URL_POOLED/, "Environment example must document the pooled PostgreSQL connection");
 assert.match(read(".env.example"), /AWS_ENDPOINT_URL_S3[\s\S]*AWS_ACCESS_KEY_ID[\s\S]*AWS_SECRET_ACCESS_KEY[\s\S]*AWS_REGION[\s\S]*S3_BUCKET/, "Environment example must document all Neon Object Storage settings");
 
