@@ -159,7 +159,9 @@ class ClassDeskSyncWorker(context: Context, params: WorkerParameters) : Coroutin
             val body = response.body() ?: return Result.retry()
             store.removeApplied(body.appliedIds.orEmpty())
             appliedCount += body.appliedIds.orEmpty().size
-            body.conflicts.orEmpty().forEach { store.mark(it.id, "CONFLICT", it.reason) }
+            body.conflicts.orEmpty().forEach { conflict ->
+                store.markConflict(conflict.id, conflict.reason, conflict.serverRecord?.let { Gson().toJson(it) })
+            }
             body.rejected.orEmpty().forEach { store.mark(it.id, "REJECTED", it.reason) }
             ClassDeskNotifications.syncCompleted(applicationContext, appliedCount)
             return Result.success()
