@@ -86,6 +86,7 @@ fun ClassDeskApp() {
         )
         else -> DashboardScreen(
             user = user!!,
+            api = api,
             summary = summary,
             upcoming = upcoming,
             onRefresh = { scope.launch { loading = true; refreshSession() } },
@@ -128,8 +129,30 @@ private fun LoginScreen(error: String?, onLogin: (String, String) -> Unit) {
 }
 
 @Composable
-private fun DashboardScreen(user: UserDto, summary: SummaryDto?, upcoming: List<AssignmentDto>, onRefresh: () -> Unit, onLogout: () -> Unit) {
+private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDto?, upcoming: List<AssignmentDto>, onRefresh: () -> Unit, onLogout: () -> Unit) {
     var selected by remember { mutableStateOf("Overview") }
+    var courses by remember { mutableStateOf<List<CourseDto>>(emptyList()) }
+    var assignments by remember { mutableStateOf<List<AssignmentDto>>(emptyList()) }
+    var moduleLoading by remember { mutableStateOf(false) }
+    var moduleError by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(selected) {
+        moduleError = null
+        if (selected == "Courses" || selected == "Tasks") {
+            moduleLoading = true
+            try {
+                if (selected == "Courses") {
+                    val response = api.courses()
+                    if (response.isSuccessful) courses = response.body()?.items.orEmpty()
+                    else moduleError = "Could not load courses (${response.code()})"
+                } else {
+                    val response = api.assignments()
+                    if (response.isSuccessful) assignments = response.body()?.items.orEmpty()
+                    else moduleError = "Could not load assignments (${response.code()})"
+                }
+            } catch (_: Exception) { moduleError = "Unable to connect. Your saved session may need refreshing." }
+            finally { moduleLoading = false }
+        }
+    }
     Scaffold(
         containerColor = Canvas,
         topBar = {
@@ -179,10 +202,37 @@ private fun DashboardScreen(user: UserDto, summary: SummaryDto?, upcoming: List<
                         }
                     }
                 }
+            } else if (selected == "Courses") {
+                Text("COURSE REGISTER", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
+                if (moduleLoading) CircularProgressIndicator(color = Cyan)
+                moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
+                if (!moduleLoading && courses.isEmpty()) Text("No courses have been added yet.", color = Muted)
+                courses.forEach { course ->
+                    Surface(color = Panel, shape = RoundedCornerShape(6.dp), modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(14.dp)) {
+                            Text(course.code, color = Cyan, fontWeight = FontWeight.Bold)
+                            Text(course.name, color = Color.White, fontWeight = FontWeight.SemiBold)
+                            Text(listOfNotNull(course.lecturer, course.semester).joinToString("  /  "), color = Muted, fontSize = 12.sp)
+                        }
+                    }
+                }
+            } else if (selected == "Tasks") {
+                Text("ASSIGNMENTS / DEADLINES", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
+                if (moduleLoading) CircularProgressIndicator(color = Cyan)
+                moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
+                if (!moduleLoading && assignments.isEmpty()) Text("No assignments have been recorded.", color = Muted)
+                assignments.forEach { item ->
+                    Surface(color = Panel, shape = RoundedCornerShape(6.dp), modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(14.dp)) {
+                            Text(item.title, color = Color.White, fontWeight = FontWeight.SemiBold)
+                            Text(listOfNotNull(item.course?.code, item.dueAt, item.status).joinToString("  /  "), color = Muted, fontSize = 12.sp)
+                        }
+                    }
+                }
             } else {
-                Text(when (selected) { "Courses" -> "Course register"; "Tasks" -> "Assignments and deadlines"; else -> "Ava voice assistant" }, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text("This native module is scaffolded for the next implementation pass.", color = Muted)
-                if (selected == "Ava") Text("Ava will only access the microphone after you tap to start a voice session.", color = Cyan)
+                Text("AVA / VOICE ASSISTANT", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
+                Text("Ava's native voice console is the next module. The microphone will only be requested after you tap ACTIVATE.", color = Muted)
+                Text("NO BACKGROUND LISTENING  /  USER-INITIATED SESSIONS", color = Cyan, fontSize = 10.sp)
             }
         }
     }
