@@ -203,10 +203,24 @@ export function useAva(handlers: AvaHandlers) {
   const start = useCallback(async () => {
     setVoiceError(""); wantRef.current = true;
     if (cloudRef.current.stt && navigator.onLine) {
-      try { await startCloud(); setListening(true); setTimeout(() => speak("Ava is ready. Go ahead."), 300); return; }
-      catch { wantRef.current = false; setVoiceError("Microphone unavailable or permission denied."); return; }
+      try {
+        await startCloud();
+        if (!wantRef.current) { cleanupRef.current?.(); cleanupRef.current = null; return; }
+        setListening(true);
+        setTimeout(() => { if (wantRef.current) speak("Ava is ready. Go ahead."); }, 300);
+        return;
+      } catch {
+        if (!wantRef.current) return;
+        wantRef.current = false;
+        setVoiceError("Microphone unavailable or permission denied.");
+        return;
+      }
     }
-    if (startBrowserRec()) { setListening(true); setTimeout(() => speak("Ava is ready. Go ahead."), 300); }
+    if (startBrowserRec()) {
+      if (!wantRef.current) { recRef.current?.abort(); recRef.current = null; return; }
+      setListening(true);
+      setTimeout(() => { if (wantRef.current) speak("Ava is ready. Go ahead."); }, 300);
+    }
   }, [startCloud, startBrowserRec, speak]);
 
   const stop = useCallback(() => {
@@ -219,8 +233,14 @@ export function useAva(handlers: AvaHandlers) {
 
   useEffect(() => {
     const w = window as any; const hasBrowserRec = Boolean(w.SpeechRecognition || w.webkitSpeechRecognition);
-    setSupported(hasBrowserRec || Boolean(navigator.mediaDevices?.getUserMedia));
-    fetch("/api/health").then(r => r.json()).then(d => { const flags = { stt: Boolean(d.sttConfigured), tts: Boolean(d.ttsConfigured) }; cloudRef.current = flags; setCloud(flags); }).catch(() => undefined);
+    const hasMicrophoneInput = Boolean(navigator.mediaDevices?.getUserMedia);
+    setSupported(hasBrowserRec);
+    fetch("/api/health").then(r => r.json()).then(d => {
+      const flags = { stt: Boolean(d.sttConfigured), tts: Boolean(d.ttsConfigured) };
+      cloudRef.current = flags;
+      setCloud(flags);
+      setSupported(hasBrowserRec || (hasMicrophoneInput && flags.stt));
+    }).catch(() => { setSupported(hasBrowserRec); });
     const loadVoices = () => setVoices(window.speechSynthesis?.getVoices().filter(v => v.lang.toLowerCase().startsWith("en")).map(v => v.name) || []);
     try { const saved = localStorage.getItem("ava-voice"); if (saved) { voiceRef.current = saved; setVoiceNameState(saved); } } catch { /* ignore */ }
     loadVoices(); window.speechSynthesis?.addEventListener?.("voiceschanged", loadVoices);
