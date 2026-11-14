@@ -172,7 +172,7 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
                                             }
                                             player.setOnCompletionListener { completed ->
                                                 speaking = false; completed.release(); audioPlayer = null; audioFile.delete()
-                                                if (sessionActive) startRecognition()
+                                                if (sessionActive && pendingDelete == null) startRecognition()
                                             }
                                             player.setOnErrorListener { failed, _, _ ->
                                                 speaking = false; failed.release(); audioPlayer = null; audioFile.delete()
@@ -293,7 +293,7 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
     }
     pendingDelete?.let { action ->
         AlertDialog(
-            onDismissRequest = { pendingDelete = null },
+            onDismissRequest = { pendingDelete = null; if (sessionActive) startRecognition() },
             title = { Text("Confirm permanent deletion") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -321,13 +321,14 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
                             }
                             response = "Verified: " + action.title + " was deleted from the ClassDesk database" + if (action.originalInSharedStorage) " and shared storage." else "."
                             pendingDelete = null
+                            if (sessionActive) startRecognition()
                         } catch (e: Exception) {
                             error = e.message ?: "Permanent deletion failed."
                         }
                     }
                 }) { Text("DELETE PERMANENTLY", color = Color(0xFFFF7D78)) }
             },
-            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("CANCEL") } }
+            dismissButton = { TextButton(onClick = { pendingDelete = null; if (sessionActive) startRecognition() }) { Text("CANCEL") } }
         )
     }
 }
