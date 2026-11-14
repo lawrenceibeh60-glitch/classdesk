@@ -6,7 +6,8 @@ import { useAva, ACKS, FOLLOWUPS, pick } from "@/lib/use-ava";
 import SectionShell from "@/components/section-shell";
 import { offlineDB, type QueuedAIRequest } from "@/lib/offline-db";
 type Source = { title?: string; filename?: string };
-type Message = { role: "user" | "assistant"; content: string; sources?: Source[] };
+type AvaActionConfirmation = { type: "delete_document"; documentId: string; title: string; filename: string; sizeBytes: number; originalInSharedStorage: boolean };
+type Message = { role: "user" | "assistant"; content: string; sources?: Source[]; actionConfirmation?: AvaActionConfirmation };
 type AvaTask = { id: string; kind: string; status: string; progress: number; currentStep: string; errorMessage?: string | null; resultDocumentId?: string | null; createdAt: string };
 const suggestions: [string, string][] = [["Explain a topic from my uploaded Electrical Principles notes.", "💡"], ["Create a catch-up plan from verified lecture records.", "🗓"], ["Draft a clear WhatsApp class announcement.", "✎"], ["Summarise the latest uploaded lecture material.", "📄"]];
 export default function AIWorkspace({ initialKind = "announcement" }: { initialKind?: string } = {}) {
@@ -37,11 +38,11 @@ export default function AIWorkspace({ initialKind = "announcement" }: { initialK
         const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error || "Queued AI request could not be processed.");
-        await offlineDB.meta.put({ key: `ai-result:${item.id}`, value: JSON.stringify({ kind: item.kind, draftKind: item.draftKind, prompt: item.prompt, answer: item.kind === "chat" ? data.answer : data.output, sources: data.sources || [], createdAt: new Date().toISOString() }) });
+        await offlineDB.meta.put({ key: `ai-result:${item.id}`, value: JSON.stringify({ kind: item.kind, draftKind: item.draftKind, prompt: item.prompt, answer: item.kind === "chat" ? data.answer : data.output, sources: data.sources || [], actionConfirmation: data.actionConfirmation, createdAt: new Date().toISOString() }) });
         setMessages(current => {
           const question = item.kind === "chat" ? item.prompt : `Generate ${item.draftKind}: ${item.prompt}`;
           const withQuestion = current.some(message => message.role === "user" && message.content === question) ? current : [...current, { role: "user" as const, content: question }];
-          return [...withQuestion, { role: "assistant", content: item.kind === "chat" ? data.answer || "No answer was returned." : data.output || "No output was returned.", sources: data.sources || [] }];
+          return [...withQuestion, { role: "assistant", content: item.kind === "chat" ? data.answer || "No answer was returned." : data.output || "No output was returned.", sources: data.sources || [], actionConfirmation: data.actionConfirmation }];
         });
         await offlineDB.aiQueue.delete(item.id);
       }
@@ -109,7 +110,7 @@ export default function AIWorkspace({ initialKind = "announcement" }: { initialK
     try {
       const response = await fetch("/api/ai/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: text, history, clientRequestId: requestId, voice: spoken }) });
       const data = await response.json(); if (!response.ok) throw new Error(data.error || "AI request failed");
-      setMessages(m => [...m, { role: "assistant", content: data.answer || "No answer was returned.", sources: data.sources || [] }]);
+      setMessages(m => [...m, { role: "assistant", content: data.answer || "No answer was returned.", sources: data.sources || [], actionConfirmation: data.actionConfirmation }]);
     } catch (e) {
       if (e instanceof TypeError) { try { await queueRequest({ kind: "chat", prompt: text, history, draftKind: kind }, requestId); setError("Network lost. Your question is queued and will be answered when you reconnect."); } catch (queueError) { setError(queueError instanceof Error ? queueError.message : "Could not queue request"); } }
       else setError(e instanceof Error ? e.message : "AI request failed");
