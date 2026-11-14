@@ -31,7 +31,10 @@ class ClassDeskSyncWorker(context: Context, params: WorkerParameters) : Coroutin
             }
             val response = ApiClient.get(applicationContext).pushSync(SyncPushRequest(mutations))
             if (!response.isSuccessful) {
-                return if (response.code() >= 500 || response.code() == 429) Result.retry() else Result.success()
+                if (response.code() >= 500 || response.code() == 429) return Result.retry()
+                if (response.code() == 401) return Result.success() // Preserve the queue until this account signs in again.
+                queued.forEach { store.mark(it.id, "REJECTED", "The server rejected this sync batch (HTTP ${response.code()}).") }
+                return Result.success()
             }
             val body = response.body() ?: return Result.retry()
             store.removeApplied(body.appliedIds.orEmpty())
