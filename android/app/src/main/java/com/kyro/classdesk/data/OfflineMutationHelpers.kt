@@ -48,6 +48,7 @@ suspend fun saveAcademicMutation(
                 baseVersion = 0,
                 payloadJson = Gson().toJson(payload)
             ))
+            ClassDeskSyncScheduler.scheduleNow(context)
         } finally { store.closeStore() }
         OfflineMutationResult(true, queued = true, statusCode = 0, message = "Saved on this device. It will sync when the network returns.")
     }
@@ -80,6 +81,7 @@ suspend fun saveAnnouncementMutation(
                 baseVersion = 0,
                 payloadJson = Gson().toJson(payload)
             ))
+            ClassDeskSyncScheduler.scheduleNow(context)
         } finally { store.closeStore() }
         OfflineMutationResult(true, queued = true, statusCode = 0, message = "Announcement change saved locally and queued for synchronization.")
     }
