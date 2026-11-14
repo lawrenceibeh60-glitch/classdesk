@@ -102,3 +102,6 @@ assert.ok(calendarViewSource.includes("if (!isPrimaryAdmin)"), "Calendar deletio
 assert.ok(calendarViewSource.includes('{isPrimaryAdmin&&<button className="btn" onClick={()=>void remove(r)}>Delete</button>}'), "Calendar delete controls must be hidden from the assistant account");
 assert.ok(calendarViewSource.includes('nav.filter(([label])=>label!=="Settings"||isPrimaryAdmin)'), "Calendar navigation must hide primary-only settings from the assistant account");
 assert.match(read("app/calendar/page.tsx"), /isPrimaryAdmin=\{user\.role === "CLASS_REP"\}/, "Calendar page must pass the authenticated primary-admin role");
+
+assert.match(academicManagerSource, /mode === "courses" && changes\.active === false && !isPrimaryAdmin/, "Assistant account must not deactivate courses from the academic manager");
+assert.match(academicManagerSource, /mode === "courses" && \(!item\.active \|\| isPrimaryAdmin\)/, "Course deactivation control must be hidden from the assistant account");
