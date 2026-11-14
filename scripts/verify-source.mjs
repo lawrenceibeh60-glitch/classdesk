@@ -96,6 +96,8 @@ assert.match(read("app/api/admin/storage/route.ts"), /requirePrimaryAdmin[\s\S]*
 assert.match(read("app/api/admin/storage/route.ts"), /CLEANUP_CLASSDESK_SQL[\s\S]*appliedAt: \{ not: null \}/, "SQL cleanup must require explicit confirmation and preserve pending sync mutations");
 assert.match(read("components/storage-management.tsx"), /Pending sync changes are never removed[\s\S]*not bulk-deleted/, "SQL cleanup UI must explain that pending sync and class content are preserved");
 assert.match(read("components/storage-management.tsx"), /Manage records and uploaded documents[\s\S]*Clean temporary SQL data/, "Settings must expose SQL storage inspection and cleanup controls");
+assert.match(read("components/storage-management.tsx"), /fetch\("\/api\/documents"[\s\S]*DELETE[\s\S]*Delete permanently/, "Primary settings must expose per-document deletion from SQL and shared storage");
+assert.match(read("app/api/documents/route.ts"), /requirePrimaryAdmin[\s\S]*db\.document\.delete[\s\S]*deleteObject/, "Deleting a stored document must remove its SQL row, cascading chunks, and shared original");
 assert.match(read("app/settings/page.tsx"), /StorageManagement/, "Primary settings page must include SQL storage management");
 assert.match(read("components/section-shell.tsx"), /Calendar & timetable.*\/calendar/, "Calendar and timetable must be reachable from workspace navigation");
 assert.match(healthRoute, /NODE_ENV !== "production" && process\.env\.LOCAL_STORAGE_DIR/, "Local disk storage must not be reported as production shared storage");
