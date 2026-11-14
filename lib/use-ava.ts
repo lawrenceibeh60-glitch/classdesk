@@ -56,7 +56,6 @@ export function useAva(handlers: AvaHandlers) {
   const [cloud, setCloud] = useState({ tts: false });
   const cloudRef = useRef({ tts: false });
   const recRef = useRef<Rec | null>(null);
-  const cleanupRef = useRef<(() => void) | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playToken = useRef(0);
   const voiceRef = useRef("");
@@ -164,7 +163,7 @@ export function useAva(handlers: AvaHandlers) {
 
   const stop = useCallback(() => {
     wantRef.current = false; awakeUntil.current = 0; setAwake(false); setListening(false); setProcessing(false);
-    recRef.current?.abort(); recRef.current = null; cleanupRef.current?.(); cleanupRef.current = null; stopSpeaking();
+    recRef.current?.abort(); recRef.current = null; stopSpeaking();
     handlersRef.current.onStopListening?.();
   }, [stopSpeaking]);
 
@@ -181,7 +180,7 @@ export function useAva(handlers: AvaHandlers) {
     const loadVoices = () => setVoices(window.speechSynthesis?.getVoices().filter(v => v.lang.toLowerCase().startsWith("en")).map(v => v.name) || []);
     try { const saved = localStorage.getItem("ava-voice"); if (saved) { voiceRef.current = saved; setVoiceNameState(saved); } } catch { /* ignore */ }
     loadVoices(); window.speechSynthesis?.addEventListener?.("voiceschanged", loadVoices);
-    return () => { window.speechSynthesis?.removeEventListener?.("voiceschanged", loadVoices); wantRef.current = false; recRef.current?.abort(); cleanupRef.current?.(); stopSpeaking(); };
+    return () => { window.speechSynthesis?.removeEventListener?.("voiceschanged", loadVoices); wantRef.current = false; recRef.current?.abort(); stopSpeaking(); };
   }, [stopSpeaking]);
 
   return { supported, listening, speaking, processing, awake, heard, voiceError, toggle, stop, speak, shutUp, voices, voiceName, setVoiceName, cloud };
