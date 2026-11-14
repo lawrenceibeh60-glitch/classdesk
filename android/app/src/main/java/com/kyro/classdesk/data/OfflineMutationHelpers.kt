@@ -65,7 +65,9 @@ suspend fun saveAnnouncementMutation(
     input: Map<String, String>
 ): OfflineMutationResult {
     val id = input["id"] ?: UUID.randomUUID().toString()
-    val payload = input + mapOf("id" to id)
+    val mutationId = UUID.randomUUID().toString()
+    val isEditableDraft = method == "PATCH" && input["action"] == "edit"
+    val payload = input + mapOf("id" to id) + if (isEditableDraft) mapOf("clientMutationId" to mutationId) else emptyMap()
     return try {
         val response = when (method) {
             "POST" -> api.createAnnouncement(payload)
@@ -74,11 +76,16 @@ suspend fun saveAnnouncementMutation(
         }
         OfflineMutationResult(response.isSuccessful, statusCode = response.code(), message = response.errorBody()?.string())
     } catch (_: Exception) {
+        // Approval, publication and archive transitions require an online confirmation.
+        // Only draft creation/editing is safe to queue for later replay.
+        if (method == "PATCH" && !isEditableDraft) {
+            return OfflineMutationResult(false, statusCode = 0, message = "This announcement action requires a live connection. Nothing was queued.")
+        }
         try {
             val store = OfflineStore(context)
             try {
                 store.enqueue(PendingMutation(
-                    id = UUID.randomUUID().toString(),
+                    id = if (isEditableDraft) mutationId else UUID.randomUUID().toString(),
                     ownerUsername = user.username,
                     entityId = id,
                     operation = "announcement:$method",
