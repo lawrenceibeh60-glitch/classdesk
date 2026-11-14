@@ -31,7 +31,7 @@ fun NativeParityScreen(section: String, api: ClassDeskApi, user: UserDto) {
     var records by remember { mutableStateOf<List<AcademicRecordDto>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
-    var query by remember { mutableStateOf("") }
+    var query by remember { mutableStateOf("") }\n    var health by remember { mutableStateOf<Map<String, Any>>(emptyMap()) }\n    var storage by remember { mutableStateOf<Map<String, Any>>(emptyMap()) }\n    var cleanupPhrase by remember { mutableStateOf("") }\n    var cleanupMessage by remember { mutableStateOf<String?>(null) }
 
     suspend fun load() {
         loading = true
@@ -44,7 +44,7 @@ fun NativeParityScreen(section: String, api: ClassDeskApi, user: UserDto) {
             if (c.isSuccessful) courses = c.body()?.items.orEmpty() else error = "Courses could not be refreshed (${c.code()})."
             if (l.isSuccessful) lectures = l.body()?.items.orEmpty() else error = error ?: "Lectures could not be refreshed (${l.code()})."
             if (a.isSuccessful) assignments = a.body()?.items.orEmpty() else error = error ?: "Assignments could not be refreshed (${a.code()})."
-            if (r.isSuccessful) records = r.body()?.records.orEmpty() else error = error ?: "Class records could not be refreshed (${r.code()})."
+            if (r.isSuccessful) records = r.body()?.records.orEmpty() else error = error ?: "Class records could not be refreshed (${r.code()})."\n            if (section == "Settings") {\n                val h = api.health()\n                if (h.isSuccessful) health = h.body().orEmpty() else error = error ?: "System health could not be checked (${h.code()})."\n                val st = api.storageStats()\n                if (st.isSuccessful) storage = st.body().orEmpty() else error = error ?: "Storage administration is unavailable (${st.code()})."\n            }
         } catch (_: Exception) {
             error = "ClassDesk could not connect. Check your connection; your account data has not been changed."
         } finally { loading = false }
@@ -109,11 +109,36 @@ fun NativeParityScreen(section: String, api: ClassDeskApi, user: UserDto) {
                 ParityCard("SIGNED-IN ACCOUNT", user.displayName)
                 ParityCard("USERNAME", user.username)
                 ParityCard("ACCESS ROLE", user.role.replace('_', ' '))
-                ParityCard("API SERVICE", "Authenticated ClassDesk API")
                 ParityCard("SESSION SECURITY", "Session cookies are stored using Android encrypted preferences.")
                 ParityCard("MICROPHONE PRIVACY", "Ava only requests microphone access after you tap its microphone control.")
-                ParityCard("DATA SHARING", "The Android app and website read and write to the same ClassDesk account and backend.")
-                Text("Administrative backup and restore controls are restricted to the primary account and are being added as a separate protected workflow.", color = NativeMuted, fontSize = 11.sp)
+                ParityCard("SHARED DATA", "The Android app and website use the same authenticated ClassDesk account and backend.")
+                Text("SYSTEM HEALTH", color = NativeGold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                ParityCard("DATABASE", if (health["databaseReachable"] == true) "Reachable" else "Unavailable / not verified")
+                ParityCard("OBJECT STORAGE", if (health["storageConfigured"] == true) "Configured" else "Not configured")
+                ParityCard("AI SERVICE", if (health["aiConfigured"] == true) "Configured" else "Not configured")
+                ParityCard("SPEECH SERVICES", "STT: ${health["sttConfigured"] == true} / TTS: ${health["ttsConfigured"] == true}")
+                Text("SQL STORAGE / ADMINISTRATION", color = NativeGold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                val counts = storage["counts"] as? Map<*, *> ?: emptyMap<Any, Any>()
+                counts.forEach { (key, value) -> ParityCard(key.toString(), value.toString()) }
+                val dbBytes = storage["databaseBytes"]?.toString() ?: "Not available"
+                ParityCard("DATABASE SIZE", dbBytes + " bytes")
+                if (user.role == "CLASS_REP") {
+                    OutlinedTextField(cleanupPhrase, { cleanupPhrase = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Type CLEANUP_CLASSDESK_SQL to confirm temporary-data cleanup") }, singleLine = true)
+                    Button(onClick = {
+                        scope.launch {
+                            try {
+                                val result = api.cleanupStorage(mapOf("confirmation" to cleanupPhrase, "retentionDays" to 30))
+                                if (result.isSuccessful) {
+                                    cleanupMessage = "Temporary SQL data cleanup completed. Class content is not deleted."
+                                    cleanupPhrase = ""
+                                    load()
+                                } else cleanupMessage = "Cleanup was rejected (${result.code()})."
+                            } catch (_: Exception) { cleanupMessage = "Cleanup service could not be reached." }
+                        }
+                    }, enabled = cleanupPhrase == "CLEANUP_CLASSDESK_SQL") { Text("CLEAN TEMPORARY SQL DATA") }
+                    cleanupMessage?.let { Text(it, color = NativeCyan, fontSize = 11.sp) }
+                }
+                Text("Backups and restore are available in More / Backup & Export. Destructive document deletion remains in the Document Library and is protected by server-side permissions.", color = NativeMuted, fontSize = 11.sp)
             }
         }
     }
