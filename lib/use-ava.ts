@@ -53,8 +53,11 @@ export function useAva(handlers: AvaHandlers) {
   const [voiceError, setVoiceError] = useState("");
   const [voices, setVoices] = useState<string[]>([]);
   const [voiceName, setVoiceNameState] = useState("");
-  const [cloud, setCloud] = useState({ tts: false });
-  const cloudRef = useRef({ tts: false });
+  const [cloud, setCloud] = useState({ tts: false, stt: false });
+  const cloudRef = useRef({ tts: false, stt: false });
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const recRef = useRef<Rec | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playToken = useRef(0);
@@ -135,62 +138,115 @@ export function useAva(handlers: AvaHandlers) {
       .finally(() => setProcessing(false));
   }, []);
 
+  const startCloudRecorder = useCallback(async () => {
+    if (!cloudRef.current.stt) {
+      wantRef.current = false;
+      setVoiceError("This browser has no built-in speech recognition and cloud transcription is not configured. Use Chrome or type to Ava.");
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      wantRef.current = false;
+      setVoiceError("This browser cannot record audio. Use a supported browser or type to Ava.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      if (!wantRef.current) { stream.getTracks().forEach(track => track.stop()); return; }
+      const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"].find(type => MediaRecorder.isTypeSupported(type));
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      mediaStreamRef.current = stream;
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+      recorder.ondataavailable = event => { if (event.data.size) audioChunksRef.current.push(event.data); };
+      recorder.onerror = () => {
+        wantRef.current = false;
+        setListening(false);
+        setVoiceError("Audio recording failed. Check microphone permission and try again.");
+        stream.getTracks().forEach(track => track.stop());
+      };
+      recorder.onstop = async () => {
+        setListening(false);
+        setProcessing(true);
+        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        audioChunksRef.current = [];
+        stream.getTracks().forEach(track => track.stop());
+        mediaStreamRef.current = null;
+        mediaRecorderRef.current = null;
+        if (!blob.size) { setProcessing(false); setVoiceError("No audio was recorded. Tap the microphone and try again."); return; }
+        try {
+          const extension = blob.type.includes("mp4") ? "m4a" : blob.type.includes("ogg") ? "ogg" : "webm";
+          const form = new FormData();
+          form.set("file", blob, `ava-recording.${extension}`);
+          const response = await fetch("/api/voice/transcribe", { method: "POST", body: form });
+          const result = await response.json();
+          if (!response.ok) throw new Error(typeof result.error === "string" ? result.error : "Ava could not transcribe that recording.");
+          handleFinal(typeof result.text === "string" ? result.text : "");
+        } catch (error) {
+          setVoiceError(error instanceof Error ? error.message : "Cloud transcription failed. Please try again.");
+        } finally {
+          setProcessing(false);
+        }
+      };
+      recorder.start(500);
+      setListening(true);
+    } catch (error) {
+      wantRef.current = false;
+      setListening(false);
+      setVoiceError(error instanceof Error && error.name === "NotAllowedError"
+        ? "Microphone permission was denied. Allow microphone access in your browser settings, then tap again."
+        : "Ava could not start audio recording. Check that the page is open over HTTPS and microphone access is allowed.");
+    }
+  }, [handleFinal]);
+
   const startBrowserRec = useCallback(() => {
     const w = window as unknown as { SpeechRecognition?: RecCtor; webkitSpeechRecognition?: RecCtor };
     const Ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
-    if (!Ctor) { setVoiceError("This browser does not provide speech recognition. Please use a supported browser such as Chrome, Edge or Safari."); wantRef.current = false; return false; }
+    if (!Ctor) return false;
     const rec = new Ctor(); rec.lang = "en-NG"; rec.continuous = true; rec.interimResults = false;
     rec.onresult = (e: any) => { for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) handleFinal(e.results[i][0].transcript); };
     rec.onerror = (e) => {
       if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-        wantRef.current = false;
-        setListening(false);
+        wantRef.current = false; setListening(false);
         setVoiceError("Microphone permission was denied. Allow microphone access in your browser settings, then tap the microphone again.");
-      } else if (e.error === "language-not-supported") {
-        rec.lang = "en-US";
-      } else if (e.error === "network") {
-        wantRef.current = false;
-        setListening(false);
-        setVoiceError(navigator.onLine
-          ? "The browser speech service could not be reached. Check your connection or try Chrome or Edge."
-          : "You're offline. Website speech recognition needs a connection; you can still type to Ava.");
+      } else if (e.error === "language-not-supported") rec.lang = "en-US";
+      else if (e.error === "network") {
+        wantRef.current = false; setListening(false);
+        setVoiceError(navigator.onLine ? "The browser speech service could not be reached. Try the cloud recording fallback in a browser without built-in recognition, or use Chrome or Edge." : "You're offline. Website speech recognition needs a connection; you can still type to Ava.");
       } else if (e.error === "audio-capture") {
-        wantRef.current = false;
-        setListening(false);
+        wantRef.current = false; setListening(false);
         setVoiceError("The browser could not access a microphone. Check that your microphone is connected and permitted.");
       } else if (e.error === "aborted" && wantRef.current) {
-        wantRef.current = false;
-        setListening(false);
+        wantRef.current = false; setListening(false);
         setVoiceError("The browser stopped the speech session. Tap the microphone to start a fresh session.");
       }
     };
     rec.onend = () => {
       if (!wantRef.current) { setListening(false); return; }
-      try {
-        rec.start();
-      } catch {
-        wantRef.current = false;
-        setListening(false);
-        setVoiceError("The browser speech session stopped unexpectedly. Tap the microphone to try again.");
-      }
+      try { rec.start(); }
+      catch { wantRef.current = false; setListening(false); setVoiceError("The browser speech session stopped unexpectedly. Tap the microphone to try again."); }
     };
     recRef.current = rec;
     try { rec.start(); return true; } catch { setVoiceError("Could not start the microphone."); return false; }
   }, [handleFinal]);
 
-  const start = useCallback(() => {
+  const start = useCallback(async () => {
     setVoiceError("");
     wantRef.current = true;
     if (startBrowserRec()) {
       if (!wantRef.current) { recRef.current?.abort(); recRef.current = null; return; }
       setListening(true);
       setTimeout(() => { if (wantRef.current) speak("Ava is ready. Go ahead."); }, 300);
+      return;
     }
-  }, [startBrowserRec, speak]);
+    await startCloudRecorder();
+  }, [startBrowserRec, startCloudRecorder, speak]);
 
   const stop = useCallback(() => {
-    wantRef.current = false; awakeUntil.current = 0; setAwake(false); setListening(false); setProcessing(false);
-    recRef.current?.abort(); recRef.current = null; stopSpeaking();
+    wantRef.current = false; awakeUntil.current = 0; setAwake(false); setListening(false);
+    recRef.current?.abort(); recRef.current = null;
+    if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
+    else mediaStreamRef.current?.getTracks().forEach(track => track.stop());
+    stopSpeaking();
     handlersRef.current.onStopListening?.();
   }, [stopSpeaking]);
 
@@ -200,14 +256,15 @@ export function useAva(handlers: AvaHandlers) {
     const w = window as any; const hasBrowserRec = Boolean(w.SpeechRecognition || w.webkitSpeechRecognition);
     setSupported(hasBrowserRec);
     fetch("/api/health").then(r => r.json()).then(d => {
-      const flags = { tts: Boolean(d.ttsConfigured) };
+      const flags = { tts: Boolean(d.ttsConfigured), stt: Boolean(d.sttConfigured) };
       cloudRef.current = flags;
       setCloud(flags);
-    }).catch(() => { setCloud({ tts: false }); });
+      setSupported(hasBrowserRec || (flags.stt && Boolean(navigator.mediaDevices?.getUserMedia) && typeof MediaRecorder !== "undefined"));
+    }).catch(() => { setCloud({ tts: false, stt: false }); });
     const loadVoices = () => setVoices(window.speechSynthesis?.getVoices().filter(v => v.lang.toLowerCase().startsWith("en")).map(v => v.name) || []);
     try { const saved = localStorage.getItem("ava-voice"); if (saved) { voiceRef.current = saved; setVoiceNameState(saved); } } catch { /* ignore */ }
     loadVoices(); window.speechSynthesis?.addEventListener?.("voiceschanged", loadVoices);
-    return () => { window.speechSynthesis?.removeEventListener?.("voiceschanged", loadVoices); wantRef.current = false; recRef.current?.abort(); stopSpeaking(); };
+    return () => { window.speechSynthesis?.removeEventListener?.("voiceschanged", loadVoices); wantRef.current = false; recRef.current?.abort(); if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop(); mediaStreamRef.current?.getTracks().forEach(track => track.stop()); stopSpeaking(); };
   }, [stopSpeaking]);
 
   return { supported, listening, speaking, processing, awake, heard, voiceError, toggle, stop, speak, shutUp, voices, voiceName, setVoiceName, cloud };
