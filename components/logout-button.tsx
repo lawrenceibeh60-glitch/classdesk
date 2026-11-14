@@ -5,9 +5,12 @@ export default function LogoutButton() {
   const [busy, setBusy] = useState(false);
   async function logout() {
     if (busy) return;
-    const pending = offlineDB ? await offlineDB.outbox.count() : 0;
+    const pendingCounts = offlineDB
+      ? await Promise.all([offlineDB.outbox.count(), offlineDB.academicQueue.count(), offlineDB.aiQueue.count(), offlineDB.uploads.count()])
+      : [0, 0, 0, 0];
+    const pending = pendingCounts.reduce((total, count) => total + count, 0);
     const warning = pending
-      ? `${pending} offline change(s) have not synced. Signing out will erase this device's local ClassDesk cache and pending changes. Continue?`
+      ? `${pending} offline item(s) — including edits, AI requests or uploads — have not synced. Signing out will erase them from this device. Continue?`
       : "Sign out and clear private ClassDesk data cached on this device?";
     if (!confirm(warning)) return;
     setBusy(true);
