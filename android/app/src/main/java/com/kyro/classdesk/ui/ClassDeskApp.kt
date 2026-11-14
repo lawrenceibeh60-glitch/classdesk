@@ -293,7 +293,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
         bottomBar = {
             NavigationBar(containerColor = Panel, contentColor = Cyan) {
                 listOf("Overview", "Courses", "Tasks", "More", "Ava").forEach { item ->
-                    NavigationBarItem(selected = selected == item || (item == "More" && selected in listOf("Lectures", "Attendance", "Concerns", "Announcements", "Calendar", "Documents")), onClick = { selected = item },
+                    NavigationBarItem(selected = selected == item || (item == "More" && selected in listOf("Lectures", "Attendance", "Concerns", "Announcements", "Calendar", "Documents", "Sync Queue")), onClick = { selected = item },
                         icon = { Icon(when (item) {
                             "Courses" -> Icons.Default.MenuBook
                             "Tasks" -> Icons.Default.CheckCircle
@@ -428,7 +428,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                 )
             } else if (selected == "More") {
                 Text("CLASS OPERATIONS", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
-                listOf("Lectures", "Attendance", "Concerns", "Announcements", "Calendar", "Documents").forEach { module ->
+                listOf("Lectures", "Attendance", "Concerns", "Announcements", "Calendar", "Documents", "Sync Queue").forEach { module ->
                     OutlinedButton(onClick = { selected = module }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(6.dp)) {
                         Text(module.uppercase(), color = Cyan, modifier = Modifier.fillMaxWidth())
                     }
@@ -631,6 +631,8 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                     } }, enabled = calendarTitle.isNotBlank() && calendarDate.isNotBlank() && calendarType in listOf("TIMETABLE", "CALENDAR")) { Text("SAVE") } },
                     dismissButton = { TextButton(onClick = { showCalendarDialog = false }) { Text("CANCEL") } }
                 )
+            } else if (selected == "Sync Queue") {
+                OfflineQueueScreen(user)
             } else if (selected == "Documents") {
                 DocumentLibraryScreen(api, user.role == "CLASS_REP")
             } else if (selected == "Announcements") {
