@@ -443,7 +443,7 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                 }
             } else if (selected == "Courses") {
                 Text("COURSE REGISTER", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
-                Button(onClick = { showCourseDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD COURSE") }
+                Button(onClick = { editingCourseId = null; courseCode = ""; courseName = ""; courseDescription = ""; lecturer = ""; semester = ""; showCourseDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD COURSE") }
                 if (moduleLoading) CircularProgressIndicator(color = Cyan)
                 moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
                 if (!moduleLoading && courses.isEmpty()) Text("No courses have been added yet.", color = Muted)
@@ -508,7 +508,7 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                 )
             } else if (selected == "Tasks") {
                 Text("ASSIGNMENTS / DEADLINES", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
-                Button(onClick = { showAssignmentDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD ASSIGNMENT") }
+                Button(onClick = { editingAssignmentId = null; assignmentCourseId = null; assignmentTitle = ""; assignmentDetails = ""; assignmentSubmissionInstructions = ""; assignmentSource = ""; assignmentDueAt = ""; showAssignmentDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD ASSIGNMENT") }
                 if (moduleLoading) CircularProgressIndicator(color = Cyan)
                 moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
                 if (!moduleLoading && assignments.isEmpty()) Text("No assignments have been recorded.", color = Muted)
@@ -589,7 +589,7 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                 Text("Native academic tools, records, catch-up views and account diagnostics.", color = Muted, fontSize = 12.sp)
             } else if (selected == "Lectures") {
                 Text("LECTURE REGISTER", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
-                Button(onClick = { showLectureDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD LECTURE") }
+                Button(onClick = { editingLectureId = null; lectureCourseId = null; lectureTopic = ""; lectureSummary = ""; lectureScheduledDate = ""; lectureDate = ""; lectureVenue = ""; lectureLecturer = ""; showLectureDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD LECTURE") }
                 if (moduleLoading) CircularProgressIndicator(color = Cyan)
                 moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
                 if (!moduleLoading && lectures.isEmpty()) Text("No lectures have been recorded.", color = Muted)
@@ -643,7 +643,7 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                 )
             } else if (selected == "Attendance") {
                 Text("ATTENDANCE SUMMARIES", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
-                Button(onClick = { showAttendanceDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD SUMMARY") }
+                Button(onClick = { editingAttendanceId = null; attendanceCourseId = null; attendanceDate = ""; attendancePresent = ""; attendanceAbsent = ""; attendanceNote = ""; showAttendanceDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD SUMMARY") }
                 if (moduleLoading) CircularProgressIndicator(color = Cyan)
                 moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
                 if (!moduleLoading && attendance.isEmpty()) Text("No attendance summaries have been recorded.", color = Muted)
@@ -699,7 +699,7 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                 )
             } else if (selected == "Concerns") {
                 Text("CLASS CONCERNS", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
-                Button(onClick = { showConcernDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD CONCERN") }
+                Button(onClick = { editingConcernId = null; concernCategory = "GENERAL"; concernTitle = ""; concernDetails = ""; concernResolution = ""; showConcernDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD CONCERN") }
                 if (moduleLoading) CircularProgressIndicator(color = Cyan)
                 moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
                 if (!moduleLoading && concerns.isEmpty()) Text("No class concerns have been recorded.", color = Muted)
@@ -763,7 +763,7 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                 )
             } else if (selected == "Calendar") {
                 Text("CALENDAR / TIMETABLE", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
-                Button(onClick = { showCalendarDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD EVENT") }
+                Button(onClick = { editingCalendarId = null; calendarTitle = ""; calendarContent = ""; calendarDate = ""; calendarType = "TIMETABLE"; showCalendarDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD EVENT") }
                 if (moduleLoading) CircularProgressIndicator(color = Cyan)
                 moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
                 if (!moduleLoading && calendarItems.isEmpty()) Text("No upcoming class events are recorded.", color = Muted)
@@ -874,7 +874,7 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                 BackupToolsScreen(api, user.role == "CLASS_REP")
             } else if (selected == "Announcements") {
                 Text("ANNOUNCEMENT STUDIO", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
-                Button(onClick = { showAnnouncementDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ NEW DRAFT") }
+                Button(onClick = { announcementTitle = ""; announcementBody = ""; announcementCategory = "GENERAL"; showAnnouncementDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ NEW DRAFT") }
                 if (moduleLoading) CircularProgressIndicator(color = Cyan)
                 moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
                 if (!moduleLoading && announcements.isEmpty()) Text("No announcements have been drafted.", color = Muted)
