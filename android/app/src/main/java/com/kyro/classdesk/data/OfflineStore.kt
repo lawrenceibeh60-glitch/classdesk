@@ -14,6 +14,15 @@ data class PendingMutation(
     val payloadJson: String
 )
 
+data class OfflineQueueEntry(
+    val id: String,
+    val entityId: String,
+    val operation: String,
+    val status: String,
+    val lastError: String?,
+    val createdAt: Long
+)
+
 class OfflineStore(private val context: Context) : SQLiteOpenHelper(context, "classdesk-offline.db", null, 2) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("""CREATE TABLE pending_mutations (
@@ -72,6 +81,24 @@ class OfflineStore(private val context: Context) : SQLiteOpenHelper(context, "cl
                     mark(id, "CORRUPT", "Offline payload could not be decrypted; retained for recovery.")
                 }
             }
+        }
+        return result
+    }
+
+    @Synchronized
+    fun entries(ownerUsername: String): List<OfflineQueueEntry> {
+        val result = mutableListOf<OfflineQueueEntry>()
+        readableDatabase.query(
+            "pending_mutations",
+            arrayOf("id", "entity_id", "operation", "status", "last_error", "created_at"),
+            "owner_username = ?",
+            arrayOf(ownerUsername),
+            null, null, "created_at DESC"
+        ).use { cursor ->
+            while (cursor.moveToNext()) result += OfflineQueueEntry(
+                cursor.getString(0), cursor.getString(1), cursor.getString(2),
+                cursor.getString(3), cursor.getString(4), cursor.getLong(5)
+            )
         }
         return result
     }
