@@ -7,6 +7,11 @@ import retrofit2.http.PATCH
 import retrofit2.http.DELETE
 import retrofit2.http.POST
 import retrofit2.http.Query
+import retrofit2.http.Multipart
+import retrofit2.http.Part
+import retrofit2.http.PartMap
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 
 interface ClassDeskApi {
     @POST("api/auth/login")
@@ -41,6 +46,16 @@ interface ClassDeskApi {
 
     @GET("api/announcements")
     suspend fun announcements(): Response<AnnouncementsEnvelope>
+
+    @GET("api/documents")
+    suspend fun documents(): Response<DocumentsEnvelope>
+
+    @Multipart
+    @POST("api/documents")
+    suspend fun uploadDocument(@Part file: MultipartBody.Part, @PartMap fields: Map<String, @JvmSuppressWildcards RequestBody>): Response<Map<String, Any>>
+
+    @DELETE("api/documents")
+    suspend fun deleteDocument(@Query("id") id: String): Response<Map<String, Any>>
 
     @POST("api/announcements")
     suspend fun createAnnouncement(@Body body: Map<String, String>): Response<Map<String, Any>>
