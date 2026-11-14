@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { db } from "@/lib/db";
-import { requireAdmin } from "@/lib/http";
+import { requireStaff } from "@/lib/http";
 export const runtime = "nodejs";
 function wrap(value: string, max = 92) {
   const words = value.replace(/\s+/g, " ").trim().split(" "); const lines: string[] = []; let line = "";
@@ -9,7 +9,7 @@ function wrap(value: string, max = 92) {
   if (line) lines.push(line); return lines.length ? lines : [""];
 }
 export async function GET() {
-  const denied = await requireAdmin(); if (denied) return denied;
+  const denied = await requireStaff(); if (denied) return denied;
   const [courses, lectures, assignments, announcements, concerns] = await Promise.all([
     db.course.findMany({ where: { active: true }, orderBy: { code: "asc" } }),
     db.lectureSession.findMany({ include: { course: { select: { code: true } } }, orderBy: { createdAt: "desc" }, take: 100 }),
