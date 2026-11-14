@@ -9,14 +9,18 @@ export async function GET() {
   const denied = await requirePrimaryAdmin();
   if (denied) return denied;
 
-  const [records, documents, chunks, announcements, announcementVersions, courses, assignments, syncPending, syncApplied, rateLimitBuckets, aiReceipts] = await Promise.all([
+  const [records, documents, chunks, announcements, announcementVersions, announcementEvents, courses, lectures, assignments, attendance, concerns, syncPending, syncApplied, rateLimitBuckets, aiReceipts] = await Promise.all([
     db.academicRecord.count(),
     db.document.count(),
     db.documentChunk.count(),
     db.announcement.count(),
     db.announcementVersion.count(),
+    db.announcementEvent.count(),
     db.course.count(),
+    db.lectureSession.count(),
     db.assignment.count(),
+    db.attendanceSummary.count(),
+    db.classConcern.count(),
     db.syncMutation.count({ where: { appliedAt: null } }),
     db.syncMutation.count({ where: { appliedAt: { not: null } } }),
     db.rateLimitBucket.count(),
@@ -40,8 +44,9 @@ export async function GET() {
   }
 
   return NextResponse.json({
-    counts: { records, documents, chunks, announcements, announcementVersions, courses, assignments, syncPending, syncApplied, rateLimitBuckets, aiReceipts },
+    counts: { records, documents, chunks, announcements, announcementVersions, announcementEvents, courses, lectures, assignments, attendance, concerns, syncPending, syncApplied, rateLimitBuckets, aiReceipts },
     databaseBytes,
+    tableSizes,
     cleanupPolicy: "Only expired rate-limit buckets, old applied non-deletion sync receipts and old AI idempotency receipts are eligible. Deletion tombstones are retained so long-offline devices can still receive deletions. Class records, announcements, documents and extracted text are never bulk-deleted here.",
   }, { headers: { "Cache-Control": "no-store" } });
 }
