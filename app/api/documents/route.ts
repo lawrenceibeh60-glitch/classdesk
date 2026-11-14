@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
-import { requireAdmin, assertSameOrigin, rateLimit, clientIp } from "@/lib/http";
+import { requireAdmin, requirePrimaryAdmin, assertSameOrigin, rateLimit, clientIp } from "@/lib/http";
 import { extractText, splitIntoChunks } from "@/lib/ingest";
 import { storeObject, deleteObject } from "@/lib/storage";
 import { scanWithClamAV } from "@/lib/malware";
@@ -83,6 +83,7 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const originDenied = assertSameOrigin(req); if (originDenied) return originDenied;
   const denied = await requireAdmin(); if (denied) return denied;
+  const primaryDenied = await requirePrimaryAdmin(); if (primaryDenied) return primaryDenied;
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
   const doc = await db.document.findUnique({ where: { id }, select: { storageKey: true } });
