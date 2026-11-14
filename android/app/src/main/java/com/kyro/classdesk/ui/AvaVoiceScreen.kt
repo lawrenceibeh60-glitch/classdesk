@@ -140,9 +140,11 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
                 })
             }
         }
-        val engine = TextToSpeech(context) { status -> ttsReady = status == TextToSpeech.SUCCESS }
+        val engine = TextToSpeech(context) { status ->
+            ttsReady = status == TextToSpeech.SUCCESS
+            if (status == TextToSpeech.SUCCESS) speech?.language = Locale.UK
+        }
         speech = engine
-        engine.language = Locale.UK
         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) { speaking = true }
             override fun onDone(utteranceId: String?) { speaking = false }
