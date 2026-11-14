@@ -44,11 +44,10 @@ Open the `android/` folder in Android Studio, allow Gradle sync, install the SDK
 
 ## Release-readiness work still required
 
-1. Run the Android verification workflow and confirm Kotlin compilation plus the calendar input unit tests pass on the current branch.
-2. Run the web CI pipeline (source verification, Prisma validation/migrations against CI PostgreSQL, TypeScript, lint and production build).
-3. Complete physical-device acceptance testing for sign-in, both staff roles, Ava microphone permission and one-tap-per-request behavior, notifications, file upload/download, backup/restore, offline queue replay, account switching and logout.
-4. Review and complete offline mutation coverage for any remaining editable screens; rejected/conflicted queue entries currently require review rather than automatic conflict resolution.
-5. Confirm the production API origin and configure release signing credentials securely outside the repository.
-6. Build and inspect a signed release APK/AAB only after the owner authorizes the release build.
+1. **CI verification passed on the current branch** at commit `b1b7cfdc71f84b8c20009ed7c5d52a80362dc0de`: Android Kotlin compilation and unit tests passed; web source verification, Prisma checks, TypeScript, lint and production build passed.
+2. Complete physical-device acceptance testing for sign-in, both staff roles, Ava microphone permission and one-tap-per-request behavior, notifications, file upload/download, backup/restore, offline queue replay, account switching and logout. CI success does not replace this device testing.
+3. Review and complete offline mutation coverage for any remaining editable screens; rejected/conflicted queue entries currently require review rather than automatic conflict resolution.
+4. Confirm the production API origin and configure release signing credentials securely outside the repository.
+5. Build and inspect a signed release APK/AAB only after the owner authorizes the release build.
 
 The Android verification workflow compiles the app and runs available unit tests; it does not package or publish an APK. The separate APK workflow is manual-only. No production deployment, merge to `main`, production database mutation or APK release is authorized by this development branch.
