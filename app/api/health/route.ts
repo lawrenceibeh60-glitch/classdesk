@@ -21,6 +21,7 @@ export async function GET() {
   // Vercel Workflows are platform-managed; availability no longer depends on
   // a separate process heartbeat stored in AiWorkerState.
   const avaTaskEngineConfigured = Boolean(
+    databaseReachable &&
     (process.env.DATABASE_URL_POOLED || process.env.DATABASE_URL) &&
     process.env.AI_BASE_URL && process.env.AI_API_KEY && process.env.AI_MODEL &&
     storageConfigured
