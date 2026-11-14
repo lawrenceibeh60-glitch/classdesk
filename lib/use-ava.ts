@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 /* Minimal Web Speech typings (not in the TS DOM lib). */
 type Rec = { lang: string; continuous: boolean; interimResults: boolean; onresult: ((e: any) => void) | null; onend: (() => void) | null; onerror: ((e: { error: string }) => void) | null; start(): void; stop(): void; abort(): void };
 type RecCtor = new () => Rec;
+const AWAKE_MS = 8000;
 
 
 export function cleanForSpeech(text: string) {
