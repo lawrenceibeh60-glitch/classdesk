@@ -209,6 +209,7 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
     var lectureCourseId by remember { mutableStateOf<String?>(null) }
     var lectureTopic by remember { mutableStateOf("") }
     var lectureSummary by remember { mutableStateOf("") }
+    var lectureScheduledDate by remember { mutableStateOf("") }
     var lectureDate by remember { mutableStateOf("") }
     var lectureVenue by remember { mutableStateOf("") }
     var showAttendanceDialog by remember { mutableStateOf(false) }
@@ -594,7 +595,7 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                             TextButton(onClick = {
                                 editingLectureId = item.id
                                 lectureCourseId = item.course?.id; lectureTopic = item.topic; lectureSummary = item.summary.orEmpty()
-                                lectureDate = item.heldAt ?: item.scheduledAt.orEmpty(); lectureVenue = item.venue.orEmpty()
+                                lectureScheduledDate = item.scheduledAt.orEmpty(); lectureDate = item.heldAt.orEmpty(); lectureVenue = item.venue.orEmpty()
                                 showLectureDialog = true
                             }) { Text("EDIT", color = Cyan, fontSize = 10.sp) }
                             if (user.role == "CLASS_REP") TextButton(onClick = {
@@ -611,20 +612,22 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                     onDismissRequest = { showLectureDialog = false },
                     title = { Text(if (editingLectureId == null) "Add lecture" else "Edit lecture") },
                     text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CoursePicker(courses, lectureCourseId) { lectureCourseId = it }
                         OutlinedTextField(lectureTopic, { lectureTopic = it }, label = { Text("Topic") }, singleLine = true)
                         OutlinedTextField(lectureSummary, { lectureSummary = it }, label = { Text("Summary") }, minLines = 2)
+                        OutlinedTextField(lectureScheduledDate, { lectureScheduledDate = it }, label = { Text("Scheduled date/time (ISO, optional)") }, singleLine = true)
                         OutlinedTextField(lectureDate, { lectureDate = it }, label = { Text("Held date/time (ISO, optional)") }, singleLine = true)
                         OutlinedTextField(lectureVenue, { lectureVenue = it }, label = { Text("Venue (optional)") }, singleLine = true)
                     } },
                     confirmButton = { TextButton(onClick = { scope.launch {
                         val id = editingLectureId
-                        val payload = mapOf("courseId" to lectureCourseId.orEmpty(), "topic" to lectureTopic.trim(), "summary" to lectureSummary.trim(), "heldAt" to lectureDate.trim(), "venue" to lectureVenue.trim())
+                        val payload = mapOf("courseId" to lectureCourseId.orEmpty(), "topic" to lectureTopic.trim(), "summary" to lectureSummary.trim(), "scheduledAt" to lectureScheduledDate.trim(), "heldAt" to lectureDate.trim(), "venue" to lectureVenue.trim())
                         val saved = mutateAcademic("lectures", if (id == null) "POST" else "PATCH", if (id == null) payload else payload + mapOf("id" to id))
                         if (saved.isSuccessful) {
-                            if (saved.queued && id != null) lectures = lectures.map { if (it.id == id) it.copy(topic = lectureTopic.trim(), summary = lectureSummary.trim(), heldAt = lectureDate.trim().ifBlank { null }, venue = lectureVenue.trim().ifBlank { null }, course = courses.firstOrNull { course -> course.id == lectureCourseId }?.let { course -> CourseRef(course.id, course.code, course.name) }) else it }
+                            if (saved.queued && id != null) lectures = lectures.map { if (it.id == id) it.copy(topic = lectureTopic.trim(), summary = lectureSummary.trim(), scheduledAt = lectureScheduledDate.trim().ifBlank { null }, heldAt = lectureDate.trim().ifBlank { null }, venue = lectureVenue.trim().ifBlank { null }, course = courses.firstOrNull { course -> course.id == lectureCourseId }?.let { course -> CourseRef(course.id, course.code, course.name) }) else it }
                             if (!saved.queued) lectures = api.lectures().body()?.items.orEmpty()
                             editingLectureId = null
-                            lectureCourseId = null; lectureTopic = ""; lectureSummary = ""; lectureDate = ""; lectureVenue = ""
+                            lectureCourseId = null; lectureTopic = ""; lectureSummary = ""; lectureScheduledDate = ""; lectureDate = ""; lectureVenue = ""
                             showLectureDialog = false
                         } else moduleError = saved.message ?: "Lecture could not be saved. Check the date format."
                     } }, enabled = lectureTopic.isNotBlank()) { Text("SAVE") } },
@@ -666,6 +669,7 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                     onDismissRequest = { showAttendanceDialog = false },
                     title = { Text(if (editingAttendanceId == null) "Add attendance summary" else "Edit attendance summary") },
                     text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CoursePicker(courses, attendanceCourseId) { attendanceCourseId = it }
                         OutlinedTextField(attendanceDate, { attendanceDate = it }, label = { Text("Session date (YYYY-MM-DD)") }, singleLine = true)
                         OutlinedTextField(attendancePresent, { attendancePresent = it }, label = { Text("Present count") }, singleLine = true)
                         OutlinedTextField(attendanceAbsent, { attendanceAbsent = it }, label = { Text("Absent count") }, singleLine = true)
