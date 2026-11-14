@@ -105,3 +105,8 @@ assert.match(read("app/calendar/page.tsx"), /isPrimaryAdmin=\{user\.role === "CL
 
 assert.match(academicManagerSource, /mode === "courses" && changes\.active === false && !isPrimaryAdmin/, "Assistant account must not deactivate courses from the academic manager");
 assert.match(academicManagerSource, /mode === "courses" && \(!item\.active \|\| isPrimaryAdmin\)/, "Course deactivation control must be hidden from the assistant account");
+
+assert.match(academicManagerSource, /if \(!isPrimaryAdmin\).*Only the Class Representative can delete academic items/, "Academic deletion handler must enforce primary-admin access");
+assert.match(announcementStudioSource, /if \(!isPrimaryAdmin\).*Only the Class Representative can delete announcements/, "Announcement deletion handler must enforce primary-admin access");
+assert.match(recordsManagerSource, /if \(!isPrimaryAdmin\).*Only the Class Representative can delete records/, "Record deletion handler must enforce primary-admin access");
+assert.match(recordsManagerSource, /if \(!queuedUpload && !isPrimaryAdmin\)/, "Stored document deletion must be restricted to the primary account");
