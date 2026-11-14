@@ -39,8 +39,8 @@ function accountConfig(): CredentialAccount[] {
   if (!classRepHash || !assistantHash) {
     throw new Error("Configure CLASS_REP_PASSWORD_HASH and ASSISTANT_REP_PASSWORD_HASH before enabling ClassDesk sign-in");
   }
-  if (classRepUsername.length < 3 || assistantUsername.length < 3 || classRepUsername === assistantUsername) {
-    throw new Error("ClassDesk account usernames must be distinct and contain at least 3 characters");
+  if (classRepUsername.length < 3 || assistantUsername.length < 3 || classRepUsername.length > 80 || assistantUsername.length > 80 || classRepUsername === assistantUsername) {
+    throw new Error("ClassDesk account usernames must be distinct and contain 3 to 80 characters");
   }
 
   return [
