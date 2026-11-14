@@ -26,6 +26,9 @@ assert.ok(sourceText.includes("assertSameOrigin") && sourceText.includes("rateLi
 assert.match(read("lib/storage.ts"), /requireProductionObjectStorage/, "Production uploads must fail closed without shared object storage");
 assert.match(read("lib/storage.ts"), /NODE_ENV === "production"/, "Production storage configuration must be enforced");
 assert.match(read("app/api/sync/route.ts"), /ASSISTANT_REP.*delete|ASSISTANT_REP.*operation === "delete"/s, "Offline sync must enforce assistant delete restrictions");
+assert.match(read("app/api/sync/route.ts"), /allowedStatuses/, "Offline sync must reject unknown record statuses");
+assert.match(read("app/api/sync/route.ts"), /Only the Class Representative can set approval, publication or archive states/, "Offline sync must enforce primary-only protected status changes");
+assert.match(read("app/api/documents/route.ts"), /Shared file storage is unavailable[\\s\\S]*status: 503/, "Document uploads must report unavailable shared storage as HTTP 503");
 const authSource = read("lib/auth.ts");
 assert.match(authSource, /CLASS_REP_PASSWORD_HASH/, "Primary account credential configuration is missing");
 assert.match(authSource, /ASSISTANT_REP_PASSWORD_HASH/, "Assistant account credential configuration is missing");
