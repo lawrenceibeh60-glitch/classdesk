@@ -1,4 +1,7 @@
 name: ClassDesk CI
+concurrency:
+  group: classdesk-ci-${{ github.ref }}
+  cancel-in-progress: true
 on:
   push:
     branches: [main, work/**, feat/**]
