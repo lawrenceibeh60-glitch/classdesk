@@ -60,8 +60,7 @@ export async function authenticateCredentials(username: string, password: string
   }
   const valid = await bcrypt.compare(password, account.passwordHash);
   if (!valid) return null;
-  const { passwordHash: _passwordHash, ...user } = account;
-  return user;
+  return { id: account.id, username: account.username, displayName: account.displayName, role: account.role };
 }
 
 export async function createSession(user: SessionUser) {
@@ -99,7 +98,7 @@ export async function getSession(): Promise<SessionUser | null> {
     });
     if (
       (payload.role !== "CLASS_REP" && payload.role !== "ASSISTANT_REP") ||
-      typeof payload.sub !== "string" ||
+      payload.sub !== (payload.role === "CLASS_REP" ? "class-rep" : "assistant-rep") ||
       typeof payload.username !== "string" ||
       typeof payload.displayName !== "string"
     ) return null;
