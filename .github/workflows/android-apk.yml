@@ -2,6 +2,11 @@ name: Android APK build
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - ".github/workflows/android-apk.yml"
     inputs:
       api_base_url:
         description: "HTTPS URL of the deployed ClassDesk website/API (include the host only; trailing slash is optional)"
