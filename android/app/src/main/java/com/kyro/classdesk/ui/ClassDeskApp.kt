@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import com.kyro.classdesk.BuildConfig
 import com.kyro.classdesk.data.*
+import com.google.gson.Gson
 import kotlinx.coroutines.launch
 
 private val Canvas = Color(0xFF0A1019)
@@ -41,21 +42,37 @@ fun ClassDeskApp() {
     var upcoming by remember { mutableStateOf<List<AssignmentDto>>(emptyList()) }
 
     suspend fun refreshSession() {
+        val secureStore = ApiClient.cookies(context)
+        fun restoreOfflineSnapshot() {
+            user = secureStore.loadUser()
+            summary = secureStore.loadSnapshot("summary")?.let { runCatching { Gson().fromJson(it, SummaryDto::class.java) }.getOrNull() }
+            upcoming = secureStore.loadSnapshot("upcoming")?.let { runCatching { Gson().fromJson(it, Array<AssignmentDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
+            if (user != null) error = "OFFLINE MODE / Showing the last securely saved overview. Changes are paused until reconnection."
+        }
         try {
             val response = api.session()
             if (response.isSuccessful) {
                 user = response.body()?.user
                 if (user != null) {
+                    secureStore.saveUser(user!!)
                     ClassDeskSyncScheduler.schedule(context)
                     val data = api.summary()
                     if (data.isSuccessful) {
                         summary = data.body()?.summary
                         upcoming = data.body()?.upcomingAssignments.orEmpty()
+                        summary?.let { secureStore.saveSnapshot("summary", Gson().toJson(it)) }
+                        secureStore.saveSnapshot("upcoming", Gson().toJson(upcoming))
+                    } else {
+                        summary = secureStore.loadSnapshot("summary")?.let { runCatching { Gson().fromJson(it, SummaryDto::class.java) }.getOrNull() }
+                        upcoming = secureStore.loadSnapshot("upcoming")?.let { runCatching { Gson().fromJson(it, Array<AssignmentDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
                     }
                 }
-            } else user = null
-        } catch (e: Exception) {
-            error = e.message ?: "Unable to connect to ClassDesk"
+            } else if (response.code() == 401) {
+                secureStore.clear()
+                user = null
+            } else restoreOfflineSnapshot()
+        } catch (_: Exception) {
+            restoreOfflineSnapshot()
         } finally { loading = false }
     }
 
@@ -136,6 +153,8 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
     var assignments by remember { mutableStateOf<List<AssignmentDto>>(emptyList()) }
     var moduleLoading by remember { mutableStateOf(false) }
     var moduleError by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    val secureStore = remember { ApiClient.cookies(context) }
     LaunchedEffect(selected) {
         moduleError = null
         if (selected == "Courses" || selected == "Tasks") {
@@ -143,14 +162,28 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
             try {
                 if (selected == "Courses") {
                     val response = api.courses()
-                    if (response.isSuccessful) courses = response.body()?.items.orEmpty()
-                    else moduleError = "Could not load courses (${response.code()})"
+                    if (response.isSuccessful) {
+                        courses = response.body()?.items.orEmpty()
+                        secureStore.saveSnapshot("courses", Gson().toJson(courses))
+                    } else {
+                        courses = secureStore.loadSnapshot("courses")?.let { runCatching { Gson().fromJson(it, Array<CourseDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
+                        moduleError = "Could not refresh courses; showing the last saved copy."
+                    }
                 } else {
                     val response = api.assignments()
-                    if (response.isSuccessful) assignments = response.body()?.items.orEmpty()
-                    else moduleError = "Could not load assignments (${response.code()})"
+                    if (response.isSuccessful) {
+                        assignments = response.body()?.items.orEmpty()
+                        secureStore.saveSnapshot("assignments", Gson().toJson(assignments))
+                    } else {
+                        assignments = secureStore.loadSnapshot("assignments")?.let { runCatching { Gson().fromJson(it, Array<AssignmentDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
+                        moduleError = "Could not refresh assignments; showing the last saved copy."
+                    }
                 }
-            } catch (_: Exception) { moduleError = "Unable to connect. Your saved session may need refreshing." }
+            } catch (_: Exception) {
+                if (selected == "Courses") courses = secureStore.loadSnapshot("courses")?.let { runCatching { Gson().fromJson(it, Array<CourseDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
+                if (selected == "Tasks") assignments = secureStore.loadSnapshot("assignments")?.let { runCatching { Gson().fromJson(it, Array<AssignmentDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
+                moduleError = "OFFLINE / Showing the last saved copy where available."
+            }
             finally { moduleLoading = false }
         }
     }
