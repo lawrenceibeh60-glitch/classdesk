@@ -433,6 +433,12 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                             Text(course.code, color = Cyan, fontWeight = FontWeight.Bold)
                             Text(course.name, color = Color.White, fontWeight = FontWeight.SemiBold)
                             Text(listOfNotNull(course.lecturer, course.semester).joinToString("  /  "), color = Muted, fontSize = 12.sp)
+                            TextButton(onClick = {
+                                editingCourseId = course.id
+                                courseCode = course.code; courseName = course.name
+                                lecturer = course.lecturer.orEmpty(); semester = course.semester.orEmpty()
+                                showCourseDialog = true
+                            }) { Text("EDIT COURSE", color = Cyan, fontSize = 10.sp) }
                             if (user.role == "CLASS_REP") TextButton(onClick = {
                                 scope.launch {
                                     val deleted = mutateAcademic("courses", "DELETE", mapOf("id" to course.id))
@@ -445,7 +451,7 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                 }
                 if (showCourseDialog) AlertDialog(
                     onDismissRequest = { showCourseDialog = false },
-                    title = { Text("Add course") },
+                    title = { Text(if (editingCourseId == null) "Add course" else "Edit course") },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(courseCode, { courseCode = it }, label = { Text("Course code") }, singleLine = true)
@@ -456,15 +462,19 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                     },
                     confirmButton = { TextButton(onClick = {
                         scope.launch {
-                            val saved = mutateAcademic("courses", "POST", mapOf("code" to courseCode.trim(), "name" to courseName.trim(), "lecturer" to lecturer.trim(), "semester" to semester.trim()))
+                            val id = editingCourseId
+                            val payload = mapOf("code" to courseCode.trim(), "name" to courseName.trim(), "lecturer" to lecturer.trim(), "semester" to semester.trim())
+                            val saved = mutateAcademic("courses", if (id == null) "POST" else "PATCH", if (id == null) payload else payload + mapOf("id" to id))
                             if (saved.isSuccessful) {
+                                if (saved.queued && id != null) courses = courses.map { if (it.id == id) it.copy(code = courseCode.trim(), name = courseName.trim(), lecturer = lecturer.trim(), semester = semester.trim()) else it }
                                 if (!saved.queued) courses = api.courses().body()?.items.orEmpty()
+                                editingCourseId = null
                                 courseCode = ""; courseName = ""; lecturer = ""; semester = ""
                                 showCourseDialog = false
-                            } else moduleError = "Course could not be saved (${saved.code()})."
+                            } else moduleError = saved.message ?: "Course could not be saved (${saved.code()})."
                         }
                     }, enabled = courseCode.isNotBlank() && courseName.isNotBlank()) { Text("SAVE") } },
-                    dismissButton = { TextButton(onClick = { showCourseDialog = false }) { Text("CANCEL") } }
+                    dismissButton = { TextButton(onClick = { showCourseDialog = false; editingCourseId = null }) { Text("CANCEL") } }
                 )
             } else if (selected == "Tasks") {
                 Text("ASSIGNMENTS / DEADLINES", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
@@ -478,6 +488,11 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                             Text(item.title, color = Color.White, fontWeight = FontWeight.SemiBold)
                             Text(listOfNotNull(item.course?.code, item.dueAt, item.status).joinToString("  /  "), color = Muted, fontSize = 12.sp)
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(onClick = {
+                                    editingAssignmentId = item.id
+                                    assignmentTitle = item.title; assignmentDetails = item.details.orEmpty(); assignmentDueAt = item.dueAt.orEmpty()
+                                    showAssignmentDialog = true
+                                }) { Text("EDIT", color = Cyan, fontSize = 10.sp) }
                                 TextButton(onClick = {
                                     scope.launch {
                                         val next = if (item.status == "DONE") "TODO" else "DONE"
@@ -499,7 +514,7 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                 }
                 if (showAssignmentDialog) AlertDialog(
                     onDismissRequest = { showAssignmentDialog = false },
-                    title = { Text("Add assignment") },
+                    title = { Text(if (editingAssignmentId == null) "Add assignment" else "Edit assignment") },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedTextField(assignmentTitle, { assignmentTitle = it }, label = { Text("Assignment title") }, singleLine = true)
@@ -509,15 +524,19 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                     },
                     confirmButton = { TextButton(onClick = {
                         scope.launch {
-                            val saved = mutateAcademic("assignments", "POST", mapOf("title" to assignmentTitle.trim(), "details" to assignmentDetails.trim(), "dueAt" to assignmentDueAt.trim()))
+                            val id = editingAssignmentId
+                            val payload = mapOf("title" to assignmentTitle.trim(), "details" to assignmentDetails.trim(), "dueAt" to assignmentDueAt.trim())
+                            val saved = mutateAcademic("assignments", if (id == null) "POST" else "PATCH", if (id == null) payload else payload + mapOf("id" to id))
                             if (saved.isSuccessful) {
+                                if (saved.queued && id != null) assignments = assignments.map { if (it.id == id) it.copy(title = assignmentTitle.trim(), details = assignmentDetails.trim(), dueAt = assignmentDueAt.trim().ifBlank { null }) else it }
                                 if (!saved.queued) assignments = api.assignments().body()?.items.orEmpty()
+                                editingAssignmentId = null
                                 assignmentTitle = ""; assignmentDetails = ""; assignmentDueAt = ""
                                 showAssignmentDialog = false
-                            } else moduleError = "Assignment could not be saved (${saved.code()}). Check the due date format."
+                            } else moduleError = saved.message ?: "Assignment could not be saved (${saved.code()}). Check the due date format."
                         }
                     }, enabled = assignmentTitle.isNotBlank()) { Text("SAVE") } },
-                    dismissButton = { TextButton(onClick = { showAssignmentDialog = false }) { Text("CANCEL") } }
+                    dismissButton = { TextButton(onClick = { showAssignmentDialog = false; editingAssignmentId = null }) { Text("CANCEL") } }
                 )
             } else if (selected == "More") {
                 Text("CLASS OPERATIONS", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
@@ -541,6 +560,12 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                             Text(item.topic, color = Color.White, fontWeight = FontWeight.SemiBold)
                             Text(listOfNotNull(item.course?.code, item.heldAt ?: item.scheduledAt, item.venue).joinToString("  /  "), color = Muted, fontSize = 12.sp)
                             if (item.summary.orEmpty().isNotBlank()) Text(item.summary.orEmpty(), color = Muted, fontSize = 12.sp)
+                            TextButton(onClick = {
+                                editingLectureId = item.id
+                                lectureTopic = item.topic; lectureSummary = item.summary.orEmpty()
+                                lectureDate = item.heldAt ?: item.scheduledAt.orEmpty(); lectureVenue = item.venue.orEmpty()
+                                showLectureDialog = true
+                            }) { Text("EDIT", color = Cyan, fontSize = 10.sp) }
                             if (user.role == "CLASS_REP") TextButton(onClick = {
                                 scope.launch {
                                     val deleted = mutateAcademic("lectures", "DELETE", mapOf("id" to item.id))
@@ -553,7 +578,7 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                 }
                 if (showLectureDialog) AlertDialog(
                     onDismissRequest = { showLectureDialog = false },
-                    title = { Text("Add lecture") },
+                    title = { Text(if (editingLectureId == null) "Add lecture" else "Edit lecture") },
                     text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(lectureTopic, { lectureTopic = it }, label = { Text("Topic") }, singleLine = true)
                         OutlinedTextField(lectureSummary, { lectureSummary = it }, label = { Text("Summary") }, minLines = 2)
@@ -561,14 +586,18 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                         OutlinedTextField(lectureVenue, { lectureVenue = it }, label = { Text("Venue (optional)") }, singleLine = true)
                     } },
                     confirmButton = { TextButton(onClick = { scope.launch {
-                        val saved = mutateAcademic("lectures", "POST", mapOf("topic" to lectureTopic.trim(), "summary" to lectureSummary.trim(), "heldAt" to lectureDate.trim(), "venue" to lectureVenue.trim()))
+                        val id = editingLectureId
+                        val payload = mapOf("topic" to lectureTopic.trim(), "summary" to lectureSummary.trim(), "heldAt" to lectureDate.trim(), "venue" to lectureVenue.trim())
+                        val saved = mutateAcademic("lectures", if (id == null) "POST" else "PATCH", if (id == null) payload else payload + mapOf("id" to id))
                         if (saved.isSuccessful) {
+                            if (saved.queued && id != null) lectures = lectures.map { if (it.id == id) it.copy(topic = lectureTopic.trim(), summary = lectureSummary.trim(), heldAt = lectureDate.trim().ifBlank { null }, venue = lectureVenue.trim().ifBlank { null }) else it }
                             if (!saved.queued) lectures = api.lectures().body()?.items.orEmpty()
+                            editingLectureId = null
                             lectureTopic = ""; lectureSummary = ""; lectureDate = ""; lectureVenue = ""
                             showLectureDialog = false
-                        } else moduleError = "Lecture could not be saved. Check the date format."
+                        } else moduleError = saved.message ?: "Lecture could not be saved. Check the date format."
                     } }, enabled = lectureTopic.isNotBlank()) { Text("SAVE") } },
-                    dismissButton = { TextButton(onClick = { showLectureDialog = false }) { Text("CANCEL") } }
+                    dismissButton = { TextButton(onClick = { showLectureDialog = false; editingLectureId = null }) { Text("CANCEL") } }
                 )
             } else if (selected == "Attendance") {
                 Text("ATTENDANCE SUMMARIES", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
@@ -583,6 +612,14 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                             Text(item.sessionDate, color = Color.White)
                             Text("PRESENT  ${item.presentCount}     ABSENT  ${item.absentCount}", color = Muted, fontSize = 12.sp)
                             item.note?.let { Text(it, color = Muted, fontSize = 12.sp) }
+                            TextButton(onClick = {
+                                editingAttendanceId = item.id
+                                attendanceDate = item.sessionDate.take(10)
+                                attendancePresent = item.presentCount.toString()
+                                attendanceAbsent = item.absentCount.toString()
+                                attendanceNote = item.note.orEmpty()
+                                showAttendanceDialog = true
+                            }) { Text("EDIT", color = Cyan, fontSize = 10.sp) }
                             if (user.role == "CLASS_REP") TextButton(onClick = {
                                 scope.launch {
                                     val deleted = mutateAcademic("attendance", "DELETE", mapOf("id" to item.id))
@@ -595,21 +632,26 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                 }
                 if (showAttendanceDialog) AlertDialog(
                     onDismissRequest = { showAttendanceDialog = false },
-                    title = { Text("Add attendance summary") },
+                    title = { Text(if (editingAttendanceId == null) "Add attendance summary" else "Edit attendance summary") },
                     text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(attendanceDate, { attendanceDate = it }, label = { Text("Session date (YYYY-MM-DD)") }, singleLine = true)
                         OutlinedTextField(attendancePresent, { attendancePresent = it }, label = { Text("Present count") }, singleLine = true)
                         OutlinedTextField(attendanceAbsent, { attendanceAbsent = it }, label = { Text("Absent count") }, singleLine = true)
+                        OutlinedTextField(attendanceNote, { attendanceNote = it }, label = { Text("Note (optional)") }, minLines = 2)
                     } },
                     confirmButton = { TextButton(onClick = { scope.launch {
-                        val saved = mutateAcademic("attendance", "POST", mapOf("sessionDate" to attendanceDate.trim(), "presentCount" to attendancePresent.trim(), "absentCount" to attendanceAbsent.trim()))
+                        val id = editingAttendanceId
+                        val payload = mapOf("sessionDate" to attendanceDate.trim(), "presentCount" to attendancePresent.trim(), "absentCount" to attendanceAbsent.trim(), "note" to attendanceNote.trim())
+                        val saved = mutateAcademic("attendance", if (id == null) "POST" else "PATCH", if (id == null) payload else payload + mapOf("id" to id))
                         if (saved.isSuccessful) {
+                            if (saved.queued && id != null) attendance = attendance.map { if (it.id == id) it.copy(sessionDate = attendanceDate.trim(), presentCount = attendancePresent.toInt(), absentCount = attendanceAbsent.toInt(), note = attendanceNote.trim().ifBlank { null }) else it }
                             if (!saved.queued) attendance = api.attendance().body()?.items.orEmpty()
-                            attendanceDate = ""; attendancePresent = ""; attendanceAbsent = ""
+                            editingAttendanceId = null
+                            attendanceDate = ""; attendancePresent = ""; attendanceAbsent = ""; attendanceNote = ""
                             showAttendanceDialog = false
-                        } else moduleError = "Attendance could not be saved. Check date and whole-number counts."
+                        } else moduleError = saved.message ?: "Attendance could not be saved. Check date and whole-number counts."
                     } }, enabled = attendanceDate.isNotBlank() && attendancePresent.toIntOrNull() != null && attendanceAbsent.toIntOrNull() != null) { Text("SAVE") } },
-                    dismissButton = { TextButton(onClick = { showAttendanceDialog = false }) { Text("CANCEL") } }
+                    dismissButton = { TextButton(onClick = { showAttendanceDialog = false; editingAttendanceId = null }) { Text("CANCEL") } }
                 )
             } else if (selected == "Concerns") {
                 Text("CLASS CONCERNS", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
@@ -624,33 +666,54 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                             Text(item.title, color = Color.White, fontWeight = FontWeight.SemiBold)
                             Text(item.details, color = Muted, fontSize = 12.sp)
                             item.resolution?.let { Text("RESOLUTION: $it", color = Gold, fontSize = 12.sp) }
-                            if (user.role == "CLASS_REP") TextButton(onClick = {
+                            TextButton(onClick = {
+                                editingConcernId = item.id
+                                concernCategory = item.category; concernTitle = item.title
+                                concernDetails = item.details; concernResolution = item.resolution.orEmpty()
+                                showConcernDialog = true
+                            }) { Text("EDIT", color = Cyan, fontSize = 10.sp) }
+                            if (user.role == "CLASS_REP") {
+                                TextButton(onClick = {
+                                    scope.launch {
+                                        val next = if (item.status == "RESOLVED") "OPEN" else "RESOLVED"
+                                        val updated = mutateAcademic("concerns", "PATCH", mapOf("id" to item.id, "status" to next, "resolution" to item.resolution.orEmpty()))
+                                        if (updated.isSuccessful && !updated.queued) concerns = api.concerns().body()?.items.orEmpty()
+                                        else if (!updated.isSuccessful) moduleError = "Concern status could not be updated."
+                                    }
+                                }) { Text(if (item.status == "RESOLVED") "REOPEN" else "RESOLVE", color = Gold, fontSize = 10.sp) }
+                                TextButton(onClick = {
                                 scope.launch {
                                     val deleted = mutateAcademic("concerns", "DELETE", mapOf("id" to item.id))
                                     if (deleted.isSuccessful) { if (deleted.queued) concerns = concerns.filterNot { it.id == item.id } else concerns = api.concerns().body()?.items.orEmpty() }
                                     else moduleError = "Could not delete concern (${deleted.code()})."
                                 }
                             }) { Text("DELETE", color = Color(0xFFFF7D78), fontSize = 10.sp) }
+                            }
                         }
                     }
                 }
                 if (showConcernDialog) AlertDialog(
                     onDismissRequest = { showConcernDialog = false },
-                    title = { Text("Add class concern") },
+                    title = { Text(if (editingConcernId == null) "Add class concern" else "Edit class concern") },
                     text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(concernCategory, { concernCategory = it }, label = { Text("Category") }, singleLine = true)
                         OutlinedTextField(concernTitle, { concernTitle = it }, label = { Text("Title") }, singleLine = true)
                         OutlinedTextField(concernDetails, { concernDetails = it }, label = { Text("Details") }, minLines = 3)
+                        OutlinedTextField(concernResolution, { concernResolution = it }, label = { Text("Resolution (optional)") }, minLines = 2)
                     } },
                     confirmButton = { TextButton(onClick = { scope.launch {
-                        val saved = mutateAcademic("concerns", "POST", mapOf("category" to concernCategory.trim(), "title" to concernTitle.trim(), "details" to concernDetails.trim()))
+                        val id = editingConcernId
+                        val payload = mapOf("category" to concernCategory.trim(), "title" to concernTitle.trim(), "details" to concernDetails.trim(), "resolution" to concernResolution.trim())
+                        val saved = mutateAcademic("concerns", if (id == null) "POST" else "PATCH", if (id == null) payload else payload + mapOf("id" to id))
                         if (saved.isSuccessful) {
+                            if (saved.queued && id != null) concerns = concerns.map { if (it.id == id) it.copy(category = concernCategory.trim(), title = concernTitle.trim(), details = concernDetails.trim(), resolution = concernResolution.trim().ifBlank { null }) else it }
                             if (!saved.queued) concerns = api.concerns().body()?.items.orEmpty()
-                            concernCategory = "GENERAL"; concernTitle = ""; concernDetails = ""
+                            editingConcernId = null
+                            concernCategory = "GENERAL"; concernTitle = ""; concernDetails = ""; concernResolution = ""
                             showConcernDialog = false
-                        } else moduleError = "Concern could not be saved."
+                        } else moduleError = saved.message ?: "Concern could not be saved."
                     } }, enabled = concernTitle.isNotBlank() && concernDetails.isNotBlank()) { Text("SAVE") } },
-                    dismissButton = { TextButton(onClick = { showConcernDialog = false }) { Text("CANCEL") } }
+                    dismissButton = { TextButton(onClick = { showConcernDialog = false; editingConcernId = null }) { Text("CANCEL") } }
                 )
             } else if (selected == "Calendar") {
                 Text("CALENDAR / TIMETABLE", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
