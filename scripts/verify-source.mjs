@@ -83,7 +83,15 @@ assert.match(avaWorkspace, /setVoicePanelOpen\(true\); ava\.toggle\(\)/, "The mi
 assert.ok(!/e\.altKey\s*&&\s*e\.key\.toLowerCase\(\)\s*===\s*"a"/.test(avaWorkspace), "Ava must only activate from the microphone button, not a keyboard shortcut");
 assert.match(avaSource, /setSupported\(hasBrowserRec\)/, "Website Ava must use browser-native speech recognition");
 assert.match(avaSource, /SpeechRecognition\?: RecCtor; webkitSpeechRecognition\?: RecCtor/, "Website Ava must support standard and WebKit browser speech recognition");
-assert.ok(!avaSource.includes("MISTRAL_API_KEY") && !avaSource.includes("/api/voice/transcribe"), "Website Ava must not depend on paid server-side speech transcription");
+assert.ok(!avaSource.includes("MISTRAL_API_KEY"), "Website Ava must not depend on a hard-coded transcription vendor key");
+assert.match(avaSource, /MediaRecorder/, "Website Ava must support tap-to-record audio when browser speech recognition is unavailable");
+assert.match(avaSource, /fetch\("\/api\/voice\/transcribe"/, "Website Ava must submit recorded audio through the authenticated transcription route");
+assert.match(avaSource, /flags\.stt/, "Website Ava must only enable cloud recording when the server reports transcription configured");
+const transcriptionRoute = read("app/api/voice/transcribe/route.ts");
+assert.match(transcriptionRoute, /assertSameOrigin[\s\S]*requireStaff[\s\S]*rateLimit/, "Cloud transcription must enforce same-origin, staff authentication and rate limits");
+assert.match(transcriptionRoute, /MAX_AUDIO_BYTES[\s\S]*20 \* 1024 \* 1024/, "Cloud transcription must enforce a 20 MB audio upload limit");
+assert.match(transcriptionRoute, /WHISPER_API_URL[\s\S]*WHISPER_API_KEY[\s\S]*AbortSignal\.timeout/, "Cloud transcription must use server-only endpoint credentials and a bounded upstream timeout");
+assert.match(read("app/api/health/route.ts"), /sttConfigured: Boolean\(process\.env\.WHISPER_API_URL\)/, "Health status must expose optional cloud transcription configuration");
 assert.ok(!avaSource.includes("cleanupRef"), "Website Ava must not retain the obsolete cloud microphone stream path");
 const androidVoiceSource = read("android/app/src/main/java/com/kyro/classdesk/ui/AvaVoiceScreen.kt");
 assert.match(androidVoiceSource, /SpeechRecognizer\.createOnDeviceSpeechRecognizer/, "Android Ava must prefer native on-device speech recognition when available");
