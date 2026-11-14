@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+type StoredDocument = { id: string; title: string; filename: string; sizeBytes: number; status: string; createdAt: string };
+
 type StorageData = {
   counts: Record<string, number>;
   databaseBytes: number | null;
@@ -36,6 +38,7 @@ function formatBytes(value: number | null) {
 
 export default function StorageManagement() {
   const [data, setData] = useState<StorageData | null>(null);
+  const [documents, setDocuments] = useState<StoredDocument[]>([]);
   const [days, setDays] = useState("30");
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
@@ -47,12 +50,34 @@ export default function StorageManagement() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Could not inspect SQL storage");
       setData(result);
+      const documentResponse = await fetch("/api/documents", { cache: "no-store" });
+      if (documentResponse.ok) {
+        const documentData = await documentResponse.json();
+        setDocuments(documentData.documents || []);
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not inspect SQL storage");
     }
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
+
+  async function deleteDocument(document: StoredDocument) {
+    if (!window.confirm(`Permanently delete "${document.title}"? This removes its SQL document row, extracted text, search chunks and stored original file.`)) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/documents?id=${encodeURIComponent(document.id)}`, { method: "DELETE" });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not delete stored document");
+      setMessage(`Deleted "${document.title}" from SQL and shared file storage.`);
+      await refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not delete stored document");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function cleanup() {
     if (confirmation !== "CLEANUP_CLASSDESK_SQL") return;
@@ -103,6 +128,14 @@ export default function StorageManagement() {
     <div className="actions" style={{ marginTop: 12 }}>
       <Link className="btn" href="/records">Manage records and uploaded documents</Link>
       <Link className="btn" href="/announcements">Manage announcements</Link>
+    </div>
+    <div style={{ marginTop: 16 }}>
+      <h3>Stored documents — SQL + file storage</h3>
+      <p className="sub">Deleting a document removes its extracted text and search chunks from PostgreSQL and its original file from shared object storage.</p>
+      {!documents.length ? <p className="sub">No stored documents were returned.</p> : documents.map((document) => <div className="row" key={document.id} style={{ justifyContent: "space-between", gap: 12, padding: "10px 0", borderBottom: "1px solid var(--border, #333)" }}>
+        <div style={{ minWidth: 0 }}><strong>{document.title}</strong><p className="sub">{document.filename} · {formatBytes(document.sizeBytes)} · {document.status}</p></div>
+        <button className="btn ghost" type="button" disabled={busy} onClick={() => void deleteDocument(document)}>Delete permanently</button>
+      </div>)}
     </div>
     <div style={{ borderTop: "1px solid var(--border, #333)", marginTop: 18, paddingTop: 16 }}>
       <h3>Clean temporary SQL data</h3>
