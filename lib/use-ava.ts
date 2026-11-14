@@ -48,6 +48,7 @@ export function useAva(handlers: AvaHandlers) {
   const [listening, setListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [inputMode, setInputMode] = useState<"browser" | "cloud" | null>(null);
   const [awake, setAwake] = useState(false);
   const [heard, setHeard] = useState("");
   const [voiceError, setVoiceError] = useState("");
@@ -188,6 +189,7 @@ export function useAva(handlers: AvaHandlers) {
         }
       };
       recorder.start(500);
+      setInputMode("cloud");
       setListening(true);
     } catch (error) {
       wantRef.current = false;
@@ -226,7 +228,7 @@ export function useAva(handlers: AvaHandlers) {
       catch { wantRef.current = false; setListening(false); setVoiceError("The browser speech session stopped unexpectedly. Tap the microphone to try again."); }
     };
     recRef.current = rec;
-    try { rec.start(); return true; } catch { setVoiceError("Could not start the microphone."); return false; }
+    try { rec.start(); setInputMode("browser"); return true; } catch { setVoiceError("Could not start the microphone."); return false; }
   }, [handleFinal]);
 
   const start = useCallback(async () => {
@@ -242,7 +244,7 @@ export function useAva(handlers: AvaHandlers) {
   }, [startBrowserRec, startCloudRecorder, speak]);
 
   const stop = useCallback(() => {
-    wantRef.current = false; awakeUntil.current = 0; setAwake(false); setListening(false);
+    wantRef.current = false; awakeUntil.current = 0; setAwake(false); setListening(false); setInputMode(null);
     recRef.current?.abort(); recRef.current = null;
     if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
     else mediaStreamRef.current?.getTracks().forEach(track => track.stop());
@@ -267,5 +269,5 @@ export function useAva(handlers: AvaHandlers) {
     return () => { window.speechSynthesis?.removeEventListener?.("voiceschanged", loadVoices); wantRef.current = false; recRef.current?.abort(); if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop(); mediaStreamRef.current?.getTracks().forEach(track => track.stop()); stopSpeaking(); };
   }, [stopSpeaking]);
 
-  return { supported, listening, speaking, processing, awake, heard, voiceError, toggle, stop, speak, shutUp, voices, voiceName, setVoiceName, cloud };
+  return { supported, listening, speaking, processing, inputMode, awake, heard, voiceError, toggle, stop, speak, shutUp, voices, voiceName, setVoiceName, cloud };
 }
