@@ -1,4 +1,9 @@
 import { redirect } from "next/navigation";
-import { isAuthenticated } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 import CalendarView from "@/components/calendar-view";
-export default async function Page() { if (!(await isAuthenticated())) redirect("/login"); return <CalendarView />; }
+
+export default async function Page() {
+  const user = await getSession();
+  if (!user) redirect("/login");
+  return <CalendarView isPrimaryAdmin={user.role === "CLASS_REP"} />;
+}
