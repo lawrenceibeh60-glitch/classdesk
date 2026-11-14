@@ -36,3 +36,7 @@ These restrictions are enforced by server-side API checks, not only by hiding in
 ## Existing data
 
 This change does not require a database migration. Both accounts work with the same existing ClassDesk database and shared class records. Account credentials are configured by the deployment environment; they are not stored in the public repository.
+
+## Shared file storage
+
+The PostgreSQL database is shared by both accounts and stores structured class information, document metadata, and searchable extracted text. Configure the S3-compatible variables in `.env.example` on the Render service to keep original uploaded files in durable shared object storage. Production uploads and backup restores that contain original files fail explicitly when this storage is missing; they will not silently report success while losing the original file bytes.
