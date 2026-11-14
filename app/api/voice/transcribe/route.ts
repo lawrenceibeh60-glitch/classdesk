@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { assertSameOrigin, clientIp, rateLimit, requireStaff } from "@/lib/http";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 const MAX_AUDIO_BYTES = 20 * 1024 * 1024;
 const ALLOWED_TYPES = new Set([
-  "audio/webm", "audio/webm;codecs=opus", "audio/ogg", "audio/ogg;codecs=opus",
-  "audio/mp4", "audio/m4a", "audio/wav", "audio/mpeg"
+  "audio/webm", "audio/ogg", "audio/mp4", "audio/m4a", "audio/wav",
+  "audio/x-wav", "audio/mpeg", "audio/aac", "audio/flac", "audio/3gpp"
 ]);
 
 export async function POST(req: NextRequest) {
@@ -40,11 +40,12 @@ export async function POST(req: NextRequest) {
     const audio = incoming.get("file");
     if (!(audio instanceof File)) return NextResponse.json({ error: "An audio recording is required." }, { status: 400 });
     if (audio.size < 1 || audio.size > MAX_AUDIO_BYTES) return NextResponse.json({ error: "Audio must be between 1 byte and 20 MB." }, { status: 413 });
-    if (!ALLOWED_TYPES.has(audio.type.toLowerCase())) return NextResponse.json({ error: "Unsupported audio format. Record using WebM, Ogg, MP4, WAV or MP3." }, { status: 415 });
+    const mimeType = audio.type.toLowerCase().split(";")[0].trim();
+    if (!ALLOWED_TYPES.has(mimeType)) return NextResponse.json({ error: "Unsupported audio format. Record using WebM, Ogg, MP4, WAV, AAC, FLAC or MP3." }, { status: 415 });
 
     const payload = new FormData();
     payload.set("file", audio, audio.name || "ava-recording.webm");
-    payload.set("model", process.env.WHISPER_MODEL?.trim() || "whisper-1");
+    // whisper.cpp loads its model at process startup; it does not need an API model field.
     payload.set("response_format", "json");
     payload.set("language", "en");
 
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
       headers,
       body: payload,
       cache: "no-store",
-      signal: AbortSignal.timeout(25_000)
+      signal: AbortSignal.timeout(55_000)
     });
     if (!upstream.ok) {
       return NextResponse.json({ error: upstream.status === 429 ? "The transcription service is busy. Try again shortly." : "The transcription service could not process this recording." }, { status: upstream.status === 429 ? 429 : 502 });
