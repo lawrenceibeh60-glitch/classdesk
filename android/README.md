@@ -7,7 +7,7 @@ Native Android client workspace for the existing ClassDesk service.
 - Kotlin + Jetpack Compose native screens and navigation shell.
 - Retrofit + OkHttp for the existing Next.js API.
 - EncryptedSharedPreferences-backed session cookies, offline profile and read-only snapshots.
-- Android Keystore AES-GCM encryption for queued offline mutation payloads.
+- Android Keystore AES-GCM encryption for queued offline mutation payloads; queued changes are bound to the account that created them.
 - SQLite outbox and WorkManager network-constrained sync foundation.
 - Native SpeechRecognizer and TextToSpeech for Ava; microphone permission is requested only after the user taps Activate.
 
@@ -36,7 +36,7 @@ Open the \`android/\` folder in Android Studio, allow Gradle sync, install the S
 - Native course register with list, add and primary-admin delete.
 - Native assignments with list, add, mark done/reopen and primary-admin delete.
 - Encrypted local snapshots for overview, courses and assignments; cached data is read-only while offline.
-- SQLite mutation outbox, AES-GCM payload encryption using Android Keystore, and WorkManager sync against the existing versioned \`/api/sync\` endpoint.
+- SQLite mutation outbox, AES-GCM payload encryption using Android Keystore, account-bound queue ownership, and WorkManager sync against the existing versioned \`/api/sync\` endpoint.
 - Ava graphical voice panel using Android speech recognition, ClassDesk AI chat and device text-to-speech. It does not request microphone access until Activate is tapped.
 - Custom ClassDesk launcher icon and HTTPS-only network policy.
 
