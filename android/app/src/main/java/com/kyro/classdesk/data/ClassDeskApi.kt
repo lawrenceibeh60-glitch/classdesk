@@ -56,6 +56,9 @@ interface ClassDeskApi {
     @POST("api/records")
     suspend fun createRecord(@Body body: Map<String, String>): Response<Map<String, Any>>
 
+    @DELETE("api/records")
+    suspend fun deleteRecord(@Query("id") id: String): Response<Map<String, Any>>
+
     @Multipart
     @POST("api/documents")
     suspend fun uploadDocument(@Part file: MultipartBody.Part, @PartMap fields: Map<String, @JvmSuppressWildcards RequestBody>): Response<Map<String, Any>>
