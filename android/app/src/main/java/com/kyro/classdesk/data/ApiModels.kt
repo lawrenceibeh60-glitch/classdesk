@@ -51,5 +51,5 @@ data class AvaTaskDto(
     val createdAt: String
 )
 data class AvaTasksEnvelope(val tasks: List<AvaTaskDto>?, val workerOnline: Boolean = false)
-data class AvaTaskCreateRequest(val kind: String, val documentIds: List<String>, val prompt: String)
+data class AvaTaskCreateRequest(val kind: String, val documentIds: List<String>, val prompt: String, val clientRequestId: String? = null)
 data class AvaTaskCreateEnvelope(val task: AvaTaskDto?, val message: String?, val error: String?)
