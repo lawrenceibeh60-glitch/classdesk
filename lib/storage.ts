@@ -14,13 +14,20 @@ function localPath(key: string) {
   if (!full.startsWith(base + path.sep)) throw new Error("Invalid storage key");
   return full;
 }
+function requireProductionObjectStorage() {
+  if (process.env.NODE_ENV === "production" && (!process.env.S3_BUCKET || !process.env.S3_ACCESS_KEY_ID || !process.env.S3_SECRET_ACCESS_KEY)) {
+    throw new Error("Shared object storage is not configured. Set S3_BUCKET, S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY before uploading or restoring original files.");
+  }
+}
 export async function storeObject(key: string, body: Buffer, contentType: string) {
+  requireProductionObjectStorage();
   const bucket = process.env.S3_BUCKET; const api = s3();
   if (bucket && api) { await api.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType })); return key; }
   const file = localPath(key); if (!file) return null;
   await fs.mkdir(path.dirname(file), { recursive: true }); await fs.writeFile(file, body); return key;
 }
 export async function readObject(key: string) {
+  requireProductionObjectStorage();
   const api = s3();
   if (api && process.env.S3_BUCKET) {
     const result = await api.send(new GetObjectCommand({ Bucket: process.env.S3_BUCKET, Key: key }));
@@ -31,6 +38,7 @@ export async function readObject(key: string) {
   return fs.readFile(file);
 }
 export async function deleteObject(key: string) {
+  requireProductionObjectStorage();
   const api = s3();
   if (api && process.env.S3_BUCKET) { await api.send(new DeleteObjectCommand({ Bucket: process.env.S3_BUCKET, Key: key })); return; }
   const file = localPath(key); if (file) await fs.rm(file, { force: true });
