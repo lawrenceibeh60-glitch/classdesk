@@ -86,13 +86,13 @@ assert.ok(!avaSource.includes("cleanupRef"), "Website Ava must not retain the ob
 const androidVoiceSource = read("android/app/src/main/java/com/kyro/classdesk/ui/AvaVoiceScreen.kt");
 assert.match(androidVoiceSource, /SpeechRecognizer\.createOnDeviceSpeechRecognizer/, "Android Ava must prefer native on-device speech recognition when available");
 assert.match(androidVoiceSource, /SpeechRecognizer\.createSpeechRecognizer/, "Android Ava must fall back to the Android platform speech recognizer");
-assert.match(androidVoiceSource, /AvaRecognitionLanguageProfile\("English \\(Nigeria\\)", listOf\("en-NG", "en-GB", "en-US", "en", null\)\)/, "English speech recognition must fall back from Nigerian to British, American, general and device-default language");
-assert.match(androidVoiceSource, /AvaRecognitionLanguageProfile\("Hausa"/, "Ava must offer a Hausa recognition profile");
-assert.match(androidVoiceSource, /AvaRecognitionLanguageProfile\("Yoruba"/, "Ava must offer a Yoruba recognition profile");
-assert.match(androidVoiceSource, /AvaRecognitionLanguageProfile\("Igbo"/, "Ava must offer an Igbo recognition profile");
-assert.match(androidVoiceSource, /ERROR_LANGUAGE_NOT_SUPPORTED[\\s\\S]*recognizer\\?\\.startListening\\(buildAvaRecognitionIntent\\(nextLocale\\)\\)/, "Android Ava must automatically try the next locale when the recognizer reports an unsupported language");
-assert.match(androidVoiceSource, /usingPlatformFallback[\\s\\S]*createSpeechRecognizer\\(context\\)/, "Android Ava must fall back from unsupported on-device language packs to the platform speech service");
-assert.match(androidVoiceSource, /RECOGNITION LANGUAGE[\\s\\S]*DropdownMenu/, "Android Ava must expose a selectable speech recognition language");
+assert.ok(androidVoiceSource.includes('AvaRecognitionLanguageProfile("English (Nigeria)", listOf("en-NG", "en-GB", "en-US", "en", null))'), "English speech recognition must fall back from Nigerian to British, American, general and device-default language");
+assert.ok(androidVoiceSource.includes('AvaRecognitionLanguageProfile("Hausa"'), "Ava must offer a Hausa recognition profile");
+assert.ok(androidVoiceSource.includes('AvaRecognitionLanguageProfile("Yoruba"'), "Ava must offer a Yoruba recognition profile");
+assert.ok(androidVoiceSource.includes('AvaRecognitionLanguageProfile("Igbo"'), "Ava must offer an Igbo recognition profile");
+assert.ok(androidVoiceSource.includes("ERROR_LANGUAGE_NOT_SUPPORTED") && androidVoiceSource.includes("recognizer?.startListening(buildAvaRecognitionIntent(nextLocale))"), "Android Ava must automatically try the next locale when the recognizer reports an unsupported language");
+assert.ok(androidVoiceSource.includes("usingPlatformFallback") && androidVoiceSource.includes("SpeechRecognizer.createSpeechRecognizer(context)"), "Android Ava must fall back from unsupported on-device language packs to the platform speech service");
+assert.ok(androidVoiceSource.includes("RECOGNITION LANGUAGE") && androidVoiceSource.includes("DropdownMenu"), "Android Ava must expose a selectable speech recognition language");
 assert.match(androidVoiceSource, /permission\.launch\(Manifest\.permission\.RECORD_AUDIO\)/, "Android microphone permission must only be requested after the user activates voice mode");
 assert.match(avaSource, /setTimeout\(\(\) => \{ if \(wantRef\.current\) speak\("Ava is ready\. Go ahead\."\); \}, 300\)/, "Ava must not speak a delayed startup prompt after voice mode has been stopped");
 
