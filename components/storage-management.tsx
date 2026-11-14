@@ -18,8 +18,12 @@ const labels: Record<string, string> = {
   chunks: "Search-index chunks",
   announcements: "Announcements",
   announcementVersions: "Announcement history versions",
+  announcementEvents: "Announcement audit events",
   courses: "Courses",
+  lectures: "Lecture sessions",
   assignments: "Assignments",
+  attendance: "Attendance summaries",
+  concerns: "Class concerns",
   syncPending: "Pending sync mutations",
   syncApplied: "Applied sync history",
   rateLimitBuckets: "Rate-limit entries",
@@ -109,7 +113,7 @@ export default function StorageManagement() {
     <div className="panel" style={{ marginTop: 12 }}>
       <p className="sub">Reported PostgreSQL database size</p>
       <h2 style={{ fontSize: 28 }}>{formatBytes(data?.databaseBytes ?? null)}</h2>
-      <p className="sub">Your hosted database quota is managed by your database provider. This figure is the whole database size, not a per-user estimate.</p>
+      <p className="sub">Your hosted database quota is managed by your database provider. This figure is the whole database size, not a per-user estimate. Deleting rows makes space reusable, but PostgreSQL may not reduce the reported database size immediately; provider maintenance or compaction may be needed.</p>
     </div>
     <div className="grid" style={{ marginTop: 12 }}>
       {data && Object.entries(data.counts).map(([key, value]) => <div className="panel half" key={key}>
