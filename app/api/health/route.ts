@@ -18,6 +18,13 @@ export async function GET() {
       (process.env.AWS_SECRET_ACCESS_KEY || process.env.S3_SECRET_ACCESS_KEY) &&
       (process.env.AWS_ENDPOINT_URL_S3 || process.env.S3_ENDPOINT))
   );
+  let avaWorkerOnline = false;
+  if (databaseReachable) {
+    try {
+      const { db } = await import("@/lib/db");
+      avaWorkerOnline = await db.aiWorkerState.count({ where: { lastSeenAt: { gt: new Date(Date.now() - 90_000) } } }) > 0;
+    } catch { avaWorkerOnline = false; }
+  }
   const headers = { "Cache-Control": "no-store" };
   if (!(await isAuthenticated())) return NextResponse.json({ ok: databaseReachable }, { status: databaseReachable ? 200 : 503, headers });
   return NextResponse.json({
@@ -28,6 +35,8 @@ export async function GET() {
     databaseReachable,
     storageConfigured,
     aiConfigured: Boolean(process.env.AI_BASE_URL && process.env.AI_API_KEY && process.env.AI_MODEL),
+    avaWorkerOnline,
+    avaTaskEngineConfigured: Boolean(process.env.DATABASE_URL && process.env.AI_BASE_URL && process.env.AI_API_KEY && process.env.AI_MODEL && storageConfigured),
     sttConfigured: Boolean(process.env.MISTRAL_API_KEY),
     ttsConfigured: Boolean(process.env.ELEVENLABS_API_KEY),
     malwareScannerConfigured: Boolean(process.env.CLAMAV_HOST),
