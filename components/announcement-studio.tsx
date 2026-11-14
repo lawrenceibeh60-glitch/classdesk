@@ -12,12 +12,22 @@ export default function AnnouncementStudio({ isPrimaryAdmin }: { isPrimaryAdmin:
   const load = useCallback(async () => {
     try {
       const response = await fetch("/api/announcements", { cache: "no-store" }); const data = await response.json(); if (!response.ok) throw new Error(data.error || "Could not load announcements");
-      const list = data.announcements || []; setItems(list);
+      const list = data.announcements || [];
       if (offlineDB) {
-        const cached = await offlineDB.academicItems.where("resource").equals("announcements").toArray();
-        const ids = new Set(list.map((item: Announcement) => item.id));
-        await offlineDB.academicItems.bulkDelete(cached.filter(item => !ids.has(item.id)).map(item => item.key));
-        await offlineDB.academicItems.bulkPut(list.map((item: Announcement) => ({ key: `announcements:${item.id}`, resource: "announcements", id: item.id, payload: item as unknown as Record<string, unknown>, updatedAt: new Date().toISOString() })));
+        const [cached, pending] = await Promise.all([
+          offlineDB.academicItems.where("resource").equals("announcements").toArray(),
+          offlineDB.academicQueue.where("resource").equals("announcements").toArray(),
+        ]);
+        const pendingDeletes = new Set(pending.filter(item => item.method === "DELETE").map(item => String(item.payload.id || "")));
+        const pendingWrites = new Set(pending.filter(item => item.method !== "DELETE").map(item => String(item.payload.id || "")));
+        const pendingCached = cached.filter(item => pendingWrites.has(item.id));
+        const pendingCachedIds = new Set(pendingCached.map(item => item.id));
+        const serverIds = new Set(list.map((item: Announcement) => item.id));
+        await offlineDB.academicItems.bulkDelete(cached.filter(item => !serverIds.has(item.id) && !pendingWrites.has(item.id)).map(item => item.key));
+        await offlineDB.academicItems.bulkPut(list.filter((item: Announcement) => !pendingWrites.has(item.id)).map((item: Announcement) => ({ key: `announcements:${item.id}`, resource: "announcements", id: item.id, payload: item as unknown as Record<string, unknown>, updatedAt: new Date().toISOString() })));
+        setItems([...list.filter((item: Announcement) => !pendingDeletes.has(item.id) && !pendingCachedIds.has(item.id)), ...pendingCached.map(item => item.payload as unknown as Announcement)]);
+      } else {
+        setItems(list);
       }
     } catch (error) {
       if (!offlineDB) throw error;
