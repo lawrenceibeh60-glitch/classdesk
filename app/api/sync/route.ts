@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin, assertSameOrigin } from "@/lib/http";
+import { requireStaff, assertSameOrigin } from "@/lib/http";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
@@ -32,7 +32,7 @@ function validDate(value: unknown): Date | null | undefined {
 export async function POST(req: NextRequest) {  const originDenied = assertSameOrigin(req);
   if (originDenied) return originDenied;
 
-  const denied = await requireAdmin();
+  const denied = await requireStaff();
   if (denied) return denied;
   const actor = await getSession();
   const body = await req.json().catch(() => null);
@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {  const originDenied = assertSameO
 
 /** Pull cloud changes since an ISO timestamp, including deletion tombstones. */
 export async function GET(req: NextRequest) {
-  const denied = await requireAdmin();
+  const denied = await requireStaff();
   if (denied) return denied;
   const rawSince = req.nextUrl.searchParams.get("since");
   const since = rawSince ? new Date(rawSince) : new Date(0);
