@@ -31,7 +31,11 @@ fun NativeParityScreen(section: String, api: ClassDeskApi, user: UserDto) {
     var records by remember { mutableStateOf<List<AcademicRecordDto>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
-    var query by remember { mutableStateOf("") }\n    var health by remember { mutableStateOf<Map<String, Any>>(emptyMap()) }\n    var storage by remember { mutableStateOf<Map<String, Any>>(emptyMap()) }\n    var cleanupPhrase by remember { mutableStateOf("") }\n    var cleanupMessage by remember { mutableStateOf<String?>(null) }
+    var query by remember { mutableStateOf("") }
+    var health by remember { mutableStateOf<Map<String, Any>>(emptyMap()) }
+    var storage by remember { mutableStateOf<Map<String, Any>>(emptyMap()) }
+    var cleanupPhrase by remember { mutableStateOf("") }
+    var cleanupMessage by remember { mutableStateOf<String?>(null) }
 
     suspend fun load() {
         loading = true
@@ -44,7 +48,13 @@ fun NativeParityScreen(section: String, api: ClassDeskApi, user: UserDto) {
             if (c.isSuccessful) courses = c.body()?.items.orEmpty() else error = "Courses could not be refreshed (${c.code()})."
             if (l.isSuccessful) lectures = l.body()?.items.orEmpty() else error = error ?: "Lectures could not be refreshed (${l.code()})."
             if (a.isSuccessful) assignments = a.body()?.items.orEmpty() else error = error ?: "Assignments could not be refreshed (${a.code()})."
-            if (r.isSuccessful) records = r.body()?.records.orEmpty() else error = error ?: "Class records could not be refreshed (${r.code()})."\n            if (section == "Settings") {\n                val h = api.health()\n                if (h.isSuccessful) health = h.body().orEmpty() else error = error ?: "System health could not be checked (${h.code()})."\n                val st = api.storageStats()\n                if (st.isSuccessful) storage = st.body().orEmpty() else error = error ?: "Storage administration is unavailable (${st.code()})."\n            }
+            if (r.isSuccessful) records = r.body()?.records.orEmpty() else error = error ?: "Class records could not be refreshed (${r.code()})."
+            if (section == "Settings") {
+                val h = api.health()
+                if (h.isSuccessful) health = h.body().orEmpty() else error = error ?: "System health could not be checked (${h.code()})."
+                val st = api.storageStats()
+                if (st.isSuccessful) storage = st.body().orEmpty() else error = error ?: "Storage administration is unavailable (${st.code()})."
+            }
         } catch (_: Exception) {
             error = "ClassDesk could not connect. Check your connection; your account data has not been changed."
         } finally { loading = false }
@@ -102,7 +112,8 @@ fun NativeParityScreen(section: String, api: ClassDeskApi, user: UserDto) {
                 OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Search title or content") }, singleLine = true)
                 val filtered = records.filter { it.title.contains(query, true) || it.content.contains(query, true) || it.type.contains(query, true) }
                 Text("${filtered.size} record(s)", color = NativeMuted, fontSize = 11.sp)
-                filtered.forEach { record -> ParityCard(record.title, "${record.type} / ${record.status} / ${record.eventDate.orEmpty()}\n${record.content.take(240)}") }
+                filtered.forEach { record -> ParityCard(record.title, "${record.type} / ${record.status} / ${record.eventDate.orEmpty()}
+${record.content.take(240)}") }
                 if (!loading && filtered.isEmpty()) Text("No matching records were found.", color = NativeMuted)
             }
             else -> {
