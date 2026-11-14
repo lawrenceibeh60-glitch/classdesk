@@ -128,3 +128,18 @@ h1 { font-family:var(--serif); font-size:clamp(27px,4vw,38px); font-weight:500; 
 .mic-btn.on { background:var(--accent); color:#fff; box-shadow:0 0 0 0 var(--accent); animation:avaPulse 1.6s infinite; }
 .mic-btn.awake { outline:2px solid var(--g2); }
 @keyframes avaPulse { 70% { box-shadow:0 0 0 10px transparent; } 100% { box-shadow:0 0 0 0 transparent; } }
+
+/* Ava voice session overlay */
+.ava-overlay{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:18px;background:rgba(8,12,18,.72);backdrop-filter:blur(14px)}
+.ava-voice-panel{width:min(100%,460px);border:1px solid var(--line);border-radius:22px;background:var(--panel);box-shadow:0 28px 90px #0008;padding:22px;display:flex;flex-direction:column;align-items:center;text-align:center}
+.ava-voice-top{width:100%;display:flex;align-items:center;justify-content:space-between}
+.ava-voice-orb{width:124px;height:124px;margin:34px 0 18px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 35% 30%,#91b8ff,#8b70d6 42%,#d97757 76%,#242424);box-shadow:0 0 0 12px color-mix(in srgb,var(--accent) 9%,transparent),0 0 55px color-mix(in srgb,var(--g2) 35%,transparent);transition:transform .25s ease,box-shadow .25s ease}
+.ava-voice-orb span{font-size:42px;color:white;text-shadow:0 2px 20px #0005}
+.ava-voice-orb.is-listening{animation:avaVoicePulse 1.8s ease-in-out infinite}
+@keyframes avaVoicePulse{0%,100%{transform:scale(1);box-shadow:0 0 0 8px color-mix(in srgb,var(--accent) 10%,transparent),0 0 45px color-mix(in srgb,var(--g2) 30%,transparent)}50%{transform:scale(1.07);box-shadow:0 0 0 20px color-mix(in srgb,var(--accent) 5%,transparent),0 0 75px color-mix(in srgb,var(--g2) 45%,transparent)}}
+.ava-voice-panel h2{font-family:var(--serif);font-size:30px;font-weight:500;margin:0}
+.ava-voice-state{color:var(--accent-strong);font-size:13px;margin:6px 0 18px}
+.ava-voice-transcript{width:100%;min-height:84px;max-height:180px;overflow:auto;border:1px solid var(--line);border-radius:14px;background:var(--panel-2);padding:16px;color:var(--text);font-size:14px;line-height:1.6;text-align:left}
+.ava-voice-actions{display:flex;gap:10px;justify-content:center;margin-top:18px}
+@media(max-width:480px){.ava-voice-panel{padding:18px}.ava-voice-orb{width:108px;height:108px;margin:26px 0 16px}}
+@media(prefers-reduced-motion:reduce){.ava-voice-orb.is-listening{animation:none}}
