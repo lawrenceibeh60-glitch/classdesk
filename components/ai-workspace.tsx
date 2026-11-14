@@ -77,6 +77,33 @@ export default function AIWorkspace({ initialKind = "announcement" }: { initialK
     const history = messages.map(({ role, content }) => ({ role, content }));
     const requestId = crypto.randomUUID();
     setMessages(m => [...m, { role: "user", content: text }]); setPrompt(""); setError("");
+    const requestsAssignmentPdf = /\b(assignments?|homework)\b/i.test(text) && /\b(pdf|solve|work through|answer|complete|do them)\b/i.test(text) && /\b(upload|uploaded|document|file|notes)\b/i.test(text);
+    if (requestsAssignmentPdf && navigator.onLine) {
+      setBusy(true); setStatus("Finding your uploaded assignment documents…");
+      try {
+        const libraryResponse = await fetch("/api/documents", { cache: "no-store" });
+        const library = await libraryResponse.json().catch(() => ({}));
+        if (!libraryResponse.ok) throw new Error(library.error || "Could not search the document library.");
+        const available = (library.documents || []).filter((doc: { id: string; title: string; filename: string; status: string }) => doc.status === "READY");
+        const named = available.filter((doc: { title: string; filename: string }) => /assignment|homework|worksheet|problem[- ]?set|exercise/i.test(doc.title + " " + doc.filename));
+        const selected = (named.length ? named : available.length === 1 ? available : []).slice(0, 10);
+        if (!selected.length) {
+          const names = available.slice(0, 6).map((doc: { title: string; filename: string }) => doc.title || doc.filename);
+          setMessages(m => [...m, { role: "assistant", content: names.length ? "I found recent uploads, but I can't safely identify which ones are assignments. Please rename the relevant files to include “assignment” or tell me their exact titles: " + names.join("; ") : "I couldn't find any ready uploaded documents. Upload the assignment first, then ask me to work through it and create a PDF." }]);
+        } else {
+          setStatus("Queuing a persistent assignment task…");
+          const taskResponse = await fetch("/api/ai/tasks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "assignment_pdf", documentIds: selected.map((doc: { id: string }) => doc.id), prompt: text }) });
+          const payload = await taskResponse.json().catch(() => ({}));
+          if (!taskResponse.ok) throw new Error(payload.error || "Ava could not queue the assignment task.");
+          await refreshTasks();
+          const titles = selected.map((doc: { title: string }) => doc.title).join(", ");
+          setMessages(m => [...m, { role: "assistant", content: "I've queued this as a background task. I'll keep working after you close the voice panel. Source documents: " + titles + ". You can follow progress in the Ava Tasks panel below; the PDF download will appear here when it's ready." }]);
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not create the Ava task.");
+      } finally { setBusy(false); setStatus(""); }
+      return;
+    }
     if (!navigator.onLine) { try { await queueRequest({ kind: "chat", prompt: text, history, draftKind: kind }, requestId); setError("Saved locally. ClassDesk will answer when your device reconnects and the AI service is available."); } catch (e) { setError(e instanceof Error ? e.message : "Could not queue request"); } return; }
     setBusy(true); setStatus("Searching class notes…");
     try {
