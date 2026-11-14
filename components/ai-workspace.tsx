@@ -144,9 +144,9 @@ export default function AIWorkspace({ initialKind = "announcement" }: { initialK
     {voicePanelOpen && <div className="ava-overlay" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) { ava.stop(); setVoicePanelOpen(false); } }}>
       <section className="ava-voice-panel" role="dialog" aria-modal="true" aria-labelledby="ava-voice-title">
         <div className="ava-voice-top"><span className="tag">CLASSDESK VOICE</span><button type="button" className="icon-btn" aria-label="Close voice interface" onClick={() => { ava.stop(); setVoicePanelOpen(false); }}>×</button></div>
-        <div className={"ava-voice-orb " + (ava.listening ? "is-listening" : "")} aria-hidden="true"><span>✳</span></div>
+        <div className={"ava-voice-orb " + (ava.speaking ? "is-speaking" : ava.processing ? "is-processing" : ava.listening ? "is-listening" : "")} aria-hidden="true"><span>✳</span></div>
         <h2 id="ava-voice-title">Ava</h2>
-        <p className="ava-voice-state">{ava.listening ? "Listening — speak naturally" : ava.voiceError ? "Voice unavailable" : "Voice session paused"}</p>
+        <p className="ava-voice-state">{ava.speaking ? "Ava is speaking" : ava.processing ? "Working on your request" : ava.listening ? "Listening — speak naturally" : ava.voiceError ? "Voice unavailable" : "Voice session paused"}</p>
         <div className="ava-voice-transcript" aria-live="polite">{ava.heard || "Tap the microphone to begin speaking. You do not need a wake word."}</div>
         {ava.voiceError && <div className="error-text" role="alert">{ava.voiceError}</div>}
         <div className="ava-voice-actions"><button type="button" className="btn" onClick={() => { ava.stop(); setVoicePanelOpen(false); }}>Close</button><button type="button" className="btn primary" onClick={() => { if (ava.listening) ava.stop(); else ava.toggle(); }}>{ava.listening ? "Stop listening" : "Start listening"}</button></div>
