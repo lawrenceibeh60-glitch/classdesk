@@ -9,6 +9,17 @@ import { processAvaTaskWorkflow } from "@/lib/ava/workflows";
 
 export const runtime = "nodejs";
 
+function avaWorkflowConfigured() {
+  return Boolean(
+    (process.env.DATABASE_URL_POOLED || process.env.DATABASE_URL) &&
+    process.env.AI_BASE_URL && process.env.AI_API_KEY && process.env.AI_MODEL &&
+    process.env.S3_BUCKET &&
+    (process.env.AWS_ENDPOINT_URL_S3 || process.env.S3_ENDPOINT) &&
+    (process.env.AWS_ACCESS_KEY_ID || process.env.S3_ACCESS_KEY_ID) &&
+    (process.env.AWS_SECRET_ACCESS_KEY || process.env.S3_SECRET_ACCESS_KEY)
+  );
+}
+
 export async function GET() {
   const user = await getSession();
   if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
@@ -19,7 +30,8 @@ export async function GET() {
     select: { id: true, kind: true, status: true, progress: true, currentStep: true, errorMessage: true, resultDocumentId: true, createdAt: true, startedAt: true, completedAt: true, updatedAt: true }
   });
   // Workflow runs are managed by Vercel; no separate heartbeat process is required.
-  return NextResponse.json({ tasks, workerOnline: true, processingMode: "vercel-workflows" });
+  const processingAvailable = avaWorkflowConfigured();
+  return NextResponse.json({ tasks, workerOnline: processingAvailable, processingAvailable, processingMode: "vercel-workflows" });
 }
 
 export async function POST(req: NextRequest) {
@@ -28,6 +40,9 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   if (!(await rateLimit(`ava-task:${user.id}:${clientIp(req)}`, 10, 60 * 60 * 1000))) {
     return NextResponse.json({ error: "Ava task limit reached. Try again later." }, { status: 429 });
+  }
+  if (!avaWorkflowConfigured()) {
+    return NextResponse.json({ error: "Ava document processing is not fully configured. No task was queued." }, { status: 503 });
   }
 
   const body = await req.json().catch(() => null);
