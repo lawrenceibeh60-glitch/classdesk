@@ -25,6 +25,9 @@ import com.google.gson.Gson
 import kotlinx.coroutines.launch
 import java.util.UUID
 import java.time.Instant
+import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
 import com.google.gson.JsonObject
 
 private val Canvas = Color(0xFF0A1019)
@@ -601,8 +604,15 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                         OutlinedTextField(calendarContent, { calendarContent = it }, label = { Text("Details / venue") }, minLines = 2)
                     } },
                     confirmButton = { TextButton(onClick = { scope.launch {
+                        val normalizedDate = runCatching { Instant.parse(calendarDate.trim()).toString() }.getOrNull()
+                            ?: runCatching { OffsetDateTime.parse(calendarDate.trim()).toInstant().toString() }.getOrNull()
+                            ?: runCatching { LocalDate.parse(calendarDate.trim()).atStartOfDay(ZoneOffset.UTC).toInstant().toString() }.getOrNull()
+                        if (normalizedDate == null) {
+                            moduleError = "Enter a valid date such as YYYY-MM-DD or an ISO date/time."
+                            return@launch
+                        }
                         try {
-                            val saved = api.createRecord(mapOf("type" to calendarType, "title" to calendarTitle.trim(), "content" to calendarContent.trim(), "eventDate" to calendarDate.trim()))
+                            val saved = api.createRecord(mapOf("type" to calendarType, "title" to calendarTitle.trim(), "content" to calendarContent.trim(), "eventDate" to normalizedDate))
                             if (saved.isSuccessful) {
                                 calendarItems = api.records().body()?.records.orEmpty()
                                 calendarTitle = ""; calendarContent = ""; calendarDate = ""; calendarType = "TIMETABLE"
@@ -614,7 +624,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                                 addProperty("type", calendarType)
                                 addProperty("title", calendarTitle.trim())
                                 addProperty("content", calendarContent.trim())
-                                addProperty("eventDate", calendarDate.trim())
+                                addProperty("eventDate", normalizedDate)
                                 add("metadata", JsonObject())
                                 addProperty("status", "ACTIVE")
                                 addProperty("updatedAt", Instant.now().toString())
@@ -622,7 +632,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                             val store = OfflineStore(context)
                             try {
                                 store.enqueue(PendingMutation(UUID.randomUUID().toString(), user.username, localId, "upsert", 0, Gson().toJson(payload)))
-                                calendarItems = listOf(AcademicRecordDto(localId, calendarType, calendarTitle.trim(), calendarContent.trim(), calendarDate.trim(), "ACTIVE", 1)) + calendarItems
+                                calendarItems = listOf(AcademicRecordDto(localId, calendarType, calendarTitle.trim(), calendarContent.trim(), normalizedDate, "ACTIVE", 1)) + calendarItems
                                 secureStore.saveSnapshot("calendar", Gson().toJson(calendarItems))
                                 moduleError = "Saved on this device. It will sync when the network returns."
                                 calendarTitle = ""; calendarContent = ""; calendarDate = ""; calendarType = "TIMETABLE"
