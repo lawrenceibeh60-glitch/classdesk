@@ -22,6 +22,7 @@ import com.kyro.classdesk.data.DocumentDto
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 private val AvaCanvas = Color(0xFF0A1019)
 private val AvaPanel = Color(0xFF111B28)
@@ -39,6 +40,7 @@ fun AvaTasksScreen(api: ClassDeskApi) {
     var prompt by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(true) }
     var workerOnline by remember { mutableStateOf(false) }
+    var pendingRequestId by remember { mutableStateOf<String?>(null) }
     var creating by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var kind by remember { mutableStateOf("assignment_pdf") }
@@ -123,10 +125,12 @@ fun AvaTasksScreen(api: ClassDeskApi) {
                     creating = true
                     error = null
                     try {
-                        val response = api.createAvaTask(AvaTaskCreateRequest(kind, selectedIds.toList(), prompt.trim()))
+                        val requestId = pendingRequestId ?: UUID.randomUUID().toString().also { pendingRequestId = it }
+                        val response = api.createAvaTask(AvaTaskCreateRequest(kind, selectedIds.toList(), prompt.trim(), requestId))
                         if (!response.isSuccessful || response.body()?.task == null) {
                             error = response.body()?.error ?: "Ava could not queue this task (HTTP ${response.code()})."
                         } else {
+                            pendingRequestId = null
                             selectedIds = emptySet()
                             prompt = ""
                             refresh()
