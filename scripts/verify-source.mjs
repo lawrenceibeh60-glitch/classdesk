@@ -178,3 +178,8 @@ assert.match(androidAnnouncementUi, /EDIT DRAFT[\s\S]*APPROVE[\s\S]*PUBLISH[\s\S
 assert.match(androidAnnouncementHelpers, /clientMutationId[\s\S]*isEditableDraft/, "Offline announcement edits must carry a stable idempotency receipt");
 assert.match(androidAnnouncementHelpers, /requires a live connection\. Nothing was queued/, "Approval and publication transitions must not be replayed as unsafe offline writes");
 assert.match(androidApi, /deleteAnnouncement\(@Query\("id"\) id: String\)/, "Android must expose the protected announcement deletion endpoint");
+
+assert.match(androidAppShell, /EDIT COURSE[\s\S]*EDIT[\s\S]*EDIT EVENT/, "Android academic records must support editing, not only creation and deletion");
+assert.match(androidAppShell, /RESOLVE[\s\S]*EDIT class concern|EDIT[\s\S]*RESOLVE/, "Android concern management must support editing and resolution");
+assert.match(androidApi, /updateRecord\(@Body body: Map<String, String>\)/, "Android calendar must support record updates");
+assert.match(read("app/api/academic/route.ts"), /body\.active === "false"/, "Native course deactivation must be parsed as a boolean by the API");
