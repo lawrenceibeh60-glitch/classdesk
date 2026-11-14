@@ -3,6 +3,8 @@ package com.kyro.classdesk.data
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.PATCH
+import retrofit2.http.DELETE
 import retrofit2.http.POST
 import retrofit2.http.Query
 
@@ -27,4 +29,13 @@ interface ClassDeskApi {
 
     @POST("api/ai/chat")
     suspend fun chat(@Body body: ChatRequest): Response<ChatResponse>
+
+    @POST("api/academic")
+    suspend fun createAcademic(@Body body: Map<String, String>): Response<Map<String, Any>>
+
+    @PATCH("api/academic")
+    suspend fun updateAcademic(@Body body: Map<String, String>): Response<Map<String, Any>>
+
+    @DELETE("api/academic")
+    suspend fun deleteAcademic(@Query("resource") resource: String, @Query("id") id: String): Response<Map<String, Any>>
 }
