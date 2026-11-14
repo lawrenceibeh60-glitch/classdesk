@@ -31,6 +31,7 @@ const labels: Record<string, string> = {
   aiReceipts: "AI request receipts",
   aiTasks: "Ava background tasks",
   auditLogs: "Privileged-action audit entries",
+  workerStates: "Ava worker instances",
 };
 
 function formatBytes(value: number | null) {
