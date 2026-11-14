@@ -18,7 +18,7 @@ data class SyncConflictDto(val id: String, val entityId: String, val reason: Str
 data class SyncRejectedDto(val id: String, val reason: String)
 data class SyncPushResponse(val appliedIds: List<String>?, val conflicts: List<SyncConflictDto>?, val rejected: List<SyncRejectedDto>?)
 
-data class ChatRequest(val message: String, val voice: Boolean = true, val history: List<ChatHistoryItem> = emptyList())
+data class ChatRequest(val message: String, val voice: Boolean = true, val history: List<ChatHistoryItem> = emptyList(), val clientRequestId: String? = null)
 data class ChatHistoryItem(val role: String, val content: String)
 data class AvaActionConfirmationDto(val type: String, val documentId: String, val title: String, val filename: String, val sizeBytes: Int, val originalInSharedStorage: Boolean)
 data class ChatResponse(val answer: String?, val error: String?, val actionConfirmation: AvaActionConfirmationDto? = null)
