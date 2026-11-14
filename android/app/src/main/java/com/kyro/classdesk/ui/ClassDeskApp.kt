@@ -236,13 +236,13 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
             if (currentOnline.value != connected) {
                 online = connected
                 connectionToast = if (connected) "You're back online. ClassDesk is reconnecting."
-                    else "Still got you, boss. You're offline; ClassDesk will reconnect when your internet returns."
+                    else "Offline mode. ClassDesk will reconnect when your internet returns."
             }
         }
         onDispose { connectivity.unregister(callback) }
     }
     LaunchedEffect(Unit) {
-        if (!online) connectionToast = "Still got you, boss. You're offline; saved data remains available."
+        if (!online) connectionToast = "Offline mode. Your saved data remains available."
     }
     LaunchedEffect(connectionToast) {
         if (connectionToast != null) {
@@ -508,7 +508,9 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                 )
             } else if (selected == "More") {
                 Text("CLASS OPERATIONS", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
-                listOf("Lectures", "Attendance", "Concerns", "Announcements", "Calendar", "Documents", "Sync Queue", "Catch-up Centre", "Coverage", "Class Records", "Settings", "Backup & Export").forEach { module ->
+                listOf("Lectures", "Attendance", "Concerns", "Announcements", "Calendar", "Documents", "Sync Queue", "Catch-up Centre", "Coverage", "Class Records", "Settings", "Backup & Export")
+                    .filter { it != "Settings" || user.role == "CLASS_REP" }
+                    .forEach { module ->
                     OutlinedButton(onClick = { selected = module }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(6.dp)) {
                         Text(module.uppercase(), color = Cyan, modifier = Modifier.fillMaxWidth())
                     }
