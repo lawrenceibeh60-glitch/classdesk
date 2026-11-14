@@ -1,8 +1,10 @@
 package com.kyro.classdesk.ui
 
 import android.provider.OpenableColumns
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,7 +32,7 @@ fun DocumentLibraryScreen(api: ClassDeskApi, isPrimaryAdmin: Boolean) {
     var documents by remember { mutableStateOf<List<DocumentDto>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var uploading by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }\n    var downloadId by remember { mutableStateOf<String?>(null) }\n    var downloadName by remember { mutableStateOf("class-material") }
 
     suspend fun reload() {
         loading = true
@@ -42,7 +44,7 @@ fun DocumentLibraryScreen(api: ClassDeskApi, isPrimaryAdmin: Boolean) {
         finally { loading = false }
     }
 
-    LaunchedEffect(Unit) { reload() }
+    val saveDownload = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->\n        val id = downloadId\n        if (uri != null && id != null) scope.launch {\n            try {\n                val result = api.downloadDocument(id)\n                if (!result.isSuccessful) throw IllegalStateException("Download failed (${result.code()}).")\n                val bytes = result.body()?.bytes() ?: throw IllegalStateException("The server returned an empty file.")\n                context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) } ?: throw IllegalStateException("Could not save the downloaded file.")\n                error = null\n                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, context.contentResolver.getType(uri) ?: "*/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) }\n            } catch (e: Exception) { error = e.message ?: "Download failed." }\n            finally { downloadId = null }\n        }\n    }\n\n    LaunchedEffect(Unit) { reload() }
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) scope.launch {
@@ -87,7 +89,7 @@ fun DocumentLibraryScreen(api: ClassDeskApi, isPrimaryAdmin: Boolean) {
                     Text(document.filename, color = Color(0xFF91A4B8), fontSize = 11.sp)
                     Text("\${document.status} / \${document.securityScanStatus} / \${(document.sizeBytes / 1024).coerceAtLeast(1)} KB", color = Color(0xFF42D9F5), fontSize = 10.sp)
                     listOfNotNull(document.courseCode, document.topic).takeIf { it.isNotEmpty() }?.let { Text(it.joinToString(" / "), color = Color(0xFF91A4B8), fontSize = 11.sp) }
-                    if (isPrimaryAdmin) TextButton(onClick = {
+                    TextButton(onClick = { downloadId = document.id; downloadName = document.filename; saveDownload.launch(document.filename) }) { Text("DOWNLOAD / OPEN", color = Color(0xFF42D9F5), fontSize = 10.sp) }\n                    if (isPrimaryAdmin) TextButton(onClick = {
                         scope.launch {
                             val result = api.deleteDocument(document.id)
                             if (result.isSuccessful) documents = api.documents().body()?.documents.orEmpty()
