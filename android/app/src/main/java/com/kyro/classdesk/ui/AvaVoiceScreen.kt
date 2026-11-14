@@ -52,6 +52,7 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
     var recognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
     var speech by remember { mutableStateOf<TextToSpeech?>(null) }
     var audioPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+    var audioFile by remember { mutableStateOf<File?>(null) }
     var ttsReady by remember { mutableStateOf(false) }
     var sessionActive by remember { mutableStateOf(false) }
     var listening by remember { mutableStateOf(false) }
@@ -72,6 +73,8 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
         runCatching { audioPlayer?.stop() }
         runCatching { audioPlayer?.release() }
         audioPlayer = null
+        audioFile?.let { runCatching { it.delete() } }
+        audioFile = null
         listening = false
         processing = false
         speaking = false
@@ -87,6 +90,12 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
         }
     }
     fun startRecognition() {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            sessionActive = false
+            listening = false
+            error = "Microphone permission is required. Tap Activate to grant access before Ava listens."
+            return
+        }
         val engine = recognizer
         if (engine == null) {
             error = "Speech recognition is unavailable on this device."
@@ -162,21 +171,35 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
                                         val voiceResult = api.speak(mapOf("text" to answer))
                                         val audioBytes = if (voiceResult.isSuccessful) voiceResult.body()?.bytes() else null
                                         if (audioBytes != null && audioBytes.isNotEmpty()) {
-                                            val audioFile = File.createTempFile("classdesk-ava-", ".mp3", context.cacheDir)
-                                            audioFile.writeBytes(audioBytes)
+                                            val outputFile = File.createTempFile("classdesk-ava-", ".mp3", context.cacheDir)
+                                            outputFile.writeBytes(audioBytes)
+                                            audioFile = outputFile
                                             val player = MediaPlayer()
                                             audioPlayer = player
-                                            player.setDataSource(audioFile.absolutePath)
+                                            player.setDataSource(outputFile.absolutePath)
                                             player.setOnPreparedListener { prepared ->
                                                 if (sessionActive) { speaking = true; prepared.start() }
-                                                else { prepared.release(); audioPlayer = null; audioFile.delete() }
+                                                else {
+                                                    runCatching { prepared.release() }
+                                                    audioPlayer = null
+                                                    runCatching { outputFile.delete() }
+                                                    audioFile = null
+                                                }
                                             }
                                             player.setOnCompletionListener { completed ->
-                                                speaking = false; completed.release(); audioPlayer = null; audioFile.delete()
+                                                speaking = false
+                                                runCatching { completed.release() }
+                                                audioPlayer = null
+                                                runCatching { outputFile.delete() }
+                                                audioFile = null
                                                 if (sessionActive && pendingDelete == null) startRecognition()
                                             }
                                             player.setOnErrorListener { failed, _, _ ->
-                                                speaking = false; failed.release(); audioPlayer = null; audioFile.delete()
+                                                speaking = false
+                                                runCatching { failed.release() }
+                                                audioPlayer = null
+                                                runCatching { outputFile.delete() }
+                                                audioFile = null
                                                 if (sessionActive) speakOnDevice(answer)
                                                 true
                                             }
@@ -212,14 +235,24 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
             override fun onError(utteranceId: String?) { speaking = false; error = "Ava's speech output failed." }
         })
         onDispose {
-            recognizer?.destroy()
+            // Leaving the voice screen always ends the user-started session. Never let a late
+            // speech/media callback reopen the microphone after navigation or disposal.
+            sessionActive = false
+            userStopped = true
+            runCatching { recognizer?.cancel() }
+            runCatching { recognizer?.destroy() }
             recognizer = null
-            speech?.stop()
-            speech?.shutdown()
+            runCatching { speech?.stop() }
+            runCatching { speech?.shutdown() }
             speech = null
             runCatching { audioPlayer?.stop() }
             runCatching { audioPlayer?.release() }
             audioPlayer = null
+            audioFile?.let { runCatching { it.delete() } }
+            audioFile = null
+            listening = false
+            processing = false
+            speaking = false
         }
     }
 
