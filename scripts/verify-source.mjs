@@ -152,3 +152,6 @@ assert.ok(read("app/api/ai/tools/route.ts").includes("confirmPermanent:") === fa
 assert.ok(read("app/api/ai/tools/route.ts").includes("body?.confirmPermanent !== true"), "The document deletion tool must reject missing confirmation");
 assert.ok(read("android/app/src/main/java/com/kyro/classdesk/ui/AvaVoiceScreen.kt").includes("pendingDelete?.let"), "Android Ava voice must show a deletion confirmation dialog");
 assert.ok(read("components/ai-workspace.tsx").includes("PERMANENT DELETION CONFIRMATION"), "Web Ava chat must show a deletion confirmation card");
+
+assert.ok(read("android/app/src/main/java/com/kyro/classdesk/ui/AvaToolsScreen.kt").includes("SQL SELECT CONSOLE"), "Android must expose the Ava read-only SQL console");
+assert.ok(read("android/app/src/main/java/com/kyro/classdesk/ui/ClassDeskApp.kt").includes("AvaToolsScreen(api, user.role == \"CLASS_REP\")"), "Android Ava tools must be role-gated in navigation");
