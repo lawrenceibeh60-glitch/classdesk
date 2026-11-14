@@ -64,7 +64,15 @@ export async function POST(req: NextRequest) {
     if (lectureDate && Number.isNaN(lectureDate.getTime())) return NextResponse.json({ error: "Invalid lecture date" }, { status: 400 });
     const safeFilename = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 160) || `document.${ext}`;
     const key = `documents/${id}/${safeFilename}`;
-    storedKey = await storeObject(key, buffer, canonicalMime);
+    try {
+      storedKey = await storeObject(key, buffer, canonicalMime);
+    } catch (storageError) {
+      console.error("document object storage failed", storageError);
+      return NextResponse.json(
+        { error: "Shared file storage is unavailable. Ask the Class Representative to check the storage configuration, then retry the upload." },
+        { status: 503 },
+      );
+    }
     const doc = await db.document.create({ data: {
       id, title: String(form.get("title") || file.name).trim().slice(0, 180), filename: safeFilename,
       mimeType: canonicalMime, sizeBytes: file.size, storageKey: storedKey,
