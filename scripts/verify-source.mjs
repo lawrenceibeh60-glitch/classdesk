@@ -100,7 +100,7 @@ assert.match(read("components/storage-management.tsx"), /Pending sync changes ar
 assert.match(read("app/api/admin/storage/route.ts"), /operation: \{ not: "delete" \}/, "SQL cleanup must retain deletion tombstones for devices that reconnect after the retention window");
 assert.match(read("app/api/sync/route.ts"), /recreatedAt === undefined \|\| item\.appliedAt!\.getTime\(\) > recreatedAt/, "A recreated record must supersede its older deletion tombstone");
 assert.match(read("components/storage-management.tsx"), /Manage records and uploaded documents[\s\S]*Clean temporary SQL data/, "Settings must expose SQL storage inspection and cleanup controls");
-assert.match(read("components/storage-management.tsx"), /fetch\("\/api\/documents"[\s\S]*DELETE[\s\S]*Delete permanently/, "Primary settings must expose per-document deletion from SQL and shared storage");
+assert.match(read("components/storage-management.tsx"), /preview_delete_document[\s\S]*action: "delete_document"[\s\S]*confirmPermanent: true/, "Primary settings must preview and confirm per-document deletion through audited storage tools");
 assert.match(read("app/api/documents/route.ts"), /requirePrimaryAdmin[\s\S]*await deleteObject[\s\S]*db\.document\.delete/, "Document deletion must confirm shared-object removal before deleting the SQL row");
 assert.match(read("app/settings/page.tsx"), /StorageManagement/, "Primary settings page must include SQL storage management");
 assert.match(read("components/section-shell.tsx"), /Calendar & timetable.*\/calendar/, "Calendar and timetable must be reachable from workspace navigation");
