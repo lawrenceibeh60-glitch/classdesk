@@ -191,6 +191,7 @@ export function useAva(handlers: AvaHandlers) {
         }
       };
       recorder.start(500);
+      setVoiceError("");
       setInputMode("cloud");
       setListening(true);
     } catch (error) {
