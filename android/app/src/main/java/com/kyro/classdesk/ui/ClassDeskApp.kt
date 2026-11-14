@@ -48,7 +48,7 @@ private val Muted = Color(0xFF91A4B8)
 private val Gold = Color(0xFFF2C94C)
 
 @Composable
-fun ClassDeskApp() {
+fun ClassDeskApp(initialDestination: String? = null) {
     val context = LocalContext.current
     val api = remember { ApiClient.get(context) }
     val scope = rememberCoroutineScope()
@@ -120,6 +120,7 @@ fun ClassDeskApp() {
             }
         )
         else -> DashboardScreen(
+            initialDestination = initialDestination,
             user = user!!,
             api = api,
             summary = summary,
@@ -165,8 +166,8 @@ private fun LoginScreen(error: String?, onLogin: (String, String) -> Unit) {
 }
 
 @Composable
-private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDto?, upcoming: List<AssignmentDto>, onRefresh: () -> Unit, onLogout: () -> Unit) {
-    var selected by remember { mutableStateOf("Overview") }
+private fun DashboardScreen(initialDestination: String?, user: UserDto, api: ClassDeskApi, summary: SummaryDto?, upcoming: List<AssignmentDto>, onRefresh: () -> Unit, onLogout: () -> Unit) {
+    var selected by remember(initialDestination) { mutableStateOf(initialDestination ?: "Overview") }
     var courses by remember { mutableStateOf<List<CourseDto>>(emptyList()) }
     var assignments by remember { mutableStateOf<List<AssignmentDto>>(emptyList()) }
     var lectures by remember { mutableStateOf<List<LectureDto>>(emptyList()) }
