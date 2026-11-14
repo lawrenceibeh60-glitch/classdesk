@@ -173,6 +173,7 @@ export default function RecordsManager({ mode, isPrimaryAdmin }: { mode: Mode; i
   }
 
   async function removeRecord(id: string) {
+    if (!isPrimaryAdmin) { setMessage("Only the Class Representative can delete records."); return; }
     if (!confirm("Delete this record permanently?")) return;
     if (!navigator.onLine) { await queueDelete(id); setMessage("Deletion queued on this device and will sync when you reconnect."); await load(); return; }
     try {
