@@ -78,3 +78,6 @@ const healthRoute = read("app/api/health/route.ts");
 assert.match(healthRoute, /DATABASE_URL_POOLED \|\| process\.env\.DATABASE_URL/, "Health checks must recognise pooled Neon database configuration");
 assert.match(healthRoute, /AWS_ACCESS_KEY_ID/, "Health checks must recognise Neon Object Storage AWS credentials");
 assert.match(healthRoute, /AWS_ENDPOINT_URL_S3/, "Health checks must recognise the Neon Object Storage endpoint");
+
+const logoutSource = read("components/logout-button.tsx");
+for (const queue of ["outbox", "academicQueue", "aiQueue", "uploads"]) assert.match(logoutSource, new RegExp(`${queue}\\.count\\(\\)`), `Logout warning must include pending ${queue} items`);
