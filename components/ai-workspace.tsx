@@ -93,7 +93,7 @@ export default function AIWorkspace({ initialKind = "announcement" }: { initialK
           setMessages(m => [...m, { role: "assistant", content: names.length ? "I found recent uploads, but I can't safely identify which ones are assignments. Please rename the relevant files to include “assignment” or tell me their exact titles: " + names.join("; ") : "I couldn't find any ready uploaded documents. Upload the assignment first, then ask me to work through it and create a PDF." }]);
         } else {
           setStatus("Queuing a persistent assignment task…");
-          const taskResponse = await fetch("/api/ai/tasks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "assignment_pdf", documentIds: selected.map((doc: { id: string }) => doc.id), prompt: text }) });
+          const taskResponse = await fetch("/api/ai/tasks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "assignment_pdf", documentIds: selected.map((doc: { id: string }) => doc.id), prompt: text, clientRequestId: requestId }) });
           const payload = await taskResponse.json().catch(() => ({}));
           if (!taskResponse.ok) throw new Error(payload.error || "Ava could not queue the assignment task.");
           await refreshTasks();
