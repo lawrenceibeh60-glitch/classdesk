@@ -150,7 +150,7 @@ fun AvaTasksScreen(api: ClassDeskApi) {
                         Text(task.status, color = if (task.status == "FAILED") Color(0xFFFF7D78) else AvaGold, fontSize = 10.sp)
                     }
                     Text(task.currentStep, color = Color.White, fontSize = 12.sp)
-                    LinearProgressIndicator(progress = { task.progress.coerceIn(0, 100) / 100f }, modifier = Modifier.fillMaxWidth(), color = AvaCyan, trackColor = Color(0xFF26384B))
+                    LinearProgressIndicator(progress = task.progress.coerceIn(0, 100) / 100f, modifier = Modifier.fillMaxWidth(), color = AvaCyan, trackColor = Color(0xFF26384B))
                     Text("${task.progress}% complete", color = AvaMuted, fontSize = 10.sp)
                     task.errorMessage?.let { Text(it, color = Color(0xFFFF7D78), fontSize = 11.sp) }
                     if (!task.resultDocumentId.isNullOrBlank()) {
