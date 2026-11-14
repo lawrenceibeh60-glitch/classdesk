@@ -59,3 +59,8 @@ Never commit `.env.local`, API keys, database URLs, student passwords, or privat
 - Session: 2026/2027
 - Access model: private, single administrator
 - Primary communication channel: WhatsApp
+
+
+## Two-account access
+
+Production deployments must configure the two authorised accounts and session secret as described in [docs/ACCOUNT-SETUP.md](docs/ACCOUNT-SETUP.md). Public registration is disabled.
