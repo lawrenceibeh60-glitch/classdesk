@@ -60,10 +60,10 @@ export default function AcademicManager({ mode, isPrimaryAdmin }: { mode: Mode; 
       }
       if (mode !== "courses") {
         const courseResponse = await fetch("/api/academic?resource=courses", { cache: "no-store" });
-        if (courseResponse.ok) { const list = (await courseResponse.json()).items || []; setCourses(list); if (offlineDB) await offlineDB.academicItems.bulkPut(list.map((item: any) => ({ key: `courses:${item.id}`, resource: "courses", id: item.id, payload: item, updatedAt: new Date().toISOString() }))); }
+        if (courseResponse.ok) { const list = (await courseResponse.json()).items || []; setCourses(list); if (offlineDB) await offlineDB.academicItems.bulkPut(list.map((item: any) => ({ key: `courses:${item.id}`, resource: "courses", id: item.id, payload: item, updatedAt: new Date().toISOString() }))); } else if (courseResponse.status === 401 || courseResponse.status === 403) setCourses([]);
       }
     } catch (error) {
-      if (!offlineDB) throw error;
+      if (!offlineDB || !(error instanceof TypeError)) { setItems([]); if (mode !== "courses") setCourses([]); throw error; }
       const cached = await offlineDB.academicItems.where("resource").equals(mode).toArray();
       setItems(cached.map(item => item.payload));
       if (mode !== "courses") { const savedCourses = await offlineDB.academicItems.where("resource").equals("courses").toArray(); setCourses(savedCourses.map(item => item.payload)); }
