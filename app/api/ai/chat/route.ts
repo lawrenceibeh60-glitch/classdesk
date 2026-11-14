@@ -71,6 +71,12 @@ export async function POST(req: NextRequest) {  const originDenied = assertSameO
     if (assignmentPdfIntent) {
       const user = await getSession();
       if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+      const workerOnline = await db.aiWorkerState.count({ where: { lastSeenAt: { gt: new Date(Date.now() - 90_000) } } }) > 0;
+      if (!workerOnline) {
+        const result = { answer: "I can prepare that assignment, but my background worker is offline. Your task was not queued. The ClassDesk administrator needs to start the Ava worker first.", sources: [], task: null };
+        if (requestId) await db.aiRequestReceipt.create({ data: { id: requestId, kind: "chat", response: result as unknown as Prisma.InputJsonValue } }).catch(() => undefined);
+        return NextResponse.json(result);
+      }
       const recentDocuments = await db.document.findMany({
         where: { status: "READY" },
         orderBy: { createdAt: "desc" },
