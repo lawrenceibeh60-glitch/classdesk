@@ -2,7 +2,6 @@ import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
 import { timingSafeEqual } from "node:crypto";
-import { NextResponse } from "next/server";
 
 const COOKIE = "classdesk_session";
 const ISSUER = "afit-classdesk";
@@ -119,9 +118,3 @@ export async function isAuthenticated() {
   return Boolean(await getSession());
 }
 
-export async function requirePrimaryAdmin() {
-  const user = await getSession();
-  if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-  if (user.role !== "CLASS_REP") return NextResponse.json({ error: "This action is restricted to the Class Representative" }, { status: 403 });
-  return null;
-}
