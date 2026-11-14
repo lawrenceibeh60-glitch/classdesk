@@ -7,7 +7,7 @@ type R = CachedRecord;
 type Doc = { id: string; title: string; filename: string; status: string; securityScanStatus?: string; originalAvailable?: boolean; courseName?: string | null; topic?: string | null; lectureDate?: string | null };
 type Mode = "notes" | "records";
 
-export default function RecordsManager({ mode }: { mode: Mode }) {
+export default function RecordsManager({ mode, isPrimaryAdmin }: { mode: Mode; isPrimaryAdmin: boolean }) {
   const [items, setItems] = useState<R[]>([]);
   const [docs, setDocs] = useState<Doc[]>([]);
   const [title, setTitle] = useState("");
