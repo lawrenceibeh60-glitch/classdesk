@@ -46,6 +46,7 @@ fun ClassDeskApp() {
             if (response.isSuccessful) {
                 user = response.body()?.user
                 if (user != null) {
+                    ClassDeskSyncScheduler.schedule(context)
                     val data = api.summary()
                     if (data.isSuccessful) {
                         summary = data.body()?.summary
@@ -230,9 +231,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                     }
                 }
             } else {
-                Text("AVA / VOICE ASSISTANT", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
-                Text("Ava's native voice console is the next module. The microphone will only be requested after you tap ACTIVATE.", color = Muted)
-                Text("NO BACKGROUND LISTENING  /  USER-INITIATED SESSIONS", color = Cyan, fontSize = 10.sp)
+                AvaVoiceScreen(api)
             }
         }
     }
