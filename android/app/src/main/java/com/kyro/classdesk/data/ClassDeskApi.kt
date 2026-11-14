@@ -116,6 +116,9 @@ interface ClassDeskApi {
     @PATCH("api/announcements")
     suspend fun updateAnnouncement(@Body body: Map<String, String>): Response<Map<String, Any>>
 
+    @DELETE("api/announcements")
+    suspend fun deleteAnnouncement(@Query("id") id: String): Response<Map<String, Any>>
+
     @POST("api/academic")
     suspend fun createAcademic(@Body body: Map<String, String>): Response<Map<String, Any>>
 
