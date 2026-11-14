@@ -211,6 +211,18 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val secureStore = remember { ApiClient.cookies(context) }
+
+    suspend fun mutateAcademic(resource: String, method: String, payload: Map<String, String>): OfflineMutationResult {
+        val result = saveAcademicMutation(context, user, api, resource, method, payload)
+        if (result.queued) moduleError = result.message ?: "Saved locally; waiting for synchronization."
+        return result
+    }
+
+    suspend fun mutateAnnouncement(method: String, payload: Map<String, String>): OfflineMutationResult {
+        val result = saveAnnouncementMutation(context, user, api, method, payload)
+        if (result.queued) moduleError = result.message ?: "Saved locally; waiting for synchronization."
+        return result
+    }
     val connectivity = remember { ClassDeskConnectivity(context) }
     var online by remember { mutableStateOf(connectivity.isOnline()) }
     val currentOnline = rememberUpdatedState(online)
@@ -413,8 +425,8 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                             Text(listOfNotNull(course.lecturer, course.semester).joinToString("  /  "), color = Muted, fontSize = 12.sp)
                             if (user.role == "CLASS_REP") TextButton(onClick = {
                                 scope.launch {
-                                    val deleted = api.deleteAcademic("courses", course.id)
-                                    if (deleted.isSuccessful) courses = api.courses().body()?.items.orEmpty()
+                                    val deleted = mutateAcademic("courses", "DELETE", mapOf("id" to course.id))
+                                    if (deleted.isSuccessful) { if (deleted.queued) courses = courses.filterNot { it.id == course.id } else courses = api.courses().body()?.items.orEmpty() }
                                     else moduleError = "Could not delete this course (${deleted.code()})."
                                 }
                             }) { Text("DELETE COURSE", color = Color(0xFFFF7D78), fontSize = 10.sp) }
@@ -434,9 +446,9 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                     },
                     confirmButton = { TextButton(onClick = {
                         scope.launch {
-                            val saved = api.createAcademic(mapOf("resource" to "courses", "code" to courseCode.trim(), "name" to courseName.trim(), "lecturer" to lecturer.trim(), "semester" to semester.trim()))
+                            val saved = mutateAcademic("courses", "POST", mapOf("code" to courseCode.trim(), "name" to courseName.trim(), "lecturer" to lecturer.trim(), "semester" to semester.trim()))
                             if (saved.isSuccessful) {
-                                courses = api.courses().body()?.items.orEmpty()
+                                if (!saved.queued) courses = api.courses().body()?.items.orEmpty()
                                 courseCode = ""; courseName = ""; lecturer = ""; semester = ""
                                 showCourseDialog = false
                             } else moduleError = "Course could not be saved (${saved.code()})."
@@ -459,15 +471,15 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                                 TextButton(onClick = {
                                     scope.launch {
                                         val next = if (item.status == "DONE") "TODO" else "DONE"
-                                        val saved = api.updateAcademic(mapOf("resource" to "assignments", "id" to item.id, "status" to next))
-                                        if (saved.isSuccessful) assignments = api.assignments().body()?.items.orEmpty()
+                                        val saved = mutateAcademic("assignments", "PATCH", mapOf("id" to item.id, "status" to next))
+                                        if (saved.isSuccessful) { if (saved.queued) moduleError = saved.message else assignments = api.assignments().body()?.items.orEmpty() }
                                         else moduleError = "Assignment status could not be updated (${saved.code()})."
                                     }
                                 }) { Text(if (item.status == "DONE") "REOPEN" else "MARK DONE", color = Cyan, fontSize = 10.sp) }
                                 if (user.role == "CLASS_REP") TextButton(onClick = {
                                     scope.launch {
-                                        val deleted = api.deleteAcademic("assignments", item.id)
-                                        if (deleted.isSuccessful) assignments = api.assignments().body()?.items.orEmpty()
+                                        val deleted = mutateAcademic("assignments", "DELETE", mapOf("id" to item.id))
+                                        if (deleted.isSuccessful) { if (deleted.queued) assignments = assignments.filterNot { it.id == item.id } else assignments = api.assignments().body()?.items.orEmpty() }
                                         else moduleError = "Assignment could not be deleted (${deleted.code()})."
                                     }
                                 }) { Text("DELETE", color = Color(0xFFFF7D78), fontSize = 10.sp) }
@@ -487,9 +499,9 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                     },
                     confirmButton = { TextButton(onClick = {
                         scope.launch {
-                            val saved = api.createAcademic(mapOf("resource" to "assignments", "title" to assignmentTitle.trim(), "details" to assignmentDetails.trim(), "dueAt" to assignmentDueAt.trim()))
+                            val saved = mutateAcademic("assignments", "POST", mapOf("title" to assignmentTitle.trim(), "details" to assignmentDetails.trim(), "dueAt" to assignmentDueAt.trim()))
                             if (saved.isSuccessful) {
-                                assignments = api.assignments().body()?.items.orEmpty()
+                                if (!saved.queued) assignments = api.assignments().body()?.items.orEmpty()
                                 assignmentTitle = ""; assignmentDetails = ""; assignmentDueAt = ""
                                 showAssignmentDialog = false
                             } else moduleError = "Assignment could not be saved (${saved.code()}). Check the due date format."
@@ -519,8 +531,8 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                             if (item.summary.orEmpty().isNotBlank()) Text(item.summary.orEmpty(), color = Muted, fontSize = 12.sp)
                             if (user.role == "CLASS_REP") TextButton(onClick = {
                                 scope.launch {
-                                    val deleted = api.deleteAcademic("lectures", item.id)
-                                    if (deleted.isSuccessful) lectures = api.lectures().body()?.items.orEmpty()
+                                    val deleted = mutateAcademic("lectures", "DELETE", mapOf("id" to item.id))
+                                    if (deleted.isSuccessful) { if (deleted.queued) lectures = lectures.filterNot { it.id == item.id } else lectures = api.lectures().body()?.items.orEmpty() }
                                     else moduleError = "Could not delete lecture (${deleted.code()})."
                                 }
                             }) { Text("DELETE", color = Color(0xFFFF7D78), fontSize = 10.sp) }
@@ -537,9 +549,9 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                         OutlinedTextField(lectureVenue, { lectureVenue = it }, label = { Text("Venue (optional)") }, singleLine = true)
                     } },
                     confirmButton = { TextButton(onClick = { scope.launch {
-                        val saved = api.createAcademic(mapOf("resource" to "lectures", "topic" to lectureTopic.trim(), "summary" to lectureSummary.trim(), "heldAt" to lectureDate.trim(), "venue" to lectureVenue.trim()))
+                        val saved = mutateAcademic("lectures", "POST", mapOf("topic" to lectureTopic.trim(), "summary" to lectureSummary.trim(), "heldAt" to lectureDate.trim(), "venue" to lectureVenue.trim()))
                         if (saved.isSuccessful) {
-                            lectures = api.lectures().body()?.items.orEmpty()
+                            if (!saved.queued) lectures = api.lectures().body()?.items.orEmpty()
                             lectureTopic = ""; lectureSummary = ""; lectureDate = ""; lectureVenue = ""
                             showLectureDialog = false
                         } else moduleError = "Lecture could not be saved. Check the date format."
@@ -561,8 +573,8 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                             item.note?.let { Text(it, color = Muted, fontSize = 12.sp) }
                             if (user.role == "CLASS_REP") TextButton(onClick = {
                                 scope.launch {
-                                    val deleted = api.deleteAcademic("attendance", item.id)
-                                    if (deleted.isSuccessful) attendance = api.attendance().body()?.items.orEmpty()
+                                    val deleted = mutateAcademic("attendance", "DELETE", mapOf("id" to item.id))
+                                    if (deleted.isSuccessful) { if (deleted.queued) attendance = attendance.filterNot { it.id == item.id } else attendance = api.attendance().body()?.items.orEmpty() }
                                     else moduleError = "Could not delete attendance summary (${deleted.code()})."
                                 }
                             }) { Text("DELETE", color = Color(0xFFFF7D78), fontSize = 10.sp) }
@@ -578,9 +590,9 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                         OutlinedTextField(attendanceAbsent, { attendanceAbsent = it }, label = { Text("Absent count") }, singleLine = true)
                     } },
                     confirmButton = { TextButton(onClick = { scope.launch {
-                        val saved = api.createAcademic(mapOf("resource" to "attendance", "sessionDate" to attendanceDate.trim(), "presentCount" to attendancePresent.trim(), "absentCount" to attendanceAbsent.trim()))
+                        val saved = mutateAcademic("attendance", "POST", mapOf("sessionDate" to attendanceDate.trim(), "presentCount" to attendancePresent.trim(), "absentCount" to attendanceAbsent.trim()))
                         if (saved.isSuccessful) {
-                            attendance = api.attendance().body()?.items.orEmpty()
+                            if (!saved.queued) attendance = api.attendance().body()?.items.orEmpty()
                             attendanceDate = ""; attendancePresent = ""; attendanceAbsent = ""
                             showAttendanceDialog = false
                         } else moduleError = "Attendance could not be saved. Check date and whole-number counts."
@@ -602,8 +614,8 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                             item.resolution?.let { Text("RESOLUTION: $it", color = Gold, fontSize = 12.sp) }
                             if (user.role == "CLASS_REP") TextButton(onClick = {
                                 scope.launch {
-                                    val deleted = api.deleteAcademic("concerns", item.id)
-                                    if (deleted.isSuccessful) concerns = api.concerns().body()?.items.orEmpty()
+                                    val deleted = mutateAcademic("concerns", "DELETE", mapOf("id" to item.id))
+                                    if (deleted.isSuccessful) { if (deleted.queued) concerns = concerns.filterNot { it.id == item.id } else concerns = api.concerns().body()?.items.orEmpty() }
                                     else moduleError = "Could not delete concern (${deleted.code()})."
                                 }
                             }) { Text("DELETE", color = Color(0xFFFF7D78), fontSize = 10.sp) }
@@ -619,9 +631,9 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                         OutlinedTextField(concernDetails, { concernDetails = it }, label = { Text("Details") }, minLines = 3)
                     } },
                     confirmButton = { TextButton(onClick = { scope.launch {
-                        val saved = api.createAcademic(mapOf("resource" to "concerns", "category" to concernCategory.trim(), "title" to concernTitle.trim(), "details" to concernDetails.trim()))
+                        val saved = mutateAcademic("concerns", "POST", mapOf("category" to concernCategory.trim(), "title" to concernTitle.trim(), "details" to concernDetails.trim()))
                         if (saved.isSuccessful) {
-                            concerns = api.concerns().body()?.items.orEmpty()
+                            if (!saved.queued) concerns = api.concerns().body()?.items.orEmpty()
                             concernCategory = "GENERAL"; concernTitle = ""; concernDetails = ""
                             showConcernDialog = false
                         } else moduleError = "Concern could not be saved."
@@ -733,15 +745,15 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                             Text(item.body, color = Muted, fontSize = 12.sp, maxLines = 5)
                             if (user.role == "CLASS_REP" && item.status == "DRAFT") TextButton(onClick = {
                                 scope.launch {
-                                    val approved = api.updateAnnouncement(mapOf("id" to item.id, "action" to "approve"))
-                                    if (approved.isSuccessful) announcements = api.announcements().body()?.announcements.orEmpty()
+                                    val approved = mutateAnnouncement("PATCH", mapOf("id" to item.id, "action" to "approve"))
+                                    if (approved.isSuccessful) { if (!approved.queued) announcements = api.announcements().body()?.announcements.orEmpty() }
                                     else moduleError = "Announcement approval failed. Resolve placeholders and try again."
                                 }
                             }) { Text("APPROVE", color = Gold, fontSize = 10.sp) }
                             if (user.role == "CLASS_REP" && item.status == "APPROVED") TextButton(onClick = {
                                 scope.launch {
-                                    val published = api.updateAnnouncement(mapOf("id" to item.id, "action" to "publish"))
-                                    if (published.isSuccessful) announcements = api.announcements().body()?.announcements.orEmpty()
+                                    val published = mutateAnnouncement("PATCH", mapOf("id" to item.id, "action" to "publish"))
+                                    if (published.isSuccessful) { if (!published.queued) announcements = api.announcements().body()?.announcements.orEmpty() }
                                     else moduleError = "Announcement could not be published."
                                 }
                             }) { Text("PUBLISH", color = Cyan, fontSize = 10.sp) }
@@ -757,9 +769,9 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                         OutlinedTextField(announcementBody, { announcementBody = it }, label = { Text("Announcement") }, minLines = 4)
                     } },
                     confirmButton = { TextButton(onClick = { scope.launch {
-                        val saved = api.createAnnouncement(mapOf("title" to announcementTitle.trim(), "category" to announcementCategory.trim(), "body" to announcementBody.trim()))
+                        val saved = mutateAnnouncement("POST", mapOf("title" to announcementTitle.trim(), "category" to announcementCategory.trim(), "body" to announcementBody.trim()))
                         if (saved.isSuccessful) {
-                            announcements = api.announcements().body()?.announcements.orEmpty()
+                            if (!saved.queued) announcements = api.announcements().body()?.announcements.orEmpty()
                             announcementTitle = ""; announcementBody = ""; announcementCategory = "GENERAL"
                             showAnnouncementDialog = false
                         } else moduleError = "Announcement draft could not be saved."
