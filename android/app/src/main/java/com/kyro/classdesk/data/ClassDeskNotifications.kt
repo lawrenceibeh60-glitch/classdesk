@@ -38,6 +38,24 @@ object ClassDeskNotifications {
         post(context, id.hashCode(), CHANNEL_UPDATES, "New class announcement", title)
     }
 
+    fun assignment(context: Context, id: String, title: String, dueAt: String?) {
+        val detail = dueAt?.takeIf { it.isNotBlank() }?.let { "Due: $it" } ?: "A new assignment is available."
+        post(context, id.hashCode(), CHANNEL_UPDATES, "New assignment", "$title — $detail")
+    }
+
+    fun timetable(context: Context, id: String, title: String, date: String?) {
+        val detail = date?.takeIf { it.isNotBlank() } ?: "A new class event is available."
+        post(context, id.hashCode(), CHANNEL_UPDATES, "Timetable update", "$title — $detail")
+    }
+
+    fun attendance(context: Context, id: String) {
+        post(context, id.hashCode(), CHANNEL_UPDATES, "Attendance updated", "A new class attendance record is available.")
+    }
+
+    fun concern(context: Context, id: String, status: String) {
+        post(context, id.hashCode(), CHANNEL_UPDATES, "Class concern updated", "A concern status changed to ${status.lowercase()}.")
+    }
+
     fun syncCompleted(context: Context, count: Int) {
         if (count > 0) post(context, 81001, CHANNEL_SYNC, "ClassDesk is up to date",
             "$count offline change${if (count == 1) "" else "s"} synchronised successfully.")
