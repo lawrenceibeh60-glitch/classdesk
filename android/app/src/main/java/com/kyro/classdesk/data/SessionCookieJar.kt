@@ -6,6 +6,7 @@ import androidx.security.crypto.MasterKey
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
+import com.google.gson.Gson
 
 class SessionCookieJar(context: Context) : CookieJar {
     private val preferences = EncryptedSharedPreferences.create(
@@ -30,5 +31,19 @@ class SessionCookieJar(context: Context) : CookieJar {
             .mapNotNull { Cookie.parse(url, it) }
             .filter { it.expiresAt > System.currentTimeMillis() }.toList()
 
-    fun clear() { preferences.edit().remove("cookies").apply() }
+    fun saveUser(user: UserDto) {
+        preferences.edit().putString("cached_user", Gson().toJson(user)).apply()
+    }
+
+    fun loadUser(): UserDto? = runCatching {
+        preferences.getString("cached_user", null)?.let { Gson().fromJson(it, UserDto::class.java) }
+    }.getOrNull()
+
+    fun saveSnapshot(key: String, json: String) {
+        preferences.edit().putString("snapshot_$key", json).apply()
+    }
+
+    fun loadSnapshot(key: String): String? = preferences.getString("snapshot_$key", null)
+
+    fun clear() { preferences.edit().clear().apply() }
 }
