@@ -19,7 +19,7 @@ Set this Gradle property in local `android/gradle.properties` (do not commit pri
 CLASSDESK_API_BASE_URL=https://YOUR-CLASSDESK-HOST/
 ```
 
-You can also set the `CLASSDESK_API_BASE_URL` environment variable. The default example host is deliberately non-production; sign-in will not work until a real HTTPS origin is configured.
+You can also set the `CLASSDESK_API_BASE_URL` environment variable. The current Gradle default is `https://afit-classdesk.vercel.app/`; verify that this is the intended live API origin before producing a release build. Override it locally when testing another HTTPS deployment.
 
 ## Build
 
@@ -27,30 +27,28 @@ Requirements: Android Studio with Android SDK 35 and JDK 17.
 
 Open the `android/` folder in Android Studio, allow Gradle sync, install the SDK components, and run on an emulator or physical Android device. From a machine with Gradle installed, run `gradle assembleDebug` inside this folder.
 
-## Implemented first slice
+## Implemented Android capabilities
 
-- Native sign-in against `POST /api/auth/login`.
-- Session restoration against `GET /api/auth/me`.
-- Encrypted persistence of the server session cookie and last authenticated profile.
-- Native command-centre overview with live summary and upcoming assignments.
-- Native course register with list, add and primary-admin delete.
-- Native assignments with list, add, mark done/reopen and primary-admin delete.
-- Native lecture register, attendance summaries and class concerns with create/list/delete flows.
-- Native announcement studio with draft creation and Class Representative-only approve/publish actions.
-- Native calendar/timetable entries with create, list and primary-admin delete.
-- Native document library with Android system file picker, server-side upload/indexing and primary-admin permanent deletion.
-- Encrypted local snapshots for the overview, courses, assignments, lectures, attendance, concerns, announcements and calendar; cached data is read-only while offline.
-- SQLite mutation outbox, AES-GCM payload encryption using Android Keystore, account-bound queue ownership, a queue review screen, and WorkManager sync against the existing versioned `/api/sync` endpoint. Calendar/timetable mutations and academic/announcement create, update, approval, publication and delete requests now enqueue on network exceptions and schedule an immediate network-constrained sync attempt. Server-side validation and permission errors are returned instead of being queued.
-- Ava graphical voice panel using Android speech recognition, ClassDesk AI chat and device text-to-speech. It does not request microphone access until Activate is tapped.
+- Native sign-in and session restoration against the shared ClassDesk API.
+- Encrypted persistence for the session cookie and signed-in profile.
+- Command-centre overview, course register, assignments, lectures, attendance, concerns, announcements and calendar/timetable records.
+- Catch-up Centre, Coverage, Class Records and account/system diagnostics.
+- Native document library with system file selection, upload/indexing, download/save and primary-account deletion controls.
+- JSON and ZIP backup export, plus confirmation-protected restore using the shared server endpoints.
+- Ava voice interface with speech recognition, AI chat, spoken responses, task/tool screens and explicit microphone permission.
+- Ava is push-to-talk: each voice request requires a fresh tap. It does not automatically reopen the microphone after responding or after leaving the voice screen.
+- Encrypted local snapshots for the overview and academic modules; cached content is read-only while offline.
+- SQLite offline mutation queue with Android Keystore encryption, account-bound ownership, review of pending/conflicted/rejected entries, and WorkManager retry/synchronisation for supported academic, announcement and calendar mutations.
+- Local notifications for newly observed announcements, assignments, timetable records, attendance and concern updates. Notification polling is periodic WorkManager work, not real-time push delivery.
 - Custom ClassDesk launcher icon and HTTPS-only network policy.
 
-## Remaining implementation slices
+## Release-readiness work still required
 
-1. Extend offline mutation creation to the remaining editable screens and add safe retry/recovery controls for rejected and conflicted changes.
-2. Add document downloads, sharing, preview and export flows.
-3. Add edit/update workflows for lectures, attendance, concerns and announcements, plus calendar filters.
-4. Improve Ava lifecycle recovery, speech-service fallbacks, voice selection and accessibility.
-5. Add unit/instrumentation tests, API contract tests and real-device acceptance testing.
-6. Configure the production API origin, generate Gradle wrapper, sign a release build and package APK/AAB.
+1. Run the Android verification workflow and confirm Kotlin compilation plus the calendar input unit tests pass on the current branch.
+2. Run the web CI pipeline (source verification, Prisma validation/migrations against CI PostgreSQL, TypeScript, lint and production build).
+3. Complete physical-device acceptance testing for sign-in, both staff roles, Ava microphone permission and one-tap-per-request behavior, notifications, file upload/download, backup/restore, offline queue replay, account switching and logout.
+4. Review and complete offline mutation coverage for any remaining editable screens; rejected/conflicted queue entries currently require review rather than automatic conflict resolution.
+5. Confirm the production API origin and configure release signing credentials securely outside the repository.
+6. Build and inspect a signed release APK/AAB only after the owner authorizes the release build.
 
-No deployment or production database changes are performed by this Android project. Do not treat the APK as release-ready until Gradle build, device tests, authentication, offline recovery and API integration tests pass.
+The Android verification workflow compiles the app and runs available unit tests; it does not package or publish an APK. The separate APK workflow is manual-only. No production deployment, merge to `main`, production database mutation or APK release is authorized by this development branch.
