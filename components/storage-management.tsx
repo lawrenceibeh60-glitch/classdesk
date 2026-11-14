@@ -29,6 +29,8 @@ const labels: Record<string, string> = {
   syncApplied: "Applied sync history",
   rateLimitBuckets: "Rate-limit entries",
   aiReceipts: "AI request receipts",
+  aiTasks: "Ava background tasks",
+  auditLogs: "Privileged-action audit entries",
 };
 
 function formatBytes(value: number | null) {
