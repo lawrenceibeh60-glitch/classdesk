@@ -40,7 +40,7 @@ export async function GET() {
     avaWorkerOnline,
     avaProcessingMode: "vercel-workflows",
     avaTaskEngineConfigured,
-    sttConfigured: Boolean(process.env.MISTRAL_API_KEY),
+    speechRecognitionMode: "browser",
     ttsConfigured: Boolean(process.env.ELEVENLABS_API_KEY),
     malwareScannerConfigured: Boolean(process.env.CLAMAV_HOST),
     malwareScanRequired: process.env.REQUIRE_MALWARE_SCAN === "true",
