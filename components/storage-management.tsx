@@ -90,6 +90,14 @@ export default function StorageManagement() {
         <p className="sub">{labels[key] || key}</p><strong>{value.toLocaleString()}</strong>
       </div>)}
     </div>
+    {!!data?.tableSizes?.length && <div style={{ marginTop: 14 }}>
+      <h3>Largest SQL tables</h3>
+      <div className="panel">
+        {data.tableSizes.map((item) => <div key={item.table} className="row" style={{ justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid var(--border, #333)" }}>
+          <span className="sub">{item.table}</span><strong>{formatBytes(item.bytes)}</strong>
+        </div>)}
+      </div>
+    </div>}
     <p className="sub" style={{ marginTop: 12 }}>{data?.cleanupPolicy || "Loading cleanup policy…"}</p>
     <div className="actions" style={{ marginTop: 12 }}>
       <Link className="btn" href="/records">Manage records and uploaded documents</Link>
