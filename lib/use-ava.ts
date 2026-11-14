@@ -63,6 +63,8 @@ export type AvaHandlers = { onCommand: (command: string) => void | Promise<void>
 export function useAva(handlers: AvaHandlers) {
   const [supported, setSupported] = useState(false);
   const [listening, setListening] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const [processing, setProcessing] = useState(false);
   const [awake, setAwake] = useState(false);
   const [heard, setHeard] = useState("");
   const [voiceError, setVoiceError] = useState("");
@@ -86,6 +88,7 @@ export function useAva(handlers: AvaHandlers) {
   const stopSpeaking = useCallback(() => {
     playToken.current++; window.speechSynthesis?.cancel();
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+    setSpeaking(false);
   }, []);
 
   const speakBrowser = useCallback((chunks: string[], finish: () => void) => {
@@ -122,10 +125,12 @@ export function useAva(handlers: AvaHandlers) {
     if (typeof window === "undefined") return;
     const body = (cleanForSpeech(text) + " " + tail).trim(); if (!body) return;
     stopSpeaking();
+    setSpeaking(true);
     const token = playToken.current;
     const chunks = sentences(body);
     mutedUntil.current = Date.now() + 120_000; // ignore the mic while talking
     const finish = () => {
+      setSpeaking(false);
       mutedUntil.current = Date.now() + 900;
       if (openMic && wantRef.current) { awakeUntil.current = Date.now() + 900 + AWAKE_MS; setAwake(true); setTimeout(() => setAwake(Date.now() < awakeUntil.current), AWAKE_MS + 1000); }
     };
@@ -142,7 +147,10 @@ export function useAva(handlers: AvaHandlers) {
     // The microphone button explicitly starts voice mode; no wake word is required.
     awakeUntil.current = 0;
     setAwake(false);
-    void handlersRef.current.onCommand(text);
+    setProcessing(true);
+    void Promise.resolve(handlersRef.current.onCommand(text))
+      .catch((error) => setVoiceError(error instanceof Error ? error.message : "Ava could not complete that command."))
+      .finally(() => setProcessing(false));
   }, []);
 
   /** Listening with Mistral Voxtral: detect speech locally, send each phrase for transcription. */
@@ -202,7 +210,7 @@ export function useAva(handlers: AvaHandlers) {
   }, [startCloud, startBrowserRec, speak]);
 
   const stop = useCallback(() => {
-    wantRef.current = false; awakeUntil.current = 0; setAwake(false); setListening(false);
+    wantRef.current = false; awakeUntil.current = 0; setAwake(false); setListening(false); setProcessing(false);
     recRef.current?.abort(); recRef.current = null; cleanupRef.current?.(); cleanupRef.current = null; stopSpeaking();
     handlersRef.current.onStopListening?.();
   }, [stopSpeaking]);
@@ -219,5 +227,5 @@ export function useAva(handlers: AvaHandlers) {
     return () => { window.speechSynthesis?.removeEventListener?.("voiceschanged", loadVoices); wantRef.current = false; recRef.current?.abort(); cleanupRef.current?.(); stopSpeaking(); };
   }, [stopSpeaking]);
 
-  return { supported, listening, awake, heard, voiceError, toggle, stop, speak, shutUp, voices, voiceName, setVoiceName, cloud };
+  return { supported, listening, speaking, processing, awake, heard, voiceError, toggle, stop, speak, shutUp, voices, voiceName, setVoiceName, cloud };
 }
