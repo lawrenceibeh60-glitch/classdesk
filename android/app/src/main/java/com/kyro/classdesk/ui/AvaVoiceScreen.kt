@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.kyro.classdesk.data.ChatRequest
+import com.kyro.classdesk.data.ChatHistoryItem
 import com.kyro.classdesk.data.ClassDeskApi
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -56,6 +57,7 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
     var userStopped by remember { mutableStateOf(false) }
     var transcript by remember { mutableStateOf("Your spoken instruction will appear here.") }
     var response by remember { mutableStateOf("Ava's response will appear here.") }
+    var conversationHistory by remember { mutableStateOf<List<ChatHistoryItem>>(emptyList()) }
     var error by remember { mutableStateOf<String?>(null) }
 
     fun stopSession() {
@@ -137,11 +139,12 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
                         processing = true
                         scope.launch {
                             try {
-                                val result = api.chat(ChatRequest(message = spoken, voice = true))
+                                val result = api.chat(ChatRequest(message = spoken, voice = true, history = conversationHistory))
                                 val answer = result.body()?.answer
                                 if (!sessionActive) return@launch
                                 if (result.isSuccessful && !answer.isNullOrBlank()) {
                                     response = answer
+                                    conversationHistory = (conversationHistory + listOf(ChatHistoryItem("user", spoken), ChatHistoryItem("assistant", answer))).takeLast(6)
                                     processing = false
                                     try {
                                         val voiceResult = api.speak(mapOf("text" to answer))
@@ -188,7 +191,7 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
             ttsReady = status == TextToSpeech.SUCCESS
             if (status == TextToSpeech.SUCCESS) {
                 speech?.language = Locale.UK
-                val britishVoices = engine.voices?.filter { it.locale.language == "en" && it.locale.country == "GB" }.orEmpty()
+                val britishVoices = speech?.voices?.filter { it.locale.language == "en" && it.locale.country == "GB" }.orEmpty()
                 val preferredVoice = britishVoices.firstOrNull { it.name.contains("female", ignoreCase = true) }
                     ?: britishVoices.firstOrNull { !it.isNetworkConnectionRequired }
                     ?: britishVoices.firstOrNull()
