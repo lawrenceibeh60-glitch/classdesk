@@ -8,6 +8,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -142,6 +143,11 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
         val engine = TextToSpeech(context) { status -> ttsReady = status == TextToSpeech.SUCCESS }
         speech = engine
         engine.language = Locale.UK
+        engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) { speaking = true }
+            override fun onDone(utteranceId: String?) { speaking = false }
+            override fun onError(utteranceId: String?) { speaking = false; error = "Ava's speech output failed." }
+        })
         onDispose {
             recognizer?.destroy()
             recognizer = null
@@ -193,8 +199,8 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
         error?.let { Text(it, color = Color(0xFFFF7D78), fontSize = 12.sp) }
         Button(
             onClick = {
-                if (listening || processing || speaking) stopSession()
-                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startRecognition()
+                if (listening || speaking) stopSession()
+                else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startRecognition()
                 else permission.launch(Manifest.permission.RECORD_AUDIO)
             },
             enabled = !processing,
@@ -202,7 +208,7 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF42D9F5), contentColor = Color(0xFF0A1019)),
             shape = RoundedCornerShape(6.dp)
         ) {
-            Text(if (listening) "RESTART MICROPHONE" else "ACTIVATE MICROPHONE", fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 7.dp))
+            Text(if (listening || speaking) "STOP MICROPHONE" else "ACTIVATE MICROPHONE", fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 7.dp))
         }
         OutlinedButton(onClick = { stopSession(); error = null }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(6.dp)) {
             Text("END VOICE SESSION", color = Color(0xFFF2C94C))
