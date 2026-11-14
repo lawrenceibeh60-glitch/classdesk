@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
-import { requireAdmin, assertSameOrigin } from "@/lib/http";
+import { requireAdmin, requirePrimaryAdmin, assertSameOrigin } from "@/lib/http";
 
 export const runtime = "nodejs";
 type Resource = "courses" | "lectures" | "assignments" | "attendance" | "concerns" | "summary";
@@ -111,6 +111,7 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const originDenied = assertSameOrigin(req); if (originDenied) return originDenied;
   const denied = await requireAdmin(); if (denied) return denied;
+  const primaryDenied = await requirePrimaryAdmin(); if (primaryDenied) return primaryDenied;
   const resource = resourceOf(req.nextUrl.searchParams.get("resource")); const id = text(req.nextUrl.searchParams.get("id"), 100);
   if (!resource || resource === "summary" || !id) return NextResponse.json({ error: "Writable resource and id are required" }, { status: 400 });
   try {
