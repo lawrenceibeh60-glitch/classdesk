@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireAdmin } from "@/lib/http";
+import { requireStaff } from "@/lib/http";
 import { markdownToDocx } from "@/lib/docx-export";
 export const runtime = "nodejs";
 export async function GET() {
-  const denied = await requireAdmin(); if (denied) return denied;
+  const denied = await requireStaff(); if (denied) return denied;
   const since = new Date(Date.now() - 7 * 86400000);
   const [records, lectures, assignments, announcements, concerns] = await Promise.all([
     db.academicRecord.findMany({ where: { updatedAt: { gte: since } }, orderBy: { updatedAt: "desc" }, take: 100 }),

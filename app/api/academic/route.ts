@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
-import { requireAdmin, assertSameOrigin } from "@/lib/http";
+import { requireStaff, requirePrimaryAdmin, assertSameOrigin } from "@/lib/http";
 
 export const runtime = "nodejs";
 type Resource = "courses" | "lectures" | "assignments" | "attendance" | "concerns" | "summary";
@@ -16,7 +16,7 @@ function dateOf(value: unknown): Date | null | undefined {
 function text(value: unknown, max = 5000) { return typeof value === "string" ? value.trim().slice(0, max) : ""; }
 
 export async function GET(req: NextRequest) {
-  const denied = await requireAdmin(); if (denied) return denied;
+  const denied = await requireStaff(); if (denied) return denied;
   const resource = resourceOf(req.nextUrl.searchParams.get("resource"));
   if (!resource) return NextResponse.json({ error: "Valid resource is required" }, { status: 400 });
   const q = text(req.nextUrl.searchParams.get("q"), 100);
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const originDenied = assertSameOrigin(req); if (originDenied) return originDenied;
-  const denied = await requireAdmin(); if (denied) return denied;
+  const denied = await requireStaff(); if (denied) return denied;
   const body = await req.json().catch(() => null);
   const resource = resourceOf(body?.resource);
   if (!resource || resource === "summary") return NextResponse.json({ error: "A writable resource is required" }, { status: 400 });
@@ -81,9 +81,10 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   const originDenied = assertSameOrigin(req); if (originDenied) return originDenied;
-  const denied = await requireAdmin(); if (denied) return denied;
+  const denied = await requireStaff(); if (denied) return denied;
   const body = await req.json().catch(() => null); const resource = resourceOf(body?.resource); const id = text(body?.id, 100);
   if (!resource || resource === "summary" || !id) return NextResponse.json({ error: "Writable resource and id are required" }, { status: 400 });
+  if (resource === "courses" && body.active === false) { const primaryDenied = await requirePrimaryAdmin(); if (primaryDenied) return primaryDenied; }
   try {
     if (resource === "courses") {
       const item = await db.course.update({ where: { id }, data: { ...(typeof body.code === "string" ? { code: text(body.code, 40).toUpperCase() } : {}), ...(typeof body.name === "string" ? { name: text(body.name, 180) } : {}), ...(typeof body.lecturer === "string" ? { lecturer: text(body.lecturer, 120) || null } : {}), ...(typeof body.semester === "string" ? { semester: text(body.semester, 80) || null } : {}), ...(typeof body.active === "boolean" ? { active: body.active } : {}), ...(typeof body.description === "string" ? { description: text(body.description, 5000) || null } : {}) } }); return NextResponse.json({ item });
@@ -110,7 +111,8 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const originDenied = assertSameOrigin(req); if (originDenied) return originDenied;
-  const denied = await requireAdmin(); if (denied) return denied;
+  const denied = await requireStaff(); if (denied) return denied;
+  const primaryDenied = await requirePrimaryAdmin(); if (primaryDenied) return primaryDenied;
   const resource = resourceOf(req.nextUrl.searchParams.get("resource")); const id = text(req.nextUrl.searchParams.get("id"), 100);
   if (!resource || resource === "summary" || !id) return NextResponse.json({ error: "Writable resource and id are required" }, { status: 400 });
   try {

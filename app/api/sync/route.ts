@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin, assertSameOrigin } from "@/lib/http";
+import { assertSameOrigin, requireStaff } from "@/lib/http";
+import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
 
@@ -31,8 +32,10 @@ function validDate(value: unknown): Date | null | undefined {
 export async function POST(req: NextRequest) {  const originDenied = assertSameOrigin(req);
   if (originDenied) return originDenied;
 
-  const denied = await requireAdmin();
-  if (denied) return denied;
+  // Read the session once and use that same authenticated identity for all
+  // role checks below; avoid a second lookup producing a nullable actor.
+  const actor = await getSession();
+  if (!actor) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   const body = await req.json().catch(() => null);
   if (!body || !Array.isArray(body.mutations)) {
     return NextResponse.json({ error: "mutations must be an array" }, { status: 400 });
@@ -53,9 +56,33 @@ export async function POST(req: NextRequest) {  const originDenied = assertSameO
       continue;
     }
     const operation = raw.operation === "delete" ? "delete" : raw.operation === "upsert" ? "upsert" : "";
-    const baseVersion = Number.isInteger(raw.baseVersion) && Number(raw.baseVersion) >= 0 ? Number(raw.baseVersion) : undefined;
+    const baseVersion = Number.isSafeInteger(raw.baseVersion) && Number(raw.baseVersion) >= 0 ? Number(raw.baseVersion) : undefined;
     if (!operation) {
       rejected.push({ id, reason: "Unsupported operation" });
+      continue;
+    }
+    // Every queued mutation is created with a base version (including new records at 0).
+    // Never fall back to timestamp-only or unconditional writes: an old offline client
+    // without a version must be reviewed/recreated rather than overwrite newer cloud data.
+    if (baseVersion === undefined) {
+      rejected.push({ id, reason: "Missing or invalid base version; refresh the record before syncing" });
+      continue;
+    }
+    if (actor?.role === "ASSISTANT_REP" && operation === "delete") {
+      rejected.push({ id, reason: "Only the Class Representative can delete synced records" });
+      continue;
+    }
+    const syncPayload = raw.payload && typeof raw.payload === "object" && !Array.isArray(raw.payload)
+      ? raw.payload as { status?: unknown }
+      : null;
+    const syncStatus = syncPayload?.status;
+    const allowedStatuses = new Set(["ACTIVE", "DONE", "ARCHIVED", "DRAFT", "APPROVED", "PUBLISHED"]);
+    if (syncStatus !== undefined && (typeof syncStatus !== "string" || !allowedStatuses.has(syncStatus))) {
+      rejected.push({ id, reason: "Unsupported record status" });
+      continue;
+    }
+    if (actor?.role === "ASSISTANT_REP" && typeof syncStatus === "string" && !["ACTIVE", "DONE", "DRAFT"].includes(syncStatus)) {
+      rejected.push({ id, reason: "Only the Class Representative can set approval, publication or archive states" });
       continue;
     }
 
@@ -131,7 +158,7 @@ export async function POST(req: NextRequest) {  const originDenied = assertSameO
 
 /** Pull cloud changes since an ISO timestamp, including deletion tombstones. */
 export async function GET(req: NextRequest) {
-  const denied = await requireAdmin();
+  const denied = await requireStaff();
   if (denied) return denied;
   const rawSince = req.nextUrl.searchParams.get("since");
   const since = rawSince ? new Date(rawSince) : new Date(0);
@@ -143,5 +170,14 @@ export async function GET(req: NextRequest) {
     db.academicRecord.findMany({ where: { updatedAt: { gte: since, lte: watermark } }, orderBy: { updatedAt: "asc" } }),
     db.syncMutation.findMany({ where: { entityType: "record", operation: "delete", appliedAt: { gte: since, lte: watermark } }, orderBy: { appliedAt: "asc" }, select: { entityId: true, appliedAt: true } }),
   ]);
-  return NextResponse.json({ records, deletedIds: [...new Set(tombstones.map((item) => item.entityId))], serverTime: watermark.toISOString() });
+  // If an ID was restored/recreated after an older deletion, the newer
+  // live record wins. Do not let an older tombstone erase it on the client.
+  const liveUpdatedAt = new Map(records.map((record) => [record.id, record.updatedAt.getTime()]));
+  const deletedIds = [...new Set(tombstones
+    .filter((item) => {
+      const recreatedAt = liveUpdatedAt.get(item.entityId);
+      return recreatedAt === undefined || item.appliedAt!.getTime() > recreatedAt;
+    })
+    .map((item) => item.entityId))];
+  return NextResponse.json({ records, deletedIds, serverTime: watermark.toISOString() });
 }

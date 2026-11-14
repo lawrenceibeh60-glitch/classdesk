@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { readObject } from "@/lib/storage";
-import { requireAdmin } from "@/lib/http";
+import { requireStaff } from "@/lib/http";
 export const runtime = "nodejs";
 export async function GET(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const denied = await requireAdmin(); if (denied) return denied;
+  const denied = await requireStaff(); if (denied) return denied;
   const { id } = await context.params;
   const doc = await db.document.findUnique({ where: { id }, select: { filename: true, mimeType: true, storageKey: true } });
   if (!doc) return NextResponse.json({ error: "Document not found" }, { status: 404 });

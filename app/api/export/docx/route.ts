@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin, assertSameOrigin } from "@/lib/http";
+import { requireStaff, assertSameOrigin } from "@/lib/http";
 import { markdownToDocx } from "@/lib/docx-export";
 
 export const runtime = "nodejs";
@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export async function POST(req: NextRequest) {  const originDenied = assertSameOrigin(req);
   if (originDenied) return originDenied;
 
-  const denied = await requireAdmin();
+  const denied = await requireStaff();
   if (denied) return denied;
   const body = await req.json().catch(() => null);
   const content = typeof body?.content === "string" ? body.content.slice(0, 100_000) : "";

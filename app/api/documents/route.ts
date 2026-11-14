@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
-import { requireAdmin, assertSameOrigin, rateLimit, clientIp } from "@/lib/http";
+import { requireStaff, requirePrimaryAdmin, assertSameOrigin, rateLimit, clientIp } from "@/lib/http";
 import { extractText, splitIntoChunks } from "@/lib/ingest";
 import { storeObject, deleteObject } from "@/lib/storage";
 import { scanWithClamAV } from "@/lib/malware";
@@ -23,7 +23,7 @@ function validateSignature(ext: string, bytes: Buffer) {
 }
 
 export async function GET() {
-  const denied = await requireAdmin();
+  const denied = await requireStaff();
   if (denied) return denied;
   const documents = await db.document.findMany({ orderBy: { createdAt: "desc" }, select: { id: true, title: true, filename: true, mimeType: true, sizeBytes: true, courseCode: true, courseName: true, lectureDate: true, topic: true, status: true, securityScanStatus: true, errorMessage: true, createdAt: true, storageKey: true } });
   return NextResponse.json({ documents: documents.map(({ storageKey, ...document }) => ({ ...document, originalAvailable: Boolean(storageKey) })) });
@@ -31,7 +31,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const originDenied = assertSameOrigin(req); if (originDenied) return originDenied;
-  const denied = await requireAdmin(); if (denied) return denied;
+  const denied = await requireStaff(); if (denied) return denied;
   if (!(await rateLimit(`upload:${clientIp(req)}`, 20, 60 * 60 * 1000))) return NextResponse.json({ error: "Upload limit reached. Try again later." }, { status: 429 });
   let storedKey: string | null = null;
   try {
@@ -64,7 +64,15 @@ export async function POST(req: NextRequest) {
     if (lectureDate && Number.isNaN(lectureDate.getTime())) return NextResponse.json({ error: "Invalid lecture date" }, { status: 400 });
     const safeFilename = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 160) || `document.${ext}`;
     const key = `documents/${id}/${safeFilename}`;
-    storedKey = await storeObject(key, buffer, canonicalMime);
+    try {
+      storedKey = await storeObject(key, buffer, canonicalMime);
+    } catch (storageError) {
+      console.error("document object storage failed", storageError);
+      return NextResponse.json(
+        { error: "Shared file storage is unavailable. Ask the Class Representative to check the storage configuration, then retry the upload." },
+        { status: 503 },
+      );
+    }
     const doc = await db.document.create({ data: {
       id, title: String(form.get("title") || file.name).trim().slice(0, 180), filename: safeFilename,
       mimeType: canonicalMime, sizeBytes: file.size, storageKey: storedKey,
@@ -82,12 +90,21 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const originDenied = assertSameOrigin(req); if (originDenied) return originDenied;
-  const denied = await requireAdmin(); if (denied) return denied;
+  const denied = await requireStaff(); if (denied) return denied;
+  const primaryDenied = await requirePrimaryAdmin(); if (primaryDenied) return primaryDenied;
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
   const doc = await db.document.findUnique({ where: { id }, select: { storageKey: true } });
   if (!doc) return NextResponse.json({ error: "Document not found" }, { status: 404 });
+  // Delete the original object first. If the storage provider rejects the
+  // request, keep the SQL row and its metadata so the administrator can retry.
+  if (doc.storageKey) {
+    try {
+      await deleteObject(doc.storageKey);
+    } catch {
+      return NextResponse.json({ error: "The original file could not be deleted from shared storage. The SQL record was kept; retry after checking storage connectivity." }, { status: 502 });
+    }
+  }
   await db.document.delete({ where: { id } });
-  if (doc.storageKey) await deleteObject(doc.storageKey).catch(() => undefined);
   return NextResponse.json({ ok: true });
 }

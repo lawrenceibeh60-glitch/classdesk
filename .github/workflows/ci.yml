@@ -1,7 +1,10 @@
 name: ClassDesk CI
+concurrency:
+  group: classdesk-ci-${{ github.ref }}
+  cancel-in-progress: true
 on:
   push:
-    branches: [main, work/**]
+    branches: [main, work/**, feat/**]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -12,7 +15,6 @@ jobs:
     env:
       DATABASE_URL: postgresql://classdesk:classdesk@localhost:5432/classdesk
       SESSION_SECRET: ci-only-session-secret-with-more-than-32-characters
-      ADMIN_PASSWORD: ci-only-password
     services:
       postgres:
         image: postgres:16

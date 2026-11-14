@@ -7,7 +7,7 @@ type R = CachedRecord;
 type Doc = { id: string; title: string; filename: string; status: string; securityScanStatus?: string; originalAvailable?: boolean; courseName?: string | null; topic?: string | null; lectureDate?: string | null };
 type Mode = "notes" | "records";
 
-export default function RecordsManager({ mode }: { mode: Mode }) {
+export default function RecordsManager({ mode, isPrimaryAdmin }: { mode: Mode; isPrimaryAdmin: boolean }) {
   const [items, setItems] = useState<R[]>([]);
   const [docs, setDocs] = useState<Doc[]>([]);
   const [title, setTitle] = useState("");
@@ -28,24 +28,33 @@ export default function RecordsManager({ mode }: { mode: Mode }) {
   const load = useCallback(async () => {
     let pending: R[] = [];
     if (offlineDB) {
-      try { pending = await offlineDB.records.where("syncState").equals("pending").toArray(); } catch { /* ignore */ }
+      try { pending = await offlineDB.records.where("syncState").equals("pending").toArray(); } catch { /* ignore cache read failures */ }
     }
     try {
       const r = await fetch("/api/records?limit=200", { cache: "no-store" });
-      if (r.ok) {
-        const d = await r.json();
-        const server: R[] = d.records || [];
-        const pendingIds = new Set(pending.map((item) => item.id));
-        const pendingDeletes = offlineDB ? new Set((await offlineDB.outbox.toArray()).filter((item) => item.operation === "delete").map((item) => item.entityId)) : new Set<string>();
-        const visibleServer = server.filter((item) => !pendingIds.has(item.id) && !pendingDeletes.has(item.id));
-        setItems([...pending, ...visibleServer]);
-        if (offlineDB) await offlineDB.records.bulkPut(visibleServer.map(x => ({ ...x, metadata: x.metadata || {}, syncState: "synced" as const })));
+      if (!r.ok) {
+        if (r.status === 401 || r.status === 403) { setItems([]); setDocs([]); setMessage("Your session has expired. Sign in again to view ClassDesk records."); return; }
+        throw new Error("Could not load class records.");
       }
-    } catch {
-      if (offlineDB) setItems(await offlineDB.records.orderBy("updatedAt").reverse().toArray());
+      const d = await r.json();
+      const server: R[] = d.records || [];
+      const pendingIds = new Set(pending.map((item) => item.id));
+      const pendingDeletes = offlineDB ? new Set((await offlineDB.outbox.toArray()).filter((item) => item.operation === "delete").map((item) => item.entityId)) : new Set<string>();
+      const visibleServer = server.filter((item) => !pendingIds.has(item.id) && !pendingDeletes.has(item.id));
+      setItems([...pending, ...visibleServer]);
+      if (offlineDB) await offlineDB.records.bulkPut(visibleServer.map(x => ({ ...x, metadata: x.metadata || {}, syncState: "synced" as const })));
+    } catch (error) {
+      if (error instanceof TypeError && offlineDB) setItems(await offlineDB.records.orderBy("updatedAt").reverse().toArray());
+      else { setItems([]); setDocs([]); setMessage(error instanceof Error ? error.message : "Could not load class records."); return; }
     }
     let serverDocs: Doc[] = [];
-    try { const dr = await fetch("/api/documents"); if (dr.ok) serverDocs = (await dr.json()).documents || []; } catch { /* offline */ }
+    try {
+      const dr = await fetch("/api/documents", { cache: "no-store" });
+      if (dr.status === 401 || dr.status === 403) { setItems([]); setDocs([]); setMessage("Your session has expired. Sign in again to view class documents."); return; }
+      if (dr.ok) serverDocs = (await dr.json()).documents || [];
+    } catch (error) {
+      if (!(error instanceof TypeError)) { setDocs([]); setMessage(error instanceof Error ? error.message : "Could not load documents."); return; }
+    }
     const queuedDocs = offlineDB ? (await offlineDB.uploads.toArray()).map(item => ({ id: item.id, title: item.title, filename: item.filename, status: "QUEUED" })) : [];
     setDocs([...queuedDocs, ...serverDocs]);
   }, []);
@@ -164,6 +173,7 @@ export default function RecordsManager({ mode }: { mode: Mode }) {
   }
 
   async function removeRecord(id: string) {
+    if (!isPrimaryAdmin) { setMessage("Only the Class Representative can delete records."); return; }
     if (!confirm("Delete this record permanently?")) return;
     if (!navigator.onLine) { await queueDelete(id); setMessage("Deletion queued on this device and will sync when you reconnect."); await load(); return; }
     try {
@@ -174,8 +184,10 @@ export default function RecordsManager({ mode }: { mode: Mode }) {
     } catch { await queueDelete(id); setMessage("Deletion queued on this device and will sync when you reconnect."); await load(); }
   }
   async function removeDoc(id: string) {
+    const queuedUpload = offlineDB ? await offlineDB.uploads.get(id) : undefined;
+    if (!queuedUpload && !isPrimaryAdmin) { setMessage("Only the Class Representative can delete stored documents."); return; }
     if (!confirm("Delete this document or queued upload?")) return;
-    if (offlineDB && await offlineDB.uploads.get(id)) { await offlineDB.uploads.delete(id); await load(); setMessage("Queued upload removed from this device."); return; }
+    if (queuedUpload && offlineDB) { await offlineDB.uploads.delete(id); await load(); setMessage("Queued upload removed from this device."); return; }
     const r = await fetch(`/api/documents?id=${encodeURIComponent(id)}`, { method: "DELETE" });
     if (!r.ok) { setMessage("Could not delete document."); return; }
     await load();
@@ -238,7 +250,7 @@ export default function RecordsManager({ mode }: { mode: Mode }) {
               <div className="item" key={d.id}>
                 <div className="row"><strong>{d.title}</strong><span className="tag">{d.status}{d.securityScanStatus ? ` · ${d.securityScanStatus}` : ""}</span></div>
                 <p>{d.courseName || "Course not assigned"} · {d.topic || "Topic not assigned"}{d.lectureDate ? ` · ${fmt(d.lectureDate)}` : ""} · {d.filename}</p>
-                <div className="actions">{d.status === "QUEUED" ? <span className="sub">Stored on this device · waiting for connection</span> : d.originalAvailable ? <a className="btn" href={`/api/documents/${encodeURIComponent(d.id)}`}>Download original</a> : <span className="sub">Original not retained · searchable text is saved</span>}<button className="btn ghost" onClick={() => void removeDoc(d.id)}>{d.status === "QUEUED" ? "Remove queued upload" : "Delete"}</button></div>
+                <div className="actions">{d.status === "QUEUED" ? <span className="sub">Stored on this device · waiting for connection</span> : d.originalAvailable ? <a className="btn" href={`/api/documents/${encodeURIComponent(d.id)}`}>Download original</a> : <span className="sub">Original not retained · searchable text is saved</span>}{(d.status === "QUEUED" || isPrimaryAdmin) && <button className="btn ghost" onClick={() => void removeDoc(d.id)}>{d.status === "QUEUED" ? "Remove queued upload" : "Delete"}</button>}</div>
               </div>
             )) : <div className="empty">No documents found.</div>
           ) : visible.length ? visible.map(i => (
@@ -248,7 +260,7 @@ export default function RecordsManager({ mode }: { mode: Mode }) {
               <div className="actions">
                                 <button className="btn ghost" onClick={() => startEdit(i)}>Edit</button>
                 {i.type === "TASK" && <button className="btn" onClick={() => void toggleDone(i)}>{i.status === "DONE" ? "Reopen" : "Mark done"}</button>}
-                <button className="btn ghost" onClick={() => void removeRecord(i.id)}>Delete</button>
+                {isPrimaryAdmin && <button className="btn ghost" onClick={() => void removeRecord(i.id)}>Delete</button>}
               </div>
             </div>
           )) : <div className="empty">No records found.</div>}

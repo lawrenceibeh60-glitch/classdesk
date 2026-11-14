@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { offlineDB, type CachedRecord, type OutboxItem } from "@/lib/offline-db";
 import LogoutButton from "@/components/logout-button";
+import AccountBadge from "@/components/account-badge";
 
 type RecordItem = CachedRecord;
 type AssignmentItem = { id: string; title: string; status: string; dueAt: string | null; course?: { code: string } | null };
@@ -23,6 +24,8 @@ export default function Dashboard() {
   const [upcoming, setUpcoming] = useState<AssignmentItem[]>([]);
   const [summary, setSummary] = useState<DashboardSummary>({ courses: 0, lectures: 0, assignments: 0, concerns: 0 });
   const [conflicts, setConflicts] = useState<SyncConflict[]>([]);
+  const [accountRole, setAccountRole] = useState<"CLASS_REP" | "ASSISTANT_REP" | null>(null);
+  const [accountName, setAccountName] = useState("ClassDesk user");
   const syncingRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -38,9 +41,10 @@ export default function Dashboard() {
           await offlineDB.records.bulkPut(visibleServer.map((item) => ({ ...item, metadata: item.metadata || {}, syncState: "synced" as const })));
           setRecords([...localPending, ...visibleServer]);
         } else setRecords(server);
-      }
-    } catch {
-      if (offlineDB) setRecords(await offlineDB.records.orderBy("updatedAt").reverse().limit(12).toArray());
+      } else if (r.status === 401 || r.status === 403) setRecords([]);
+    } catch (error) {
+      if (error instanceof TypeError && offlineDB) setRecords(await offlineDB.records.orderBy("updatedAt").reverse().limit(12).toArray());
+      else setRecords([]);
     }
     try {
       const response = await fetch("/api/academic?resource=summary", { cache: "no-store" });
@@ -48,8 +52,8 @@ export default function Dashboard() {
         const data = await response.json();
         setSummary(data.summary || { courses: 0, lectures: 0, assignments: 0, concerns: 0 });
         setUpcoming(data.upcomingAssignments || []);
-      }
-    } catch { /* keep cached dashboard state */ }
+      } else if (response.status === 401 || response.status === 403) { setSummary({ courses: 0, lectures: 0, assignments: 0, concerns: 0 }); setUpcoming([]); }
+    } catch { /* keep the current dashboard view during a network interruption */ }
     if (offlineDB) {
       setPending((await offlineDB.outbox.count()) + (await offlineDB.uploads.count()) + (await offlineDB.academicQueue.count()) + (await offlineDB.aiQueue.count()));
       const savedConflicts = await offlineDB.meta.toArray();
@@ -129,10 +133,19 @@ export default function Dashboard() {
         const delta = await pulled.json();
         const pendingRecords = await offlineDB.records.where("syncState").equals("pending").toArray();
         const pendingIds = new Set(pendingRecords.map((item) => item.id));
+        // A locally queued deletion removes its cached row immediately. Keep the
+        // tombstone in mind during pulls or a stale cloud copy can reappear offline.
+        const pendingDeleteIds = new Set((await offlineDB.outbox.toArray())
+          .filter((mutation) => mutation.operation === "delete")
+          .map((mutation) => mutation.entityId));
         for (const record of (delta.records || []) as RecordItem[]) {
-          if (!pendingIds.has(record.id)) await offlineDB.records.put({ ...record, metadata: record.metadata || {}, syncState: "synced" });
+          if (!pendingIds.has(record.id) && !pendingDeleteIds.has(record.id)) {
+            await offlineDB.records.put({ ...record, metadata: record.metadata || {}, syncState: "synced" });
+          }
         }
-        for (const id of (delta.deletedIds || []) as string[]) if (!pendingIds.has(id)) await offlineDB.records.delete(id);
+        for (const id of (delta.deletedIds || []) as string[]) {
+          if (!pendingIds.has(id) && !pendingDeleteIds.has(id)) await offlineDB.records.delete(id);
+        }
         await offlineDB.meta.put({ key: "lastSync", value: delta.serverTime || new Date().toISOString() });
       }
       await load();
@@ -162,6 +175,10 @@ export default function Dashboard() {
   }
 
   useEffect(() => {
+    fetch("/api/auth/me", { cache: "no-store" }).then((response) => response.ok ? response.json() : null).then((data) => { if (data?.user?.role) setAccountRole(data.user.role); if (data?.user?.displayName) setAccountName(data.user.displayName); }).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
     setOnline(navigator.onLine);
     const on = () => { setOnline(navigator.onLine); if (navigator.onLine) void sync(); };
     window.addEventListener("online", on);
@@ -171,8 +188,8 @@ export default function Dashboard() {
   }, [load, sync]);
 
   return <div className="shell">
-    <aside className="sidebar"><div className="brand"><div className="brand-mark">✳</div><div><strong>ClassDesk</strong><small>AFIT · ND1 · 2026/27</small></div></div><div className="nav-label">Workspace</div><nav className="nav">{nav.map(([icon, label, href]) => <Link key={href} className={href === "/" ? "active" : ""} href={href}><span>{icon}</span>{label}</Link>)}</nav><div style={{ marginTop: "auto" }} className="notice">Private workspace<br /><span className="muted">Sole class representative</span></div><LogoutButton /></aside>
-    <main className="main"><div className="topline"><div><div className="eyebrow">COMMAND CENTRE / 2026–2027</div><h1>Good day, Class Rep.</h1><div className="sub">Your academic coordination workspace. Keep information accurate, organised and accessible.</div></div><div className="actions"><span className="tag">{online ? "ONLINE" : "OFFLINE"}</span><button className="btn ghost" onClick={() => void sync()} disabled={busy}>{busy ? "Syncing…" : "↻ Sync"} {pending > 0 ? `(${pending})` : ""}</button></div></div>
+    <aside className="sidebar"><div className="brand"><div className="brand-mark">✳</div><div><strong>ClassDesk</strong><small>AFIT · ND1 · 2026/27</small></div></div><div className="nav-label">Workspace</div><nav className="nav">{nav.filter(([, label]) => label !== "Settings" || accountRole === "CLASS_REP").map(([icon, label, href]) => <Link key={href} className={href === "/" ? "active" : ""} href={href}><span>{icon}</span>{label}</Link>)}</nav><div style={{ marginTop: "auto" }} className="notice">Private workspace<br /><span className="muted">Two authorised staff accounts</span></div><LogoutButton /></aside>
+    <main className="main"><div className="topline"><div><div className="eyebrow">COMMAND CENTRE / 2026–2027</div><h1>Good day, {accountName}.</h1><div className="sub">Your academic coordination workspace. Keep information accurate, organised and accessible.</div></div><div className="actions"><AccountBadge /><span className="tag">{online ? "ONLINE" : "OFFLINE"}</span><button className="btn ghost" onClick={() => void sync()} disabled={busy}>{busy ? "Syncing…" : "↻ Sync"} {pending > 0 ? `(${pending})` : ""}</button></div></div>
       {syncMessage && <p className="sub" role="status">{syncMessage}</p>}
       {conflicts.length > 0 && <div className="panel" style={{ marginBottom: 16 }}><div className="row"><h2>Sync conflicts</h2><span className="tag">{conflicts.length} need review</span></div><p className="sub">Another device changed or deleted a record while this device was offline. Choose which version should win. No change is discarded until you choose.</p>{conflicts.map((conflict) => <div className="item" key={conflict.id}><div className="row"><strong>{conflict.mutation.operation === "delete" ? "Offline deletion" : (conflict.mutation.payload as RecordItem).title}</strong><span className="tag">{conflict.reason}</span></div><p>Cloud version: {conflict.serverRecord?.title || "Record no longer exists in the cloud"}</p><div className="actions"><button className="btn" onClick={() => void resolveConflict(conflict, "server")}>Use cloud version</button><button className="btn primary" onClick={() => void resolveConflict(conflict, "local")}>{conflict.mutation.operation === "delete" ? "Delete cloud version" : "Keep my local version"}</button></div></div>)}</div>}
       <section className="grid"><div className="panel stat"><label>ACTIVE COURSES</label><strong>{summary.courses}</strong><small>In the course catalogue</small></div><div className="panel stat"><label>LECTURE SESSIONS</label><strong>{summary.lectures}</strong><small>Scheduled or recorded</small></div><div className="panel stat"><label>OPEN ASSIGNMENTS</label><strong>{summary.assignments}</strong><small>Not marked complete</small></div><div className="panel stat"><label>SYNC QUEUE</label><strong>{pending}</strong><small>Changes waiting to sync</small></div>

@@ -25,7 +25,7 @@ const config: Record<Mode, { title: string; description: string; fields: Field[]
 };
 const blank = (mode: Mode) => Object.fromEntries(config[mode].fields.map((field) => [field.key, field.kind === "select" ? field.options?.[0] || "" : ""]));
 
-export default function AcademicManager({ mode }: { mode: Mode }) {
+export default function AcademicManager({ mode, isPrimaryAdmin }: { mode: Mode; isPrimaryAdmin: boolean }) {
   const meta = config[mode];
   const [items, setItems] = useState<any[]>([]);
   const [courses, setCourses] = useState<any[]>([]);
@@ -40,19 +40,30 @@ export default function AcademicManager({ mode }: { mode: Mode }) {
       const response = await fetch(`/api/academic?resource=${mode}`, { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not load records");
-      const serverItems = data.items || []; setItems(serverItems);
+      const serverItems = data.items || [];
       if (offlineDB) {
-        const cachedItems = await offlineDB.academicItems.where("resource").equals(mode).toArray();
+        const [cachedItems, pendingMutations] = await Promise.all([
+          offlineDB.academicItems.where("resource").equals(mode).toArray(),
+          offlineDB.academicQueue.where("resource").equals(mode).toArray(),
+        ]);
+        const pendingDeletes = new Set(pendingMutations.filter(item => item.method === "DELETE").map(item => String(item.payload.id || "")));
+        const pendingWrites = new Set(pendingMutations.filter(item => item.method !== "DELETE").map(item => String(item.payload.id || "")));
         const currentIds = new Set(serverItems.map((item: any) => item.id));
-        await offlineDB.academicItems.bulkDelete(cachedItems.filter(item => !currentIds.has(item.id)).map(item => item.key));
-        await offlineDB.academicItems.bulkPut(serverItems.map((item: any) => ({ key: `${mode}:${item.id}`, resource: mode, id: item.id, payload: item, updatedAt: new Date().toISOString() })));
+        const pendingCached = cachedItems.filter(item => pendingWrites.has(item.id));
+        const pendingCachedIds = new Set(pendingCached.map(item => item.id));
+        await offlineDB.academicItems.bulkDelete(cachedItems.filter(item => !currentIds.has(item.id) && !pendingWrites.has(item.id)).map(item => item.key));
+        await offlineDB.academicItems.bulkPut(serverItems.filter((item: any) => !pendingWrites.has(item.id)).map((item: any) => ({ key: `${mode}:${item.id}`, resource: mode, id: item.id, payload: item, updatedAt: new Date().toISOString() })));
+        const visibleServer = serverItems.filter((item: any) => !pendingDeletes.has(item.id) && !pendingCachedIds.has(item.id));
+        setItems([...visibleServer, ...pendingCached.map(item => item.payload)]);
+      } else {
+        setItems(serverItems);
       }
       if (mode !== "courses") {
         const courseResponse = await fetch("/api/academic?resource=courses", { cache: "no-store" });
-        if (courseResponse.ok) { const list = (await courseResponse.json()).items || []; setCourses(list); if (offlineDB) await offlineDB.academicItems.bulkPut(list.map((item: any) => ({ key: `courses:${item.id}`, resource: "courses", id: item.id, payload: item, updatedAt: new Date().toISOString() }))); }
+        if (courseResponse.ok) { const list = (await courseResponse.json()).items || []; setCourses(list); if (offlineDB) await offlineDB.academicItems.bulkPut(list.map((item: any) => ({ key: `courses:${item.id}`, resource: "courses", id: item.id, payload: item, updatedAt: new Date().toISOString() }))); } else if (courseResponse.status === 401 || courseResponse.status === 403) setCourses([]);
       }
     } catch (error) {
-      if (!offlineDB) throw error;
+      if (!offlineDB || !(error instanceof TypeError)) { setItems([]); if (mode !== "courses") setCourses([]); setMessage(error instanceof Error ? error.message : "Could not load records."); return; }
       const cached = await offlineDB.academicItems.where("resource").equals(mode).toArray();
       setItems(cached.map(item => item.payload));
       if (mode !== "courses") { const savedCourses = await offlineDB.academicItems.where("resource").equals("courses").toArray(); setCourses(savedCourses.map(item => item.payload)); }
@@ -121,12 +132,14 @@ export default function AcademicManager({ mode }: { mode: Mode }) {
     finally { setBusy(false); }
   }
   async function update(id: string, changes: Record<string, unknown>) {
+    if (mode === "courses" && changes.active === false && !isPrimaryAdmin) { setMessage("Only the Class Representative can deactivate a course."); return; }
     const payload = { resource: mode, id, ...changes };
     if (!navigator.onLine) { await queueOffline("PATCH", payload); await load(); setMessage("Change saved offline; sync will resume when online."); return; }
     try { const response = await fetch("/api/academic", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); const data = await response.json(); if (!response.ok) throw new Error(data.error || "Update failed"); await load(); }
     catch (error) { if (error instanceof TypeError) { await queueOffline("PATCH", payload); await load(); setMessage("Network unavailable. Change queued for sync."); } else setMessage(error instanceof Error ? error.message : "Update failed"); }
   }
   async function remove(id: string) {
+    if (!isPrimaryAdmin) { setMessage("Only the Class Representative can delete academic items."); return; }
     if (!confirm("Delete this item permanently?")) return;
     if (!navigator.onLine) { await queueOffline("DELETE", { resource: mode, id }); await load(); setMessage("Deletion queued on this device."); return; }
     try { const response = await fetch(`/api/academic?resource=${mode}&id=${encodeURIComponent(id)}`, { method: "DELETE" }); if (!response.ok && response.status !== 404) throw new Error("Could not delete this item."); await load(); }
@@ -157,8 +170,8 @@ export default function AcademicManager({ mode }: { mode: Mode }) {
           <div className="actions"><button className="btn ghost" onClick={() => edit(item)}>Edit</button>
             {mode === "assignments" && <button className="btn" onClick={() => { const next = item.status === "TODO" ? "IN_PROGRESS" : item.status === "IN_PROGRESS" ? "DONE" : "TODO"; void update(item.id, { status: next }); }}>{item.status === "TODO" ? "Start" : item.status === "IN_PROGRESS" ? "Mark done" : "Reopen"}</button>}
             {mode === "concerns" && <button className="btn" onClick={() => void update(item.id, { status: item.status === "RESOLVED" ? "OPEN" : "RESOLVED" })}>{item.status === "RESOLVED" ? "Reopen" : "Resolve"}</button>}
-            {mode === "courses" && <button className="btn" onClick={() => void update(item.id, { active: !item.active })}>{item.active ? "Deactivate" : "Activate"}</button>}
-            <button className="btn ghost" onClick={() => void remove(item.id)}>Delete</button></div>
+            {mode === "courses" && (!item.active || isPrimaryAdmin) && <button className="btn" onClick={() => void update(item.id, { active: !item.active })}>{item.active ? "Deactivate" : "Activate"}</button>}
+            {isPrimaryAdmin && <button className="btn ghost" onClick={() => void remove(item.id)}>Delete</button>}</div>
         </div>) : <div className="empty">No items yet. Add your first entry here.</div>}
       </div>
     </div>

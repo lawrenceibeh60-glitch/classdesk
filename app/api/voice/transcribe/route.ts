@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin, assertSameOrigin, rateLimit, clientIp } from "@/lib/http";
+import { requireStaff, assertSameOrigin, rateLimit, clientIp } from "@/lib/http";
 export const runtime = "nodejs";
 export const maxDuration = 30;
 export async function POST(req: NextRequest) {
   const originDenied = assertSameOrigin(req); if (originDenied) return originDenied;
-  const denied = await requireAdmin(); if (denied) return denied;
+  const denied = await requireStaff(); if (denied) return denied;
   const key = process.env.MISTRAL_API_KEY;
   if (!key) return NextResponse.json({ error: "Add MISTRAL_API_KEY to keys/API-KEYS.env to enable voice listening." }, { status: 501 });
   if (!(await rateLimit(`stt:${clientIp(req)}`, 600, 60 * 60 * 1000))) return NextResponse.json({ error: "Voice limit reached. Try again later." }, { status: 429 });

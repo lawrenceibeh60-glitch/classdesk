@@ -1,18 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireAdmin, assertSameOrigin } from "@/lib/http";
+import { requireStaff, requirePrimaryAdmin, assertSameOrigin } from "@/lib/http";
 import { Prisma } from "@prisma/client";
 export const runtime = "nodejs";
 const placeholder = /\[[A-Z0-9 _/:-]{2,}\]/;
 const clean = (value: unknown, max: number) => typeof value === "string" ? value.trim().slice(0, max) : "";
 export async function GET() {
-  const denied = await requireAdmin(); if (denied) return denied;
+  const denied = await requireStaff(); if (denied) return denied;
   const announcements = await db.announcement.findMany({ include: { versions: { orderBy: { version: "desc" } }, events: { orderBy: { createdAt: "desc" } } }, orderBy: { updatedAt: "desc" }, take: 200 });
   return NextResponse.json({ announcements });
 }
 export async function POST(req: NextRequest) {
   const originDenied = assertSameOrigin(req); if (originDenied) return originDenied;
-  const denied = await requireAdmin(); if (denied) return denied;
+  const denied = await requireStaff(); if (denied) return denied;
   const body = await req.json().catch(() => null); const title = clean(body?.title, 180); const content = clean(body?.body, 20000);
   if (!title || !content) return NextResponse.json({ error: "Announcement title and body are required" }, { status: 400 });
   const id = clean(body.id, 100) || undefined;
@@ -23,8 +23,9 @@ export async function POST(req: NextRequest) {
 }
 export async function PATCH(req: NextRequest) {
   const originDenied = assertSameOrigin(req); if (originDenied) return originDenied;
-  const denied = await requireAdmin(); if (denied) return denied;
+  const denied = await requireStaff(); if (denied) return denied;
   const body = await req.json().catch(() => null);
+  if (body?.action !== "edit") { const primaryDenied = await requirePrimaryAdmin(); if (primaryDenied) return primaryDenied; }
   if (!body?.id || typeof body.id !== "string") return NextResponse.json({ error: "Announcement id is required" }, { status: 400 });
   const current = await db.announcement.findUnique({ where: { id: body.id }, include: { versions: { orderBy: { version: "desc" }, take: 1 } } });
   if (!current) return NextResponse.json({ error: "Announcement not found" }, { status: 404 });
@@ -89,7 +90,8 @@ export async function PATCH(req: NextRequest) {
 }
 export async function DELETE(req: NextRequest) {
   const originDenied = assertSameOrigin(req); if (originDenied) return originDenied;
-  const denied = await requireAdmin(); if (denied) return denied;
+  const denied = await requireStaff(); if (denied) return denied;
+  const primaryDenied = await requirePrimaryAdmin(); if (primaryDenied) return primaryDenied;
   const id = req.nextUrl.searchParams.get("id"); if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
   await db.announcement.deleteMany({ where: { id } }); return NextResponse.json({ ok: true });
 }

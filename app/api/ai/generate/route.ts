@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin, assertSameOrigin, rateLimit, clientIp } from "@/lib/http";
+import { requireStaff, assertSameOrigin, rateLimit, clientIp } from "@/lib/http";
 import { callModel, SYSTEM_CONTEXT } from "@/lib/ai";
 import { retrieveRelevantChunks } from "@/lib/retrieval";
 import { db } from "@/lib/db";
@@ -17,7 +17,7 @@ const templates: Record<string, string> = {
 export async function POST(req: NextRequest) {  const originDenied = assertSameOrigin(req);
   if (originDenied) return originDenied;
 
-  const denied = await requireAdmin();
+  const denied = await requireStaff();
   if (denied) return denied;
   try {
     const body = await req.json();

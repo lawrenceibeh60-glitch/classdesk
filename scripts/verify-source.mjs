@@ -12,16 +12,122 @@ for (const model of requiredModels) assert.match(schema, new RegExp(`model\\s+${
 for (const table of ["Course", "LectureSession", "Assignment", "AttendanceSummary", "ClassConcern", "AnnouncementVersion", "AnnouncementEvent", "RateLimitBucket"]) assert.ok(migrationSql.includes(`CREATE TABLE "${table}"`), `Missing SQL migration table: ${table}`);
 assert.match(migrationSql, /ALTER TABLE "AcademicRecord" ADD COLUMN "version" INTEGER NOT NULL DEFAULT 1/, "Missing optimistic record version migration");
 assert.match(read("app/api/sync/route.ts"), /baseVersion/, "Sync optimistic version checks are missing");
+assert.match(read("app/api/sync/route.ts"), /const actor = await getSession\(\);[\s\S]*if \(!actor\)[\s\S]*actor\?\.role === "ASSISTANT_REP"/, "Offline sync role restrictions must use the same authenticated session that passed authorization");
+assert.match(read("app/api/sync/route.ts"), /import \{ assertSameOrigin, requireStaff \} from "@\/lib\/http"/, "Sync pull route must import its staff authentication guard");
+assert.match(read("app/api/sync/route.ts"), /Number\.isSafeInteger\(raw\.baseVersion\)[\s\S]*if \(baseVersion === undefined\)[\s\S]*Missing or invalid base version/, "Offline sync must reject unversioned mutations rather than overwrite newer cloud data");
 assert.match(schema, /CALENDAR\s+TIMETABLE/, "Calendar and timetable record types are missing");
 assert.match(migrationSql, /ALTER TYPE "RecordType" ADD VALUE IF NOT EXISTS 'CALENDAR'/, "Calendar record migration is missing");
 assert.match(read("components/dashboard.tsx"), /resolveConflict/, "User conflict resolution controls are missing");
 for (const route of ["app/api/academic/route.ts", "app/api/announcements/route.ts", "app/api/sync/route.ts", "app/api/backup/restore/route.ts", "app/api/export/catch-up/route.ts", "app/api/export/weekly/route.ts", "app/api/export/calendar/route.ts"]) assert.ok(existsSync(join(root, route)), `Missing route: ${route}`);
-for (const page of ["courses", "lectures", "assignments", "attendance", "concerns", "calendar"]) assert.ok(existsSync(join(root, `app/${page}/page.tsx`)), `Missing page: ${page}`);
+for (const page of ["courses", "lectures", "assignments", "attendance", "concerns", "calendar", "coverage"]) assert.ok(existsSync(join(root, `app/${page}/page.tsx`)), `Missing page: ${page}`);
 assert.ok(pkg.dependencies?.next && pkg.dependencies?.react && pkg.dependencies?.["@prisma/client"], "Core runtime dependencies are missing");
 assert.ok(pkg.scripts?.build?.includes("prisma generate") && pkg.scripts?.typecheck, "Build/typecheck scripts are missing");
 const sourceFiles = readdirSync(root, { recursive: true }).filter((file) => typeof file === "string" && /\.(?:ts|tsx|js|jsx)$/.test(file) && !file.startsWith("node_modules/") && !file.startsWith(".next/") && !file.startsWith("desktop/node_modules/") && !file.startsWith("desktop/payload/") && !file.startsWith("dist-desktop/"));
 const sourceText = sourceFiles.map((file) => read(file)).join("\n");
 assert.ok(!/NEXT_PUBLIC_(?:AI_API_KEY|OPENAI_API_KEY|SESSION_SECRET|S3_SECRET_ACCESS_KEY)/.test(sourceText), "A server secret appears to be exposed through a NEXT_PUBLIC variable");
 assert.ok(sourceText.includes("assertSameOrigin") && sourceText.includes("rateLimit"), "Mutation origin checks or rate limiting are missing");
+assert.match(read("lib/storage.ts"), /requireProductionObjectStorage/, "Production uploads must fail closed without shared object storage");
+assert.match(read("lib/storage.ts"), /NODE_ENV === "production"/, "Production storage configuration must be enforced");
+assert.match(read("lib/storage.ts"), /AWS_ENDPOINT_URL_S3/, "Neon Object Storage endpoint environment variable must be supported");
+assert.match(read("lib/storage.ts"), /AWS_ACCESS_KEY_ID/, "Neon Object Storage access key environment variable must be supported");
+assert.match(read("lib/storage.ts"), /AWS_SECRET_ACCESS_KEY/, "Neon Object Storage secret environment variable must be supported");
+assert.match(read("lib/storage.ts"), /AWS_REGION/, "Neon Object Storage region environment variable must be supported");
+assert.match(read("lib/db.ts"), /DATABASE_URL_POOLED \|\| process\.env\.DATABASE_URL/, "Runtime Prisma client must prefer the pooled PostgreSQL connection");
+assert.match(read("lib/db.ts"), /function getClient\(\)/, "Prisma client must initialize lazily so builds do not require production database secrets");
+assert.match(read("lib/db.ts"), /new Proxy\(\{\} as PrismaClient/, "Database access must be deferred until a request uses Prisma");
+assert.match(read(".env.example"), /DATABASE_URL_POOLED/, "Environment example must document the pooled PostgreSQL connection");
+assert.match(read(".env.example"), /AWS_ENDPOINT_URL_S3[\s\S]*AWS_ACCESS_KEY_ID[\s\S]*AWS_SECRET_ACCESS_KEY[\s\S]*AWS_REGION[\s\S]*S3_BUCKET/, "Environment example must document all Neon Object Storage settings");
+
+assert.match(read("app/api/sync/route.ts"), /ASSISTANT_REP.*delete|ASSISTANT_REP.*operation === "delete"/s, "Offline sync must enforce assistant delete restrictions");
+assert.match(read("app/api/sync/route.ts"), /allowedStatuses/, "Offline sync must reject unknown record statuses");
+assert.match(read("app/api/sync/route.ts"), /Only the Class Representative can set approval, publication or archive states/, "Offline sync must enforce primary-only protected status changes");
+const documentRoute = read("app/api/documents/route.ts");
+assert.ok(documentRoute.includes("Shared file storage is unavailable") && documentRoute.includes("{ status: 503 }"), "Document uploads must report unavailable shared storage as HTTP 503");
+const authSource = read("lib/auth.ts");
+assert.match(authSource, /CLASS_REP_PASSWORD_HASH/, "Primary account credential configuration is missing");
+assert.match(authSource, /ASSISTANT_REP_PASSWORD_HASH/, "Assistant account credential configuration is missing");
+assert.match(authSource, /ASSISTANT_REP/, "Assistant role identity is missing");
+assert.match(read("app/api/auth/login/route.ts"), /authenticateCredentials/, "Two-account login handler is missing");
+assert.match(read("app/api/auth/me/route.ts"), /getSession/, "Current account identity endpoint is missing");
+assert.ok(!existsSync(join(root, "app/api/auth/register/route.ts")), "Public account registration must remain disabled");
+assert.match(read("app/api/backup/restore/route.ts"), /requirePrimaryAdmin/, "Backup restore must be restricted to the primary account");
+assert.match(read("app/api/export/route.ts"), /requirePrimaryAdmin/, "Full JSON backup export must be restricted to the primary account");
+assert.match(read("app/api/export/archive/route.ts"), /requirePrimaryAdmin/, "ZIP backup export must be restricted to the primary account");
+assert.match(read("app/api/records/route.ts"), /\[\"APPROVED\", \"PUBLISHED\", \"ARCHIVED\"\][\s\S]*requirePrimaryAdmin/, "Protected academic record statuses must be restricted to the primary account");
+assert.match(read("app/api/documents/[id]/route.ts"), /requireStaff/, "Original document downloads must require staff authentication");
+assert.match(read("app/api/documents/route.ts"), /requirePrimaryAdmin/, "Document deletion must be restricted to the primary account");
+assert.match(read("app/api/announcements/route.ts"), /requirePrimaryAdmin/, "Announcement approval and publication must be restricted to the primary account");
+assert.match(read("app/api/academic/route.ts"), /requirePrimaryAdmin/, "Academic record deletion must be restricted to the primary account");
+assert.match(read("app/api/academic/route.ts"), /resource === "courses" && body\.active === false[\s\S]*requirePrimaryAdmin/, "Course deactivation must be restricted to the primary account");
+assert.ok(read("components/records-manager.tsx").includes("isPrimaryAdmin &&"), "Primary-only record/document delete controls must be hidden from the assistant");
+assert.ok(read("components/academic-manager.tsx").includes("isPrimaryAdmin &&"), "Primary-only academic delete controls must be hidden from the assistant");
+assert.ok(read("components/announcement-studio.tsx").includes("isPrimaryAdmin &&"), "Primary-only announcement actions must be hidden from the assistant");
+assert.match(read("components/academic-manager.tsx"), /pendingWrites/, "Online refresh must preserve queued offline academic writes");
+assert.match(read("public/sw.js"), /explicitlyPublic/, "Offline cache must exclude account-specific/private pages");
+assert.match(read("components/announcement-studio.tsx"), /pendingWrites/, "Online refresh must preserve queued offline announcement drafts");
+
 assert.ok(sourceText.includes("UNTRUSTED_CLASS_MATERIAL") && sourceText.includes("UNTRUSTED_CLASS_SOURCES"), "AI retrieval boundaries are missing");
 console.log(`Source structure checks passed. ${requiredModels.length} models, ${migrationDirs.length} migrations, academic APIs and pages present.`);
+
+const avaSource = read("lib/use-ava.ts");
+const avaWorkspace = read("components/ai-workspace.tsx");
+assert.ok(!avaSource.includes("const WAKE ="), "Ava voice commands must not require a wake word after manual activation");
+assert.match(avaSource, /handlersRef\.current\.onCommand\(text\)/, "Ava must process natural speech inside an explicitly activated voice session");
+assert.match(avaWorkspace, /voicePanelOpen && <div className="ava-overlay"/, "Tapping the microphone must open the graphical Ava voice interface");
+assert.match(avaWorkspace, /if \(ava\.listening\) ava\.speak\(/, "Ava spoken replies must be limited to an active microphone session");
+assert.match(avaWorkspace, /setVoicePanelOpen\(true\); ava\.toggle\(\)/, "The microphone button must explicitly open and start voice mode");
+assert.ok(!/e\.altKey\s*&&\s*e\.key\.toLowerCase\(\)\s*===\s*"a"/.test(avaWorkspace), "Ava must only activate from the microphone button, not a keyboard shortcut");
+assert.match(avaSource, /setSupported\(hasBrowserRec \|\| \(hasMicrophoneInput && flags\.stt\)\)/, "Ava must only offer cloud microphone input when speech transcription is configured");
+assert.match(avaSource, /if \(!wantRef\.current\) \{ cleanupRef\.current\?\.\(\); cleanupRef\.current = null; return; \}/, "Ava must clean up a microphone stream if the user stops while permission is pending");
+assert.match(avaSource, /setTimeout\(\(\) => \{ if \(wantRef\.current\) speak\("Ava is ready\. Go ahead\."\); \}, 300\)/, "Ava must not speak a delayed startup prompt after voice mode has been stopped");
+
+const healthRoute = read("app/api/health/route.ts");
+assert.match(healthRoute, /DATABASE_URL_POOLED \|\| process\.env\.DATABASE_URL/, "Health checks must recognise pooled Neon database configuration");
+assert.match(healthRoute, /AWS_ACCESS_KEY_ID/, "Health checks must recognise Neon Object Storage AWS credentials");
+assert.match(healthRoute, /AWS_ENDPOINT_URL_S3/, "Health checks must recognise the Neon Object Storage endpoint");
+
+const logoutSource = read("components/logout-button.tsx");
+for (const queue of ["outbox", "academicQueue", "aiQueue", "uploads"]) assert.match(logoutSource, new RegExp(`${queue}\\.count\\(\\)`), `Logout warning must include pending ${queue} items`);
+
+assert.match(avaSource, /const \[speaking, setSpeaking\] = useState\(false\)/, "Ava must expose an explicit speaking state");
+assert.match(avaSource, /const \[processing, setProcessing\] = useState\(false\)/, "Ava must expose an explicit processing state");
+assert.match(avaWorkspace, /ava\.speaking \? "SPEAKING" : ava\.processing \? "PROCESSING"/, "Ava voice interface must show explicit speaking and processing states");
+assert.match(avaWorkspace, /ava-voice-readout[\s\S]*LATEST INPUT[\s\S]*LATEST RESPONSE/, "Ava graphical interface must show input and response readouts");
+assert.match(read("app/api/admin/storage/route.ts"), /requirePrimaryAdmin[\s\S]*pg_database_size[\s\S]*deleteMany/, "SQL storage inspection and cleanup must be primary-admin-only");
+assert.match(read("app/api/admin/storage/route.ts"), /tableSizes,/, "SQL storage API must return largest-table measurements to the settings UI");
+assert.match(read("app/api/admin/storage/route.ts"), /CLEANUP_CLASSDESK_SQL[\s\S]*appliedAt: \{ not: null \}[\s\S]*operation: \{ not: "delete" \}/, "SQL cleanup must require confirmation, preserve pending mutations and retain deletion tombstones");
+assert.match(read("components/storage-management.tsx"), /Pending sync changes are never removed[\s\S]*not touched/, "SQL cleanup UI must explain that pending sync and class content are preserved");
+assert.match(read("app/api/admin/storage/route.ts"), /operation: \{ not: "delete" \}/, "SQL cleanup must retain deletion tombstones for devices that reconnect after the retention window");
+assert.match(read("app/api/sync/route.ts"), /recreatedAt === undefined \|\| item\.appliedAt!\.getTime\(\) > recreatedAt/, "A recreated record must supersede its older deletion tombstone");
+assert.match(read("components/storage-management.tsx"), /Manage records and uploaded documents[\s\S]*Clean temporary SQL data/, "Settings must expose SQL storage inspection and cleanup controls");
+assert.match(read("components/storage-management.tsx"), /fetch\("\/api\/documents"[\s\S]*DELETE[\s\S]*Delete permanently/, "Primary settings must expose per-document deletion from SQL and shared storage");
+assert.match(read("app/api/documents/route.ts"), /requirePrimaryAdmin[\s\S]*await deleteObject[\s\S]*db\.document\.delete/, "Document deletion must confirm shared-object removal before deleting the SQL row");
+assert.match(read("app/settings/page.tsx"), /StorageManagement/, "Primary settings page must include SQL storage management");
+assert.match(read("components/section-shell.tsx"), /Calendar & timetable.*\/calendar/, "Calendar and timetable must be reachable from workspace navigation");
+assert.match(healthRoute, /NODE_ENV !== "production" && process\.env\.LOCAL_STORAGE_DIR/, "Local disk storage must not be reported as production shared storage");
+
+const academicManagerSource = read("components/academic-manager.tsx");
+const announcementStudioSource = read("components/announcement-studio.tsx");
+const recordsManagerSource = read("components/records-manager.tsx");
+const dashboardSource = read("components/dashboard.tsx");
+assert.match(academicManagerSource, /error instanceof TypeError/, "Academic offline cache must be used only for network failures");
+assert.match(announcementStudioSource, /error instanceof TypeError/, "Announcement offline cache must be used only for network failures");
+assert.match(recordsManagerSource, /error instanceof TypeError && offlineDB/, "Record cache must not be shown after an authentication failure");
+assert.match(dashboardSource, /error instanceof TypeError && offlineDB/, "Dashboard cache must not be shown after an authentication failure");
+assert.match(dashboardSource, /pendingDeleteIds[\s\S]*mutation\.operation === "delete"[\s\S]*!pendingDeleteIds\.has\(record\.id\)/, "Dashboard delta pulls must not resurrect locally queued deletions");
+
+const calendarViewSource = read("components/calendar-view.tsx");
+assert.ok(calendarViewSource.includes("if (!isPrimaryAdmin)"), "Calendar deletion must be guarded in the UI as well as the API");
+assert.ok(calendarViewSource.includes('{isPrimaryAdmin&&<button className="btn" onClick={()=>void remove(r)}>Delete</button>}'), "Calendar delete controls must be hidden from the assistant account");
+assert.ok(calendarViewSource.includes('nav.filter(([label])=>label!=="Settings"||isPrimaryAdmin)'), "Calendar navigation must hide primary-only settings from the assistant account");
+assert.match(read("app/calendar/page.tsx"), /isPrimaryAdmin=\{user\.role === "CLASS_REP"\}/, "Calendar page must pass the authenticated primary-admin role");
+
+assert.match(academicManagerSource, /mode === "courses" && changes\.active === false && !isPrimaryAdmin/, "Assistant account must not deactivate courses from the academic manager");
+assert.match(academicManagerSource, /mode === "courses" && \(!item\.active \|\| isPrimaryAdmin\)/, "Course deactivation control must be hidden from the assistant account");
+
+assert.match(academicManagerSource, /if \(!isPrimaryAdmin\).*Only the Class Representative can delete academic items/, "Academic deletion handler must enforce primary-admin access");
+assert.match(announcementStudioSource, /if \(!isPrimaryAdmin\).*Only the Class Representative can delete announcements/, "Announcement deletion handler must enforce primary-admin access");
+assert.match(recordsManagerSource, /if \(!isPrimaryAdmin\).*Only the Class Representative can delete records/, "Record deletion handler must enforce primary-admin access");
+assert.match(recordsManagerSource, /if \(!queuedUpload && !isPrimaryAdmin\)/, "Stored document deletion must be restricted to the primary account");
+
+assert.ok(!avaWorkspace.includes("altKey") && !avaWorkspace.includes("Alt+A"), "Only the microphone button may activate Ava voice mode");

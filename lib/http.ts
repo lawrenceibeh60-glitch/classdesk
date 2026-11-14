@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
-import { isAuthenticated } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 
-export async function requireAdmin() {
-  if (!(await isAuthenticated())) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+export async function requireStaff() {
+  if (!(await getSession())) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  return null;
+}
+
+export async function requirePrimaryAdmin() {
+  const user = await getSession();
+  if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  if (user.role !== "CLASS_REP") return NextResponse.json({ error: "This action is restricted to the Class Representative" }, { status: 403 });
   return null;
 }
 
@@ -40,4 +47,6 @@ export async function rateLimit(key: string, max = 5, windowMs = 15 * 60 * 1000)
     hit.count += 1; return hit.count <= max;
   }
 }
-export function clientIp(req: Request) { return req.headers.get("x-real-ip")?.trim() || req.headers.get("x-forwarded-for")?.split(",").at(-1)?.trim() || "local"; }
+export function clientIp(req: Request) {
+  return req.headers.get("x-real-ip")?.trim() || req.headers.get("x-forwarded-for")?.split(",").at(-1)?.trim() || "local";
+}

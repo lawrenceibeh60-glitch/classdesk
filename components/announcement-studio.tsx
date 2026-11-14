@@ -5,22 +5,32 @@ import { offlineDB } from "@/lib/offline-db";
 type Version = { id: string; version: number; title: string; body: string; status: string; createdAt: string };
 type AnnouncementEvent = { id: string; action: string; details?: string | null; createdAt: string };
 type Announcement = { id: string; title: string; body: string; category: string; source?: string | null; status: string; publishedAt?: string | null; updatedAt: string; versions: Version[]; events: AnnouncementEvent[] };
-export default function AnnouncementStudio() {
+export default function AnnouncementStudio({ isPrimaryAdmin }: { isPrimaryAdmin: boolean }) {
   const [items, setItems] = useState<Announcement[]>([]);
   const [title, setTitle] = useState(""); const [body, setBody] = useState(""); const [category, setCategory] = useState("GENERAL"); const [source, setSource] = useState("");
   const [editId, setEditId] = useState<string | null>(null); const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false); const [expanded, setExpanded] = useState<string | null>(null);
   const load = useCallback(async () => {
     try {
       const response = await fetch("/api/announcements", { cache: "no-store" }); const data = await response.json(); if (!response.ok) throw new Error(data.error || "Could not load announcements");
-      const list = data.announcements || []; setItems(list);
+      const list = data.announcements || [];
       if (offlineDB) {
-        const cached = await offlineDB.academicItems.where("resource").equals("announcements").toArray();
-        const ids = new Set(list.map((item: Announcement) => item.id));
-        await offlineDB.academicItems.bulkDelete(cached.filter(item => !ids.has(item.id)).map(item => item.key));
-        await offlineDB.academicItems.bulkPut(list.map((item: Announcement) => ({ key: `announcements:${item.id}`, resource: "announcements", id: item.id, payload: item as unknown as Record<string, unknown>, updatedAt: new Date().toISOString() })));
+        const [cached, pending] = await Promise.all([
+          offlineDB.academicItems.where("resource").equals("announcements").toArray(),
+          offlineDB.academicQueue.where("resource").equals("announcements").toArray(),
+        ]);
+        const pendingDeletes = new Set(pending.filter(item => item.method === "DELETE").map(item => String(item.payload.id || "")));
+        const pendingWrites = new Set(pending.filter(item => item.method !== "DELETE").map(item => String(item.payload.id || "")));
+        const pendingCached = cached.filter(item => pendingWrites.has(item.id));
+        const pendingCachedIds = new Set(pendingCached.map(item => item.id));
+        const serverIds = new Set(list.map((item: Announcement) => item.id));
+        await offlineDB.academicItems.bulkDelete(cached.filter(item => !serverIds.has(item.id) && !pendingWrites.has(item.id)).map(item => item.key));
+        await offlineDB.academicItems.bulkPut(list.filter((item: Announcement) => !pendingWrites.has(item.id)).map((item: Announcement) => ({ key: `announcements:${item.id}`, resource: "announcements", id: item.id, payload: item as unknown as Record<string, unknown>, updatedAt: new Date().toISOString() })));
+        setItems([...list.filter((item: Announcement) => !pendingDeletes.has(item.id) && !pendingCachedIds.has(item.id)), ...pendingCached.map(item => item.payload as unknown as Announcement)]);
+      } else {
+        setItems(list);
       }
     } catch (error) {
-      if (!offlineDB) throw error;
+      if (!offlineDB || !(error instanceof TypeError)) { setItems([]); setMessage(error instanceof Error ? error.message : "Could not load announcements."); return; }
       const cached = await offlineDB.academicItems.where("resource").equals("announcements").toArray(); setItems(cached.map(item => item.payload as unknown as Announcement));
       if (!cached.length) setMessage(error instanceof Error ? error.message : "Offline: no cached announcements available.");
     }
@@ -74,7 +84,7 @@ export default function AnnouncementStudio() {
     const data = await response.json(); if (!response.ok) { setMessage(data.error || "Action failed"); return; } await load();
   }
   function edit(item: Announcement) { setEditId(item.id); setTitle(item.title); setBody(item.body); setCategory(item.category); setSource(item.source || ""); window.scrollTo({ top: 0, behavior: "smooth" }); }
-  async function remove(item: Announcement) { if (!confirm("Permanently delete this announcement and its version history?")) return; if (!navigator.onLine) { await queueOffline("DELETE", { id: item.id }); await load(); setMessage("Deletion queued on this device."); return; } const response = await fetch(`/api/announcements?id=${encodeURIComponent(item.id)}`, { method: "DELETE" }); if (!response.ok) { setMessage("Could not delete announcement"); return; } await load(); }
+  async function remove(item: Announcement) { if (!isPrimaryAdmin) { setMessage("Only the Class Representative can delete announcements."); return; } if (!confirm("Permanently delete this announcement and its version history?")) return; if (!navigator.onLine) { await queueOffline("DELETE", { id: item.id }); await load(); setMessage("Deletion queued on this device."); return; } const response = await fetch(`/api/announcements?id=${encodeURIComponent(item.id)}`, { method: "DELETE" }); if (!response.ok) { setMessage("Could not delete announcement"); return; } await load(); }
   const share = (item: Announcement) => `https://wa.me/?text=${encodeURIComponent(`*${item.title}*\n\n${item.body}`)}`;
   const unresolved = (item: Announcement) => /\[[A-Z0-9 _/:-]{2,}\]/.test(item.title + " " + item.body);
   return <SectionShell title="Announcement studio" description="Prepare class notices, preserve every revision, and enforce a human approval step before publication.">
@@ -95,14 +105,14 @@ export default function AnnouncementStudio() {
           {item.source && <p>Source: {item.source}</p>}
           {item.status === "DRAFT" && unresolved(item) && <p className="error-text">Contains unresolved [PLACEHOLDER] fields. Approval is blocked.</p>}
           <div className="actions" style={{ marginTop: 10 }}>
-            {item.status === "DRAFT" && <button className="btn" onClick={() => void action(item, "approve")} disabled={unresolved(item)}>Approve</button>}
-            {item.status === "APPROVED" && <button className="btn primary" onClick={() => void action(item, "publish")}>Mark published</button>}
+            {isPrimaryAdmin && item.status === "DRAFT" && <button className="btn" onClick={() => void action(item, "approve")} disabled={unresolved(item)}>Approve</button>}
+            {isPrimaryAdmin && item.status === "APPROVED" && <button className="btn primary" onClick={() => void action(item, "publish")}>Mark published</button>}
             {item.status === "PUBLISHED" && <a className="btn" href={share(item)} target="_blank" rel="noreferrer">Share on WhatsApp</a>}
             {item.status !== "ARCHIVED" && <button className="btn ghost" onClick={() => edit(item)}>Edit / revise</button>}
-            {item.status !== "ARCHIVED" && <button className="btn ghost" onClick={() => void action(item, "archive")}>Archive</button>}
-            {item.status !== "DRAFT" && item.status !== "ARCHIVED" && <button className="btn ghost" onClick={() => void action(item, "backToDraft")}>Return to draft</button>}
+            {isPrimaryAdmin && item.status !== "ARCHIVED" && <button className="btn ghost" onClick={() => void action(item, "archive")}>Archive</button>}
+            {isPrimaryAdmin && item.status !== "DRAFT" && item.status !== "ARCHIVED" && <button className="btn ghost" onClick={() => void action(item, "backToDraft")}>Return to draft</button>}
             <button className="btn ghost" onClick={() => setExpanded(expanded === item.id ? null : item.id)}>History ({item.versions?.length || 0})</button>
-            <button className="btn ghost" onClick={() => void remove(item)}>Delete</button>
+            {isPrimaryAdmin && <button className="btn ghost" onClick={() => void remove(item)}>Delete</button>}
           </div>
           {expanded === item.id && <div className="notice" style={{ marginTop: 12 }}><strong>Approval / publication activity</strong>{item.events?.map((event) => <div className="item" key={event.id}><div className="row"><strong>{event.action.replaceAll("_", " ")}</strong><span className="tag">{new Date(event.createdAt).toLocaleString("en-GB")}</span></div><p>{event.details}</p></div>)}<strong>Content version history</strong>{item.versions?.map((version) => <div className="item" key={version.id}><div className="row"><strong>Version {version.version}</strong><span className="tag">{version.status}</span></div><p>{new Date(version.createdAt).toLocaleString("en-GB")}</p><p style={{ whiteSpace: "pre-wrap" }}>{version.title}<br />{version.body}</p></div>)}</div>}
         </article>) : <div className="empty">No announcements yet. Create your first draft.</div>}
