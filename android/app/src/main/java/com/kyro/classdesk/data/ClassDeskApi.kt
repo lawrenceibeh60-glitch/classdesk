@@ -39,6 +39,15 @@ interface ClassDeskApi {
     @POST("api/ai/chat")
     suspend fun chat(@Body body: ChatRequest): Response<ChatResponse>
 
+    @GET("api/announcements")
+    suspend fun announcements(): Response<AnnouncementsEnvelope>
+
+    @POST("api/announcements")
+    suspend fun createAnnouncement(@Body body: Map<String, String>): Response<Map<String, Any>>
+
+    @PATCH("api/announcements")
+    suspend fun updateAnnouncement(@Body body: Map<String, String>): Response<Map<String, Any>>
+
     @POST("api/academic")
     suspend fun createAcademic(@Body body: Map<String, String>): Response<Map<String, Any>>
 
