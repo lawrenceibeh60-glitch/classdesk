@@ -71,6 +71,8 @@ assert.match(read("components/announcement-studio.tsx"), /pendingWrites/, "Onlin
 assert.ok(sourceText.includes("UNTRUSTED_CLASS_MATERIAL") && sourceText.includes("UNTRUSTED_CLASS_SOURCES"), "AI retrieval boundaries are missing");
 console.log(`Source structure checks passed. ${requiredModels.length} models, ${migrationDirs.length} migrations, academic APIs and pages present.`);
 
+const nextConfigSource = read("next.config.ts");
+assert.match(nextConfigSource, /microphone=\(self\)/, "Same-origin browser microphone access must remain enabled for Ava");
 const avaSource = read("lib/use-ava.ts");
 const avaWorkspace = read("components/ai-workspace.tsx");
 assert.ok(!avaSource.includes("const WAKE ="), "Ava voice commands must not require a wake word after manual activation");
