@@ -49,12 +49,12 @@ fun OfflineQueueScreen(user: UserDto) {
         entries.forEach { entry ->
             Surface(color = Color(0xFF111B28), shape = RoundedCornerShape(6.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text("\${entry.status} / \${entry.operation.uppercase()}", color = when (entry.status) {
+                    Text("${entry.status} / ${entry.operation.uppercase()}", color = when (entry.status) {
                         "PENDING" -> Color(0xFF42D9F5)
                         "CONFLICT" -> Color(0xFFF2C94C)
                         else -> Color(0xFFFF7D78)
                     }, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    Text("Record \${entry.entityId}", color = Color.White, fontSize = 12.sp)
+                    Text("Record ${entry.entityId}", color = Color.White, fontSize = 12.sp)
                     Text(SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.UK).format(Date(entry.createdAt)), color = Color(0xFF91A4B8), fontSize = 10.sp)
                     entry.lastError?.let { Text(it, color = Color(0xFFFF7D78), fontSize = 11.sp) }
                 }
