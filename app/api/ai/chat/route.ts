@@ -24,6 +24,49 @@ export async function POST(req: NextRequest) {  const originDenied = assertSameO
     if (!(await rateLimit(`ai:${clientIp(req)}`, 30, 10 * 60 * 1000))) return NextResponse.json({ error: "AI usage limit reached. Please wait a few minutes before trying again." }, { status: 429 });
     const question = String(body.message || "").trim(); const voiceStyle = body.voice === true ? "\n\nThe user is speaking to you by voice and your reply will be read aloud. You are Ava, a warm, quick-witted British assistant. Call the user \"boss\" now and then, naturally, not in every sentence. Use British spelling and a polished, friendly tone. Do not add a closing question, because the app asks that itself. Answer like a person talking: short natural sentences, usually 2 to 5 sentences, no markdown, no bullet points, no emojis, no headings. Use contractions. If the topic needs more detail, give the key idea first and offer to go deeper." : "";
     if (!question || question.length > 8000) return NextResponse.json({ error: "Message is required and must be under 8,000 characters" }, { status: 400 });
+    const deleteDocumentIntent = /\b(delete|remove|erase|permanently delete)\b/i.test(question) && /\b(document|file|upload|assignment|notes)\b/i.test(question);
+    if (deleteDocumentIntent) {
+      const user = await getSession();
+      if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+      if (user.role !== "CLASS_REP") {
+        const result = { answer: "Permanent document deletion is restricted to the Class Representative. I can still help you find or read the document.", sources: [], actionConfirmation: null };
+        if (requestId) await db.aiRequestReceipt.create({ data: { id: requestId, kind: "chat", response: result as unknown as Prisma.InputJsonValue } }).catch(() => undefined);
+        return NextResponse.json(result);
+      }
+      const documents = await db.document.findMany({
+        orderBy: { createdAt: "desc" }, take: 50,
+        select: { id: true, title: true, filename: true, sizeBytes: true, storageKey: true }
+      });
+      const words = question.toLowerCase().replace(/\b(delete|remove|erase|permanently|the|a|an|my|document|file|upload|uploaded|assignment|notes|please|ava|can|you|could)\b/g, " ").split(/\s+/).filter(word => word.length > 2);
+      const ranked = documents.map(document => {
+        const haystack = (document.title + " " + document.filename).toLowerCase();
+        const score = words.reduce((total, word) => total + (haystack.includes(word) ? 1 : 0), 0);
+        return { document, score };
+      }).sort((a, b) => b.score - a.score);
+      const match = ranked[0];
+      if (!match || match.score === 0) {
+        const names = documents.slice(0, 8).map(document => document.title);
+        const result = { answer: names.length ? "I couldn't identify the exact file. Tell me its title so I don't delete the wrong document. Recent documents: " + names.join("; ") : "There are no uploaded documents to delete.", sources: [], actionConfirmation: null };
+        if (requestId) await db.aiRequestReceipt.create({ data: { id: requestId, kind: "chat", response: result as unknown as Prisma.InputJsonValue } }).catch(() => undefined);
+        return NextResponse.json(result);
+      }
+      const selected = match.document;
+      const result = {
+        answer: "I found the document. Permanent deletion will remove its database record, extracted text, search chunks and original file from shared storage. Please review the confirmation before I proceed.",
+        sources: [{ title: selected.title, filename: selected.filename }],
+        actionConfirmation: {
+          type: "delete_document",
+          documentId: selected.id,
+          title: selected.title,
+          filename: selected.filename,
+          sizeBytes: selected.sizeBytes,
+          originalInSharedStorage: Boolean(selected.storageKey)
+        }
+      };
+      if (requestId) await db.aiRequestReceipt.create({ data: { id: requestId, kind: "chat", response: result as unknown as Prisma.InputJsonValue } }).catch(() => undefined);
+      return NextResponse.json(result);
+    }
+
     const assignmentPdfIntent = /\b(assignments?|homework)\b/i.test(question) && /\b(pdf|solve|work through|answer|complete|do them)\b/i.test(question) && /\b(upload|uploaded|document|file|notes)\b/i.test(question);
     if (assignmentPdfIntent) {
       const user = await getSession();
