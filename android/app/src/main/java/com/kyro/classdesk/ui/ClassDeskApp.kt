@@ -650,6 +650,8 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                 DocumentLibraryScreen(api, user.role == "CLASS_REP")
             } else if (selected in listOf("Catch-up Centre", "Coverage", "Class Records", "Settings")) {
                 NativeParityScreen(selected, api, user)
+            } else if (selected == "Backup & Export") {
+                BackupToolsScreen(api, user.role == "CLASS_REP")
             } else if (selected == "Announcements") {
                 Text("ANNOUNCEMENT STUDIO", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
                 Button(onClick = { showAnnouncementDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ NEW DRAFT") }
