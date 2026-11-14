@@ -245,3 +245,17 @@ model AiTask {
   @@index([status, availableAt, createdAt])
   @@index([resultDocumentId])
 }
+
+model AuditLog {
+  id String @id @default(cuid())
+  actorId String
+  actorUsername String
+  actorRole String
+  action String
+  targetType String
+  targetId String?
+  details Json?
+  createdAt DateTime @default(now())
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId, createdAt])
+}
