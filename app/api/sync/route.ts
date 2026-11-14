@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, assertSameOrigin } from "@/lib/http";
+import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Prisma } from "@prisma/client";
 
@@ -33,6 +34,7 @@ export async function POST(req: NextRequest) {  const originDenied = assertSameO
 
   const denied = await requireAdmin();
   if (denied) return denied;
+  const actor = await getSession();
   const body = await req.json().catch(() => null);
   if (!body || !Array.isArray(body.mutations)) {
     return NextResponse.json({ error: "mutations must be an array" }, { status: 400 });
@@ -56,6 +58,15 @@ export async function POST(req: NextRequest) {  const originDenied = assertSameO
     const baseVersion = Number.isInteger(raw.baseVersion) && Number(raw.baseVersion) >= 0 ? Number(raw.baseVersion) : undefined;
     if (!operation) {
       rejected.push({ id, reason: "Unsupported operation" });
+      continue;
+    }
+    if (actor?.role === "ASSISTANT_REP" && operation === "delete") {
+      rejected.push({ id, reason: "Only the Class Representative can delete synced records" });
+      continue;
+    }
+    const syncStatus = (raw.payload as { status?: unknown } | null)?.status;
+    if (actor?.role === "ASSISTANT_REP" && ["APPROVED", "PUBLISHED", "ARCHIVED"].includes(String(syncStatus))) {
+      rejected.push({ id, reason: "Only the Class Representative can change protected publication states" });
       continue;
     }
 
