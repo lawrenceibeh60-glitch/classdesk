@@ -37,3 +37,18 @@ data class DocumentsEnvelope(val documents: List<DocumentDto>?)
 
 data class AcademicRecordDto(val id: String, val type: String, val title: String, val content: String, val eventDate: String?, val status: String, val version: Int)
 data class RecordsEnvelope(val records: List<AcademicRecordDto>?)
+
+
+data class AvaTaskDto(
+    val id: String,
+    val kind: String,
+    val status: String,
+    val progress: Int = 0,
+    val currentStep: String = "Queued",
+    val errorMessage: String?,
+    val resultDocumentId: String?,
+    val createdAt: String
+)
+data class AvaTasksEnvelope(val tasks: List<AvaTaskDto>?)
+data class AvaTaskCreateRequest(val kind: String, val documentIds: List<String>, val prompt: String)
+data class AvaTaskCreateEnvelope(val task: AvaTaskDto?, val message: String?, val error: String?)
