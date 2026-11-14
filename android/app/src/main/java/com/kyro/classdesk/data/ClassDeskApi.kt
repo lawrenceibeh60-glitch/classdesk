@@ -85,6 +85,9 @@ interface ClassDeskApi {
     @POST("api/records")
     suspend fun createRecord(@Body body: Map<String, String>): Response<Map<String, Any>>
 
+    @PATCH("api/records")
+    suspend fun updateRecord(@Body body: Map<String, String>): Response<Map<String, Any>>
+
     @DELETE("api/records")
     suspend fun deleteRecord(@Query("id") id: String): Response<Map<String, Any>>
 
