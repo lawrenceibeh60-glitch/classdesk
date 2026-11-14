@@ -181,6 +181,12 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
     var announcementTitle by remember { mutableStateOf("") }
     var announcementBody by remember { mutableStateOf("") }
     var announcementCategory by remember { mutableStateOf("GENERAL") }
+    var showAnnouncementEditDialog by remember { mutableStateOf(false) }
+    var editingAnnouncementId by remember { mutableStateOf<String?>(null) }
+    var editingAnnouncementTitle by remember { mutableStateOf("") }
+    var editingAnnouncementBody by remember { mutableStateOf("") }
+    var editingAnnouncementCategory by remember { mutableStateOf("GENERAL") }
+    var deleteAnnouncementTarget by remember { mutableStateOf<AnnouncementDto?>(null) }
     var moduleLoading by remember { mutableStateOf(false) }
     var moduleError by remember { mutableStateOf<String?>(null) }
     var showCourseDialog by remember { mutableStateOf(false) }
@@ -748,20 +754,63 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                             Text(item.status.uppercase() + " / " + item.category.uppercase(), color = Cyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             Text(item.title, color = Color.White, fontWeight = FontWeight.SemiBold)
                             Text(item.body, color = Muted, fontSize = 12.sp, maxLines = 5)
+                            if (item.status == "DRAFT") TextButton(onClick = {
+                                editingAnnouncementId = item.id
+                                editingAnnouncementTitle = item.title
+                                editingAnnouncementBody = item.body
+                                editingAnnouncementCategory = item.category
+                                showAnnouncementEditDialog = true
+                            }) { Text("EDIT DRAFT", color = Cyan, fontSize = 10.sp) }
                             if (user.role == "CLASS_REP" && item.status == "DRAFT") TextButton(onClick = {
                                 scope.launch {
                                     val approved = mutateAnnouncement("PATCH", mapOf("id" to item.id, "action" to "approve"))
-                                    if (approved.isSuccessful) { if (!approved.queued) announcements = api.announcements().body()?.announcements.orEmpty() }
-                                    else moduleError = "Announcement approval failed. Resolve placeholders and try again."
+                                    if (approved.isSuccessful) {
+                                        val refreshed = api.announcements()
+                                        if (refreshed.isSuccessful) announcements = refreshed.body()?.announcements.orEmpty()
+                                    } else moduleError = "Announcement approval requires a connection and all placeholders must be resolved."
                                 }
                             }) { Text("APPROVE", color = Gold, fontSize = 10.sp) }
-                            if (user.role == "CLASS_REP" && item.status == "APPROVED") TextButton(onClick = {
+                            if (user.role == "CLASS_REP" && item.status == "APPROVED") {
+                                TextButton(onClick = {
+                                    scope.launch {
+                                        val published = mutateAnnouncement("PATCH", mapOf("id" to item.id, "action" to "publish"))
+                                        if (published.isSuccessful) {
+                                            val refreshed = api.announcements()
+                                            if (refreshed.isSuccessful) announcements = refreshed.body()?.announcements.orEmpty()
+                                        } else moduleError = "Announcement publication requires a live connection."
+                                    }
+                                }) { Text("PUBLISH", color = Cyan, fontSize = 10.sp) }
+                                TextButton(onClick = {
+                                    scope.launch {
+                                        val reverted = mutateAnnouncement("PATCH", mapOf("id" to item.id, "action" to "backToDraft"))
+                                        if (reverted.isSuccessful) {
+                                            val refreshed = api.announcements()
+                                            if (refreshed.isSuccessful) announcements = refreshed.body()?.announcements.orEmpty()
+                                        } else moduleError = "Could not return this announcement to draft."
+                                    }
+                                }) { Text("RETURN TO DRAFT", color = Gold, fontSize = 10.sp) }
+                            }
+                            if (user.role == "CLASS_REP" && item.status == "PUBLISHED") TextButton(onClick = {
                                 scope.launch {
-                                    val published = mutateAnnouncement("PATCH", mapOf("id" to item.id, "action" to "publish"))
-                                    if (published.isSuccessful) { if (!published.queued) announcements = api.announcements().body()?.announcements.orEmpty() }
-                                    else moduleError = "Announcement could not be published."
+                                    val archived = mutateAnnouncement("PATCH", mapOf("id" to item.id, "action" to "archive"))
+                                    if (archived.isSuccessful) {
+                                        val refreshed = api.announcements()
+                                        if (refreshed.isSuccessful) announcements = refreshed.body()?.announcements.orEmpty()
+                                    } else moduleError = "Archiving requires a live connection."
                                 }
-                            }) { Text("PUBLISH", color = Cyan, fontSize = 10.sp) }
+                            }) { Text("ARCHIVE", color = Gold, fontSize = 10.sp) }
+                            if (user.role == "CLASS_REP" && item.status == "ARCHIVED") TextButton(onClick = {
+                                scope.launch {
+                                    val reverted = mutateAnnouncement("PATCH", mapOf("id" to item.id, "action" to "backToDraft"))
+                                    if (reverted.isSuccessful) {
+                                        val refreshed = api.announcements()
+                                        if (refreshed.isSuccessful) announcements = refreshed.body()?.announcements.orEmpty()
+                                    } else moduleError = "Could not return this announcement to draft."
+                                }
+                            }) { Text("RESTORE TO DRAFT", color = Cyan, fontSize = 10.sp) }
+                            if (user.role == "CLASS_REP") TextButton(onClick = { deleteAnnouncementTarget = item }) {
+                                Text("DELETE", color = Color(0xFFFF7D78), fontSize = 10.sp)
+                            }
                         }
                     }
                 }
@@ -776,13 +825,75 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                     confirmButton = { TextButton(onClick = { scope.launch {
                         val saved = mutateAnnouncement("POST", mapOf("title" to announcementTitle.trim(), "category" to announcementCategory.trim(), "body" to announcementBody.trim()))
                         if (saved.isSuccessful) {
-                            if (!saved.queued) announcements = api.announcements().body()?.announcements.orEmpty()
+                            if (!saved.queued) {
+                                val refreshed = api.announcements()
+                                if (refreshed.isSuccessful) announcements = refreshed.body()?.announcements.orEmpty()
+                            }
                             announcementTitle = ""; announcementBody = ""; announcementCategory = "GENERAL"
                             showAnnouncementDialog = false
-                        } else moduleError = "Announcement draft could not be saved."
+                        } else moduleError = saved.message ?: "Announcement draft could not be saved."
                     } }, enabled = announcementTitle.isNotBlank() && announcementBody.isNotBlank()) { Text("SAVE DRAFT") } },
                     dismissButton = { TextButton(onClick = { showAnnouncementDialog = false }) { Text("CANCEL") } }
                 )
+                if (showAnnouncementEditDialog) AlertDialog(
+                    onDismissRequest = { showAnnouncementEditDialog = false },
+                    title = { Text("Edit announcement draft") },
+                    text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(editingAnnouncementTitle, { editingAnnouncementTitle = it }, label = { Text("Title") }, singleLine = true)
+                        OutlinedTextField(editingAnnouncementCategory, { editingAnnouncementCategory = it }, label = { Text("Category") }, singleLine = true)
+                        OutlinedTextField(editingAnnouncementBody, { editingAnnouncementBody = it }, label = { Text("Announcement") }, minLines = 4)
+                    } },
+                    confirmButton = { TextButton(onClick = { scope.launch {
+                        val id = editingAnnouncementId ?: return@launch
+                        val saved = mutateAnnouncement("PATCH", mapOf(
+                            "id" to id, "action" to "edit",
+                            "title" to editingAnnouncementTitle.trim(),
+                            "category" to editingAnnouncementCategory.trim(),
+                            "body" to editingAnnouncementBody.trim()
+                        ))
+                        if (saved.isSuccessful) {
+                            if (saved.queued) {
+                                announcements = announcements.map { item ->
+                                    if (item.id == id) item.copy(
+                                        title = editingAnnouncementTitle.trim(),
+                                        category = editingAnnouncementCategory.trim(),
+                                        body = editingAnnouncementBody.trim(),
+                                        status = "DRAFT"
+                                    ) else item
+                                }
+                            } else {
+                                val refreshed = api.announcements()
+                                if (refreshed.isSuccessful) announcements = refreshed.body()?.announcements.orEmpty()
+                            }
+                            showAnnouncementEditDialog = false
+                            editingAnnouncementId = null
+                        } else moduleError = saved.message ?: "Announcement draft could not be updated."
+                    } }, enabled = editingAnnouncementTitle.isNotBlank() && editingAnnouncementBody.isNotBlank()) { Text("SAVE CHANGES") } },
+                    dismissButton = { TextButton(onClick = { showAnnouncementEditDialog = false }) { Text("CANCEL") } }
+                )
+                deleteAnnouncementTarget?.let { target ->
+                    AlertDialog(
+                        onDismissRequest = { deleteAnnouncementTarget = null },
+                        title = { Text("Delete announcement?") },
+                        text = { Text("Permanently delete ${target.title}? This action cannot be undone.") },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                scope.launch {
+                                    try {
+                                        val deleted = api.deleteAnnouncement(target.id)
+                                        if (deleted.isSuccessful) {
+                                            announcements = announcements.filterNot { it.id == target.id }
+                                            deleteAnnouncementTarget = null
+                                        } else moduleError = "Announcement could not be deleted (HTTP ${deleted.code()})."
+                                    } catch (_: Exception) {
+                                        moduleError = "Deletion requires a live connection. The announcement was not removed locally."
+                                    }
+                                }
+                            }) { Text("DELETE PERMANENTLY", color = Color(0xFFFF7D78)) }
+                        },
+                        dismissButton = { TextButton(onClick = { deleteAnnouncementTarget = null }) { Text("CANCEL") } }
+                    )
+                }
             } else {
                 AvaVoiceScreen(api)
             }
