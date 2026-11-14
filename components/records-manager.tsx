@@ -28,27 +28,36 @@ export default function RecordsManager({ mode, isPrimaryAdmin }: { mode: Mode; i
   const load = useCallback(async () => {
     let pending: R[] = [];
     if (offlineDB) {
-      try { pending = await offlineDB.records.where("syncState").equals("pending").toArray(); } catch { /* ignore */ }
+      try { pending = await offlineDB.records.where("syncState").equals("pending").toArray(); } catch { /* ignore cache read failures */ }
     }
     try {
       const r = await fetch("/api/records?limit=200", { cache: "no-store" });
-      if (r.ok) {
-        const d = await r.json();
-        const server: R[] = d.records || [];
-        const pendingIds = new Set(pending.map((item) => item.id));
-        const pendingDeletes = offlineDB ? new Set((await offlineDB.outbox.toArray()).filter((item) => item.operation === "delete").map((item) => item.entityId)) : new Set<string>();
-        const visibleServer = server.filter((item) => !pendingIds.has(item.id) && !pendingDeletes.has(item.id));
-        setItems([...pending, ...visibleServer]);
-        if (offlineDB) await offlineDB.records.bulkPut(visibleServer.map(x => ({ ...x, metadata: x.metadata || {}, syncState: "synced" as const })));
+      if (!r.ok) {
+        if (r.status === 401 || r.status === 403) { setItems([]); setDocs([]); setMessage("Your session has expired. Sign in again to view ClassDesk records."); return; }
+        throw new Error("Could not load class records.");
       }
-    } catch {
-      if (offlineDB) setItems(await offlineDB.records.orderBy("updatedAt").reverse().toArray());
+      const d = await r.json();
+      const server: R[] = d.records || [];
+      const pendingIds = new Set(pending.map((item) => item.id));
+      const pendingDeletes = offlineDB ? new Set((await offlineDB.outbox.toArray()).filter((item) => item.operation === "delete").map((item) => item.entityId)) : new Set<string>();
+      const visibleServer = server.filter((item) => !pendingIds.has(item.id) && !pendingDeletes.has(item.id));
+      setItems([...pending, ...visibleServer]);
+      if (offlineDB) await offlineDB.records.bulkPut(visibleServer.map(x => ({ ...x, metadata: x.metadata || {}, syncState: "synced" as const })));
+    } catch (error) {
+      if (error instanceof TypeError && offlineDB) setItems(await offlineDB.records.orderBy("updatedAt").reverse().toArray());
+      else { setItems([]); setDocs([]); setMessage(error instanceof Error ? error.message : "Could not load class records."); return; }
     }
     let serverDocs: Doc[] = [];
-    try { const dr = await fetch("/api/documents"); if (dr.ok) serverDocs = (await dr.json()).documents || []; } catch { /* offline */ }
+    try {
+      const dr = await fetch("/api/documents", { cache: "no-store" });
+      if (dr.status === 401 || dr.status === 403) { setItems([]); setDocs([]); setMessage("Your session has expired. Sign in again to view class documents."); return; }
+      if (dr.ok) serverDocs = (await dr.json()).documents || [];
+    } catch (error) {
+      if (!(error instanceof TypeError)) { setDocs([]); setMessage(error instanceof Error ? error.message : "Could not load documents."); return; }
+    }
     const queuedDocs = offlineDB ? (await offlineDB.uploads.toArray()).map(item => ({ id: item.id, title: item.title, filename: item.filename, status: "QUEUED" })) : [];
     setDocs([...queuedDocs, ...serverDocs]);
-  }, []);
+  }
 
   useEffect(() => {
     void load();
