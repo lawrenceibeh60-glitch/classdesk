@@ -49,11 +49,13 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
     var listening by remember { mutableStateOf(false) }
     var processing by remember { mutableStateOf(false) }
     var speaking by remember { mutableStateOf(false) }
+    var userStopped by remember { mutableStateOf(false) }
     var transcript by remember { mutableStateOf("Your spoken instruction will appear here.") }
     var response by remember { mutableStateOf("Ava's response will appear here.") }
     var error by remember { mutableStateOf<String?>(null) }
 
     fun stopSession() {
+        userStopped = true
         recognizer?.cancel()
         speech?.stop()
         listening = false
@@ -67,6 +69,7 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
             error = "Speech recognition is unavailable on this device."
             return
         }
+        userStopped = false
         error = null
         transcript = "Listening for your instruction…"
         listening = true
@@ -101,6 +104,7 @@ fun AvaVoiceScreen(api: ClassDeskApi) {
                     override fun onError(errorCode: Int) {
                         listening = false
                         processing = false
+                        if (userStopped) { userStopped = false; return }
                         error = when (errorCode) {
                             SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission is required."
                             SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Speech service needs an internet connection."
