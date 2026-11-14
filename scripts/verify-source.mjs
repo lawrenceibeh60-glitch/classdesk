@@ -94,6 +94,7 @@ assert.match(avaSource, /const \[processing, setProcessing\] = useState\(false\)
 assert.match(avaWorkspace, /ava\.speaking \? "SPEAKING" : ava\.processing \? "PROCESSING"/, "Ava voice interface must show explicit speaking and processing states");
 assert.match(avaWorkspace, /ava-voice-readout[\s\S]*LATEST INPUT[\s\S]*LATEST RESPONSE/, "Ava graphical interface must show input and response readouts");
 assert.match(read("app/api/admin/storage/route.ts"), /requirePrimaryAdmin[\s\S]*pg_database_size[\s\S]*deleteMany/, "SQL storage inspection and cleanup must be primary-admin-only");
+assert.match(read("app/api/admin/storage/route.ts"), /tableSizes,/, "SQL storage API must return largest-table measurements to the settings UI");
 assert.match(read("app/api/admin/storage/route.ts"), /CLEANUP_CLASSDESK_SQL[\s\S]*appliedAt: \{ not: null \}[\s\S]*operation: \{ not: "delete" \}/, "SQL cleanup must require confirmation, preserve pending mutations and retain deletion tombstones");
 assert.match(read("components/storage-management.tsx"), /Pending sync changes are never removed[\s\S]*not touched/, "SQL cleanup UI must explain that pending sync and class content are preserved");
 assert.match(read("app/api/admin/storage/route.ts"), /operation: \{ not: "delete" \}/, "SQL cleanup must retain deletion tombstones for devices that reconnect after the retention window");
