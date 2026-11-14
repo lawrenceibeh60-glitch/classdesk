@@ -7,6 +7,18 @@ const prisma = new PrismaClient();
 const intervalMs = Math.max(1000, Number(process.env.AVA_WORKER_POLL_MS || 5000));
 const maxAttempts = 3;
 let stopping = false;
+const workerId = process.env.RENDER_INSTANCE_ID || process.env.HOSTNAME || randomUUID();
+
+async function heartbeat() {
+  await prisma.aiWorkerState.upsert({
+    where: { id: workerId },
+    create: { id: workerId },
+    update: { lastSeenAt: new Date() }
+  });
+}
+const heartbeatTimer = setInterval(() => {
+  void heartbeat().catch(error => console.error("Ava worker heartbeat failed", error));
+}, 15000);
 
 const bucket = process.env.S3_BUCKET;
 const endpoint = process.env.AWS_ENDPOINT_URL_S3 || process.env.S3_ENDPOINT;
@@ -192,6 +204,7 @@ async function runTask(task) {
 }
 
 async function loop() {
+  await heartbeat();
   console.log("Ava task worker started; polling every " + intervalMs + "ms");
   while (!stopping) {
     try {
@@ -224,4 +237,4 @@ async function loop() {
 
 process.on("SIGTERM", () => { stopping = true; });
 process.on("SIGINT", () => { stopping = true; });
-loop().finally(async () => { await prisma.$disconnect(); });
+loop().finally(async () => { clearInterval(heartbeatTimer); await prisma.$disconnect(); });
