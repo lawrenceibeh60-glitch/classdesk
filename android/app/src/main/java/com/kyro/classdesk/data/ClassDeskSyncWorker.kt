@@ -53,7 +53,7 @@ object ClassDeskSyncScheduler {
     fun scheduleNow(context: Context) {
         val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
         val request = OneTimeWorkRequestBuilder<ClassDeskSyncWorker>().setConstraints(constraints).build()
-        WorkManager.getInstance(context).enqueueUniqueWork("classdesk-offline-sync-now", ExistingWorkPolicy.KEEP, request)
+        WorkManager.getInstance(context).enqueueUniqueWork("classdesk-offline-sync-now", ExistingWorkPolicy.APPEND_OR_REPLACE, request)
     }
 
     fun schedule(context: Context) {
