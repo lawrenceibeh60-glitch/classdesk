@@ -23,6 +23,9 @@ import com.kyro.classdesk.BuildConfig
 import com.kyro.classdesk.data.*
 import com.google.gson.Gson
 import kotlinx.coroutines.launch
+import java.util.UUID
+import java.time.Instant
+import com.google.gson.JsonObject
 
 private val Canvas = Color(0xFF0A1019)
 private val Panel = Color(0xFF111B28)
@@ -569,9 +572,19 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                             if (item.content.isNotBlank()) Text(item.content, color = Muted, fontSize = 12.sp)
                             if (user.role == "CLASS_REP") TextButton(onClick = {
                                 scope.launch {
-                                    val deleted = api.deleteRecord(item.id)
-                                    if (deleted.isSuccessful) calendarItems = api.records().body()?.records.orEmpty()
-                                    else moduleError = "Could not delete this calendar item."
+                                    try {
+                                        val deleted = api.deleteRecord(item.id)
+                                        if (deleted.isSuccessful) calendarItems = api.records().body()?.records.orEmpty()
+                                        else moduleError = "Could not delete this calendar item."
+                                    } catch (_: Exception) {
+                                        val store = OfflineStore(context)
+                                        try {
+                                            store.enqueue(PendingMutation(UUID.randomUUID().toString(), user.username, item.id, "delete", item.version, "{}"))
+                                            calendarItems = calendarItems.filterNot { it.id == item.id }
+                                            secureStore.saveSnapshot("calendar", Gson().toJson(calendarItems))
+                                            moduleError = "Deletion saved on this device and queued for synchronization."
+                                        } finally { store.closeStore() }
+                                    }
                                 }
                             }) { Text("DELETE", color = Color(0xFFFF7D78), fontSize = 10.sp) }
                         }
@@ -587,12 +600,34 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                         OutlinedTextField(calendarContent, { calendarContent = it }, label = { Text("Details / venue") }, minLines = 2)
                     } },
                     confirmButton = { TextButton(onClick = { scope.launch {
-                        val saved = api.createRecord(mapOf("type" to calendarType, "title" to calendarTitle.trim(), "content" to calendarContent.trim(), "eventDate" to calendarDate.trim()))
-                        if (saved.isSuccessful) {
-                            calendarItems = api.records().body()?.records.orEmpty()
-                            calendarTitle = ""; calendarContent = ""; calendarDate = ""; calendarType = "TIMETABLE"
-                            showCalendarDialog = false
-                        } else moduleError = "Event could not be saved. Use TIMETABLE or CALENDAR and a valid ISO date."
+                        try {
+                            val saved = api.createRecord(mapOf("type" to calendarType, "title" to calendarTitle.trim(), "content" to calendarContent.trim(), "eventDate" to calendarDate.trim()))
+                            if (saved.isSuccessful) {
+                                calendarItems = api.records().body()?.records.orEmpty()
+                                calendarTitle = ""; calendarContent = ""; calendarDate = ""; calendarType = "TIMETABLE"
+                                showCalendarDialog = false
+                            } else moduleError = "Event could not be saved. Use TIMETABLE or CALENDAR and a valid ISO date."
+                        } catch (_: Exception) {
+                            val localId = UUID.randomUUID().toString()
+                            val payload = JsonObject().apply {
+                                addProperty("type", calendarType)
+                                addProperty("title", calendarTitle.trim())
+                                addProperty("content", calendarContent.trim())
+                                addProperty("eventDate", calendarDate.trim())
+                                add("metadata", JsonObject())
+                                addProperty("status", "ACTIVE")
+                                addProperty("updatedAt", Instant.now().toString())
+                            }
+                            val store = OfflineStore(context)
+                            try {
+                                store.enqueue(PendingMutation(UUID.randomUUID().toString(), user.username, localId, "upsert", 0, Gson().toJson(payload)))
+                                calendarItems = listOf(AcademicRecordDto(localId, calendarType, calendarTitle.trim(), calendarContent.trim(), calendarDate.trim(), "ACTIVE", 1)) + calendarItems
+                                secureStore.saveSnapshot("calendar", Gson().toJson(calendarItems))
+                                moduleError = "Saved on this device. It will sync when the network returns."
+                                calendarTitle = ""; calendarContent = ""; calendarDate = ""; calendarType = "TIMETABLE"
+                                showCalendarDialog = false
+                            } finally { store.closeStore() }
+                        }
                     } }, enabled = calendarTitle.isNotBlank() && calendarDate.isNotBlank() && calendarType in listOf("TIMETABLE", "CALENDAR")) { Text("SAVE") } },
                     dismissButton = { TextButton(onClick = { showCalendarDialog = false }) { Text("CANCEL") } }
                 )
