@@ -175,7 +175,7 @@ const androidAnnouncementUi = androidAppShell;
 const androidAnnouncementHelpers = read("android/app/src/main/java/com/kyro/classdesk/data/OfflineMutationHelpers.kt");
 const androidApi = read("android/app/src/main/java/com/kyro/classdesk/data/ClassDeskApi.kt");
 assert.match(androidAnnouncementUi, /EDIT DRAFT[\s\S]*APPROVE[\s\S]*PUBLISH[\s\S]*ARCHIVE[\s\S]*DELETE PERMANENTLY/, "Android announcement studio must cover the draft-to-publication lifecycle");
-assert.match(androidAnnouncementHelpers, /clientMutationId[\s\S]*isEditableDraft/, "Offline announcement edits must carry a stable idempotency receipt");
+assert.match(androidAnnouncementHelpers, /isEditableDraft[\s\S]*clientMutationId/, "Offline announcement edits must carry a stable idempotency receipt");
 assert.match(androidAnnouncementHelpers, /requires a live connection\. Nothing was queued/, "Approval and publication transitions must not be replayed as unsafe offline writes");
 assert.match(androidApi, /deleteAnnouncement\(@Query\("id"\) id: String\)/, "Android must expose the protected announcement deletion endpoint");
 
