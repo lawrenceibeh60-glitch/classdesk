@@ -24,4 +24,7 @@ interface ClassDeskApi {
 
     @POST("api/sync")
     suspend fun pushSync(@Body body: SyncPushRequest): Response<SyncPushResponse>
+
+    @POST("api/ai/chat")
+    suspend fun chat(@Body body: ChatRequest): Response<ChatResponse>
 }
