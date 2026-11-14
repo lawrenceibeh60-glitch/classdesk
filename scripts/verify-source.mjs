@@ -31,6 +31,7 @@ assert.match(read("app/api/auth/login/route.ts"), /authenticateCredentials/, "Tw
 assert.match(read("app/api/auth/me/route.ts"), /getSession/, "Current account identity endpoint is missing");
 assert.ok(!existsSync(join(root, "app/api/auth/register/route.ts")), "Public account registration must remain disabled");
 assert.match(read("app/api/backup/restore/route.ts"), /requirePrimaryAdmin/, "Backup restore must be restricted to the primary account");
+assert.match(read("app/api/export/route.ts"), /requirePrimaryAdmin/, "Full JSON backup export must be restricted to the primary account");
 assert.match(read("app/api/announcements/route.ts"), /requirePrimaryAdmin/, "Announcement approval and publication must be restricted to the primary account");
 assert.match(read("app/api/academic/route.ts"), /requirePrimaryAdmin/, "Academic record deletion must be restricted to the primary account");
 
