@@ -157,7 +157,10 @@ assert.ok(read("android/app/src/main/java/com/kyro/classdesk/ui/AvaToolsScreen.k
 assert.ok(read("android/app/src/main/java/com/kyro/classdesk/ui/ClassDeskApp.kt").includes("AvaToolsScreen(api, user.role == \"CLASS_REP\")"), "Android Ava tools must be role-gated in navigation");
 
 assert.ok(read("scripts/ava-task-worker.mjs").includes("aiWorkerState.upsert"), "Ava worker must publish a database heartbeat");
-assert.ok(read("app/api/ai/tasks/route.ts").includes("Ava's background worker is not online yet"), "Ava must not accept background tasks without a live worker");
+assert.ok(read("app/api/ai/tasks/route.ts").includes("start(processAvaTaskWorkflow"), "Ava task creation must enqueue Vercel durable workflows");
+assert.ok(read("lib/ava/workflows.ts").includes('"use workflow"'), "Ava document tasks must use a durable Vercel workflow");
+assert.ok(read("lib/ava/workflow-steps.ts").includes('"use step"'), "Ava document processing must run in durable workflow steps");
+assert.ok(read("next.config.ts").includes("withWorkflow(nextConfig)"), "Next.js must register the Vercel Workflow integration");
 assert.ok(read("app/api/health/route.ts").includes("avaWorkerOnline"), "Health status must expose Ava worker availability");
 
 const androidOfflineStore = read("android/app/src/main/java/com/kyro/classdesk/data/OfflineStore.kt");
