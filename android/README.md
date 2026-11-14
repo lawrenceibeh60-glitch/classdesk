@@ -35,7 +35,7 @@ Open the `android/` folder in Android Studio, allow Gradle sync, install the SDK
 - Catch-up Centre, Coverage, Class Records and account/system diagnostics.
 - Native document library with system file selection, upload/indexing, download/save and primary-account deletion controls.
 - JSON and ZIP backup export, plus confirmation-protected restore using the shared server endpoints.
-- Ava voice interface with speech recognition, AI chat, spoken responses, task/tool screens and explicit microphone permission.
+- Ava voice interface using Android's native SpeechRecognizer (on-device when available, platform service fallback), xKiro-backed AI chat, ElevenLabs spoken responses when configured, and Android TextToSpeech fallback.
 - Ava is push-to-talk: each voice request requires a fresh tap. It does not automatically reopen the microphone after responding or after leaving the voice screen.
 - Encrypted local snapshots for the overview and academic modules; cached content is read-only while offline.
 - SQLite offline mutation queue with Android Keystore encryption, account-bound ownership, manual sync, cloud-vs-local conflict resolution with version rebasing, rejected/corrupt item discard controls, and WorkManager retry/synchronisation for supported academic, announcement and calendar mutations.
