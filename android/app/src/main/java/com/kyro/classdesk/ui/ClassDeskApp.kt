@@ -154,6 +154,11 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
     var lectures by remember { mutableStateOf<List<LectureDto>>(emptyList()) }
     var attendance by remember { mutableStateOf<List<AttendanceDto>>(emptyList()) }
     var concerns by remember { mutableStateOf<List<ConcernDto>>(emptyList()) }
+    var announcements by remember { mutableStateOf<List<AnnouncementDto>>(emptyList()) }
+    var showAnnouncementDialog by remember { mutableStateOf(false) }
+    var announcementTitle by remember { mutableStateOf("") }
+    var announcementBody by remember { mutableStateOf("") }
+    var announcementCategory by remember { mutableStateOf("GENERAL") }
     var moduleLoading by remember { mutableStateOf(false) }
     var moduleError by remember { mutableStateOf<String?>(null) }
     var showCourseDialog by remember { mutableStateOf(false) }
@@ -183,7 +188,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
     val secureStore = remember { ApiClient.cookies(context) }
     LaunchedEffect(selected) {
         moduleError = null
-        if (selected in listOf("Courses", "Tasks", "Lectures", "Attendance", "Concerns")) {
+        if (selected in listOf("Courses", "Tasks", "Lectures", "Attendance", "Concerns", "Announcements")) {
             moduleLoading = true
             try {
                 if (selected == "Courses") {
@@ -223,7 +228,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                         attendance = secureStore.loadSnapshot("attendance")?.let { runCatching { Gson().fromJson(it, Array<AttendanceDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
                         moduleError = "Could not refresh attendance; showing the last saved copy."
                     }
-                } else {
+                } else if (selected == "Concerns") {
                     val response = api.concerns()
                     if (response.isSuccessful) {
                         concerns = response.body()?.items.orEmpty()
@@ -232,6 +237,15 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                         concerns = secureStore.loadSnapshot("concerns")?.let { runCatching { Gson().fromJson(it, Array<ConcernDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
                         moduleError = "Could not refresh concerns; showing the last saved copy."
                     }
+                } else {
+                    val response = api.announcements()
+                    if (response.isSuccessful) {
+                        announcements = response.body()?.announcements.orEmpty()
+                        secureStore.saveSnapshot("announcements", Gson().toJson(announcements))
+                    } else {
+                        announcements = secureStore.loadSnapshot("announcements")?.let { runCatching { Gson().fromJson(it, Array<AnnouncementDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
+                        moduleError = "Could not refresh announcements; showing the last saved copy."
+                    }
                 }
             } catch (_: Exception) {
                 if (selected == "Courses") courses = secureStore.loadSnapshot("courses")?.let { runCatching { Gson().fromJson(it, Array<CourseDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
@@ -239,6 +253,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                 if (selected == "Lectures") lectures = secureStore.loadSnapshot("lectures")?.let { runCatching { Gson().fromJson(it, Array<LectureDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
                 if (selected == "Attendance") attendance = secureStore.loadSnapshot("attendance")?.let { runCatching { Gson().fromJson(it, Array<AttendanceDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
                 if (selected == "Concerns") concerns = secureStore.loadSnapshot("concerns")?.let { runCatching { Gson().fromJson(it, Array<ConcernDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
+                if (selected == "Announcements") announcements = secureStore.loadSnapshot("announcements")?.let { runCatching { Gson().fromJson(it, Array<AnnouncementDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
                 moduleError = "OFFLINE / Showing the last saved copy where available."
             }
             finally { moduleLoading = false }
@@ -259,7 +274,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
         bottomBar = {
             NavigationBar(containerColor = Panel, contentColor = Cyan) {
                 listOf("Overview", "Courses", "Tasks", "More", "Ava").forEach { item ->
-                    NavigationBarItem(selected = selected == item || (item == "More" && selected in listOf("Lectures", "Attendance", "Concerns")), onClick = { selected = item },
+                    NavigationBarItem(selected = selected == item || (item == "More" && selected in listOf("Lectures", "Attendance", "Concerns", "Announcements")), onClick = { selected = item },
                         icon = { Icon(when (item) {
                             "Courses" -> Icons.Default.MenuBook
                             "Tasks" -> Icons.Default.CheckCircle
@@ -394,7 +409,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                 )
             } else if (selected == "More") {
                 Text("CLASS OPERATIONS", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
-                listOf("Lectures", "Attendance", "Concerns").forEach { module ->
+                listOf("Lectures", "Attendance", "Concerns", "Announcements").forEach { module ->
                     OutlinedButton(onClick = { selected = module }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(6.dp)) {
                         Text(module.uppercase(), color = Cyan, modifier = Modifier.fillMaxWidth())
                     }
@@ -522,6 +537,53 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                         } else moduleError = "Concern could not be saved."
                     } }, enabled = concernTitle.isNotBlank() && concernDetails.isNotBlank()) { Text("SAVE") } },
                     dismissButton = { TextButton(onClick = { showConcernDialog = false }) { Text("CANCEL") } }
+                )
+            } else if (selected == "Announcements") {
+                Text("ANNOUNCEMENT STUDIO", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
+                Button(onClick = { showAnnouncementDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ NEW DRAFT") }
+                if (moduleLoading) CircularProgressIndicator(color = Cyan)
+                moduleError?.let { Text(it, color = Color(0xFFFF7D78)) }
+                if (!moduleLoading && announcements.isEmpty()) Text("No announcements have been drafted.", color = Muted)
+                announcements.forEach { item ->
+                    Surface(color = Panel, shape = RoundedCornerShape(6.dp), modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(item.status.uppercase() + " / " + item.category.uppercase(), color = Cyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text(item.title, color = Color.White, fontWeight = FontWeight.SemiBold)
+                            Text(item.body, color = Muted, fontSize = 12.sp, maxLines = 5)
+                            if (user.role == "CLASS_REP" && item.status == "DRAFT") TextButton(onClick = {
+                                scope.launch {
+                                    val approved = api.updateAnnouncement(mapOf("id" to item.id, "action" to "approve"))
+                                    if (approved.isSuccessful) announcements = api.announcements().body()?.announcements.orEmpty()
+                                    else moduleError = "Announcement approval failed. Resolve placeholders and try again."
+                                }
+                            }) { Text("APPROVE", color = Gold, fontSize = 10.sp) }
+                            if (user.role == "CLASS_REP" && item.status == "APPROVED") TextButton(onClick = {
+                                scope.launch {
+                                    val published = api.updateAnnouncement(mapOf("id" to item.id, "action" to "publish"))
+                                    if (published.isSuccessful) announcements = api.announcements().body()?.announcements.orEmpty()
+                                    else moduleError = "Announcement could not be published."
+                                }
+                            }) { Text("PUBLISH", color = Cyan, fontSize = 10.sp) }
+                        }
+                    }
+                }
+                if (showAnnouncementDialog) AlertDialog(
+                    onDismissRequest = { showAnnouncementDialog = false },
+                    title = { Text("New announcement draft") },
+                    text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(announcementTitle, { announcementTitle = it }, label = { Text("Title") }, singleLine = true)
+                        OutlinedTextField(announcementCategory, { announcementCategory = it }, label = { Text("Category") }, singleLine = true)
+                        OutlinedTextField(announcementBody, { announcementBody = it }, label = { Text("Announcement") }, minLines = 4)
+                    } },
+                    confirmButton = { TextButton(onClick = { scope.launch {
+                        val saved = api.createAnnouncement(mapOf("title" to announcementTitle.trim(), "category" to announcementCategory.trim(), "body" to announcementBody.trim()))
+                        if (saved.isSuccessful) {
+                            announcements = api.announcements().body()?.announcements.orEmpty()
+                            announcementTitle = ""; announcementBody = ""; announcementCategory = "GENERAL"
+                            showAnnouncementDialog = false
+                        } else moduleError = "Announcement draft could not be saved."
+                    } }, enabled = announcementTitle.isNotBlank() && announcementBody.isNotBlank()) { Text("SAVE DRAFT") } },
+                    dismissButton = { TextButton(onClick = { showAnnouncementDialog = false }) { Text("CANCEL") } }
                 )
             } else {
                 AvaVoiceScreen(api)
