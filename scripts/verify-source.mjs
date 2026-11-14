@@ -74,9 +74,9 @@ assert.match(avaWorkspace, /voicePanelOpen && <div className="ava-overlay"/, "Ta
 assert.match(avaWorkspace, /if \(ava\.listening\) ava\.speak\(/, "Ava spoken replies must be limited to an active microphone session");
 assert.match(avaWorkspace, /setVoicePanelOpen\(true\); ava\.toggle\(\)/, "The microphone button must explicitly open and start voice mode");
 assert.ok(!/e\.altKey\s*&&\s*e\.key\.toLowerCase\(\)\s*===\s*"a"/.test(avaWorkspace), "Ava must only activate from the microphone button, not a keyboard shortcut");
-assert.match(avaSource, /setSupported\\(hasBrowserRec \\|\\| \\(hasMicrophoneInput && flags\\.stt\\)\\)/, "Ava must only offer cloud microphone input when speech transcription is configured");
-assert.match(avaSource, /if \\(!wantRef\\.current\\) \\{ cleanupRef\\.current\\?\\.\\(\\); cleanupRef\\.current = null; return; \\}/, "Ava must clean up a microphone stream if the user stops while permission is pending");
-assert.match(avaSource, /setTimeout\\(\\(\\) => \\{ if \\(wantRef\\.current\\) speak\\("Ava is ready\\. Go ahead\\."\\); \\}, 300\\)/, "Ava must not speak a delayed startup prompt after voice mode has been stopped");
+assert.match(avaSource, /setSupported\(hasBrowserRec \|\| \(hasMicrophoneInput && flags\.stt\)\)/, "Ava must only offer cloud microphone input when speech transcription is configured");
+assert.match(avaSource, /if \(!wantRef\.current\) \{ cleanupRef\.current\?\.\(\); cleanupRef\.current = null; return; \}/, "Ava must clean up a microphone stream if the user stops while permission is pending");
+assert.match(avaSource, /setTimeout\(\(\) => \{ if \(wantRef\.current\) speak\("Ava is ready\. Go ahead\."\); \}, 300\)/, "Ava must not speak a delayed startup prompt after voice mode has been stopped");
 
 const healthRoute = read("app/api/health/route.ts");
 assert.match(healthRoute, /DATABASE_URL_POOLED \|\| process\.env\.DATABASE_URL/, "Health checks must recognise pooled Neon database configuration");
