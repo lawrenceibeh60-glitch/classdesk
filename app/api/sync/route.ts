@@ -64,9 +64,17 @@ export async function POST(req: NextRequest) {  const originDenied = assertSameO
       rejected.push({ id, reason: "Only the Class Representative can delete synced records" });
       continue;
     }
-    const syncStatus = (raw.payload as { status?: unknown } | null)?.status;
-    if (actor?.role === "ASSISTANT_REP" && ["APPROVED", "PUBLISHED", "ARCHIVED"].includes(String(syncStatus))) {
-      rejected.push({ id, reason: "Only the Class Representative can change protected publication states" });
+    const syncPayload = raw.payload && typeof raw.payload === "object" && !Array.isArray(raw.payload)
+      ? raw.payload as { status?: unknown }
+      : null;
+    const syncStatus = syncPayload?.status;
+    const allowedStatuses = new Set(["ACTIVE", "DONE", "ARCHIVED", "DRAFT", "APPROVED", "PUBLISHED"]);
+    if (syncStatus !== undefined && (typeof syncStatus !== "string" || !allowedStatuses.has(syncStatus))) {
+      rejected.push({ id, reason: "Unsupported record status" });
+      continue;
+    }
+    if (actor?.role === "ASSISTANT_REP" && typeof syncStatus === "string" && !["ACTIVE", "DONE", "DRAFT"].includes(syncStatus)) {
+      rejected.push({ id, reason: "Only the Class Representative can set approval, publication or archive states" });
       continue;
     }
 
