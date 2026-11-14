@@ -46,7 +46,7 @@ fun DocumentLibraryScreen(api: ClassDeskApi, isPrimaryAdmin: Boolean) {
         try {
             val result = api.documents()
             if (result.isSuccessful) documents = result.body()?.documents.orEmpty()
-            else error = "Could not load documents (\${result.code()})."
+            else error = "Could not load documents (${result.code()})."
         } catch (_: Exception) { error = "Document service is unavailable. Check your connection." }
         finally { loading = false }
     }
@@ -91,7 +91,7 @@ fun DocumentLibraryScreen(api: ClassDeskApi, isPrimaryAdmin: Boolean) {
                 )
                 val result = api.uploadDocument(filePart, fields)
                 if (result.isSuccessful) reload()
-                else error = "Upload failed (\${result.code()}). Check the file type and server storage."
+                else error = "Upload failed (${result.code()}). Check the file type and server storage."
             } catch (e: Exception) {
                 error = e.message ?: "Upload failed."
             } finally { uploading = false }
@@ -154,7 +154,7 @@ fun DocumentLibraryScreen(api: ClassDeskApi, isPrimaryAdmin: Boolean) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text(document.title, color = Color.White, fontWeight = FontWeight.SemiBold)
                     Text(document.filename, color = Color(0xFF91A4B8), fontSize = 11.sp)
-                    Text("\${document.status} / \${document.securityScanStatus} / \${(document.sizeBytes / 1024).coerceAtLeast(1)} KB", color = Color(0xFF42D9F5), fontSize = 10.sp)
+                    Text("${document.status} / ${document.securityScanStatus} / ${(document.sizeBytes / 1024).coerceAtLeast(1)} KB", color = Color(0xFF42D9F5), fontSize = 10.sp)
                     listOfNotNull(document.courseCode, document.topic).takeIf { it.isNotEmpty() }?.let { Text(it.joinToString(" / "), color = Color(0xFF91A4B8), fontSize = 11.sp) }
                     TextButton(onClick = { downloadId = document.id; downloadName = document.filename; saveDownload.launch(document.filename) }) { Text("DOWNLOAD / OPEN", color = Color(0xFF42D9F5), fontSize = 10.sp) }
                     if (isPrimaryAdmin) TextButton(onClick = { deleteTarget = document }) {
