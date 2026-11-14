@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireAdmin, assertSameOrigin } from "@/lib/http";
+import { requireAdmin, requirePrimaryAdmin, assertSameOrigin } from "@/lib/http";
 import { Prisma } from "@prisma/client";
 export const runtime = "nodejs";
 const placeholder = /\[[A-Z0-9 _/:-]{2,}\]/;
@@ -25,6 +25,7 @@ export async function PATCH(req: NextRequest) {
   const originDenied = assertSameOrigin(req); if (originDenied) return originDenied;
   const denied = await requireAdmin(); if (denied) return denied;
   const body = await req.json().catch(() => null);
+  if (body?.action !== "edit") { const primaryDenied = await requirePrimaryAdmin(); if (primaryDenied) return primaryDenied; }
   if (!body?.id || typeof body.id !== "string") return NextResponse.json({ error: "Announcement id is required" }, { status: 400 });
   const current = await db.announcement.findUnique({ where: { id: body.id }, include: { versions: { orderBy: { version: "desc" }, take: 1 } } });
   if (!current) return NextResponse.json({ error: "Announcement not found" }, { status: 404 });
@@ -90,6 +91,7 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const originDenied = assertSameOrigin(req); if (originDenied) return originDenied;
   const denied = await requireAdmin(); if (denied) return denied;
+  const primaryDenied = await requirePrimaryAdmin(); if (primaryDenied) return primaryDenied;
   const id = req.nextUrl.searchParams.get("id"); if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
   await db.announcement.deleteMany({ where: { id } }); return NextResponse.json({ ok: true });
 }
