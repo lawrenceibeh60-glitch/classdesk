@@ -106,11 +106,25 @@ fun DocumentLibraryScreen(api: ClassDeskApi, isPrimaryAdmin: Boolean) {
             confirmButton = {
                 TextButton(onClick = {
                     scope.launch {
-                        val result = api.deleteDocument(target.id)
-                        if (result.isSuccessful) {
-                            documents = documents.filterNot { it.id == target.id }
-                            error = null
-                        } else error = "Document deletion failed (HTTP ${result.code()})."
+                        val preview = api.avaTool(mapOf("action" to "preview_delete_document", "documentId" to target.id))
+                        if (!preview.isSuccessful) throw IllegalStateException(preview.body()?.get("error")?.toString() ?: "Could not verify the deletion target.")
+                        val previewDetails = preview.body()?.get("preview") as? Map<*, *>
+                            ?: throw IllegalStateException("The server did not return a deletion preview.")
+                        val originalInStorage = previewDetails["originalInSharedStorage"] == true
+                        val result = api.avaTool(mapOf(
+                            "action" to "delete_document",
+                            "documentId" to target.id,
+                            "confirmPermanent" to true,
+                            "confirmTitle" to target.title
+                        ))
+                        if (!result.isSuccessful) throw IllegalStateException(result.body()?.get("error")?.toString() ?: "Document deletion failed (HTTP ${result.code()}).")
+                        val deleted = result.body()?.get("deleted") as? Map<*, *>
+                            ?: throw IllegalStateException("Deletion could not be verified.")
+                        if (deleted["databaseRecord"] != true || (originalInStorage && deleted["sharedStorageObject"] != true)) {
+                            throw IllegalStateException("Deletion returned an incomplete verification result. Check the audit log.")
+                        }
+                        documents = documents.filterNot { it.id == target.id }
+                        error = null
                         deleteTarget = null
                     }
                 }) { Text("DELETE PERMANENTLY", color = Color(0xFFFF7D78)) }
