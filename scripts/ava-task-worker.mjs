@@ -117,8 +117,8 @@ async function claimTask() {
         WHERE ("status" = 'QUEUED' AND "availableAt" <= NOW())
            OR ("status" = 'RUNNING' AND "lockedAt" < NOW() - INTERVAL '5 minutes')
         ORDER BY "createdAt" ASC
-        FOR UPDATE SKIP LOCKED
         LIMIT 1
+        FOR UPDATE SKIP LOCKED
       )
       RETURNING *
     `;
