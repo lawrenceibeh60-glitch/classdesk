@@ -213,25 +213,7 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                         lectures = secureStore.loadSnapshot("lectures")?.let { runCatching { Gson().fromJson(it, Array<LectureDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
                         moduleError = "Could not refresh lectures; showing the last saved copy."
                     }
-                    if (showLectureDialog) AlertDialog(
-                    onDismissRequest = { showLectureDialog = false },
-                    title = { Text("Add lecture") },
-                    text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(lectureTopic, { lectureTopic = it }, label = { Text("Topic") }, singleLine = true)
-                        OutlinedTextField(lectureSummary, { lectureSummary = it }, label = { Text("Summary") }, minLines = 2)
-                        OutlinedTextField(lectureDate, { lectureDate = it }, label = { Text("Held date/time (ISO, optional)") }, singleLine = true)
-                        OutlinedTextField(lectureVenue, { lectureVenue = it }, label = { Text("Venue (optional)") }, singleLine = true)
-                    } },
-                    confirmButton = { TextButton(onClick = { scope.launch {
-                        val saved = api.createAcademic(mapOf("resource" to "lectures", "topic" to lectureTopic.trim(), "summary" to lectureSummary.trim(), "heldAt" to lectureDate.trim(), "venue" to lectureVenue.trim()))
-                        if (saved.isSuccessful) {
-                            lectures = api.lectures().body()?.items.orEmpty()
-                            lectureTopic = ""; lectureSummary = ""; lectureDate = ""; lectureVenue = ""
-                            showLectureDialog = false
-                        } else moduleError = "Lecture could not be saved. Check the date format."
-                    } }, enabled = lectureTopic.isNotBlank()) { Text("SAVE") } },
-                    dismissButton = { TextButton(onClick = { showLectureDialog = false }) { Text("CANCEL") } }
-                )
+
             } else if (selected == "Attendance") {
                     val response = api.attendance()
                     if (response.isSuccessful) {
@@ -440,6 +422,25 @@ private fun DashboardScreen(user: UserDto, api: ClassDeskApi, summary: SummaryDt
                         }
                     }
                 }
+                if (showLectureDialog) AlertDialog(
+                    onDismissRequest = { showLectureDialog = false },
+                    title = { Text("Add lecture") },
+                    text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(lectureTopic, { lectureTopic = it }, label = { Text("Topic") }, singleLine = true)
+                        OutlinedTextField(lectureSummary, { lectureSummary = it }, label = { Text("Summary") }, minLines = 2)
+                        OutlinedTextField(lectureDate, { lectureDate = it }, label = { Text("Held date/time (ISO, optional)") }, singleLine = true)
+                        OutlinedTextField(lectureVenue, { lectureVenue = it }, label = { Text("Venue (optional)") }, singleLine = true)
+                    } },
+                    confirmButton = { TextButton(onClick = { scope.launch {
+                        val saved = api.createAcademic(mapOf("resource" to "lectures", "topic" to lectureTopic.trim(), "summary" to lectureSummary.trim(), "heldAt" to lectureDate.trim(), "venue" to lectureVenue.trim()))
+                        if (saved.isSuccessful) {
+                            lectures = api.lectures().body()?.items.orEmpty()
+                            lectureTopic = ""; lectureSummary = ""; lectureDate = ""; lectureVenue = ""
+                            showLectureDialog = false
+                        } else moduleError = "Lecture could not be saved. Check the date format."
+                    } }, enabled = lectureTopic.isNotBlank()) { Text("SAVE") } },
+                    dismissButton = { TextButton(onClick = { showLectureDialog = false }) { Text("CANCEL") } }
+                )
             } else if (selected == "Attendance") {
                 Text("ATTENDANCE SUMMARIES", color = Gold, fontSize = 11.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold)
                 Button(onClick = { showAttendanceDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = Cyan, contentColor = Canvas), shape = RoundedCornerShape(6.dp)) { Text("+ ADD SUMMARY") }
