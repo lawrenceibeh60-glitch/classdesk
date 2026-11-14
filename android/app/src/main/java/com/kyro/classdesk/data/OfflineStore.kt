@@ -20,10 +20,11 @@ data class OfflineQueueEntry(
     val operation: String,
     val status: String,
     val lastError: String?,
-    val createdAt: Long
+    val createdAt: Long,
+    val serverRecordJson: String? = null
 )
 
-class OfflineStore(private val context: Context) : SQLiteOpenHelper(context, "classdesk-offline.db", null, 2) {
+class OfflineStore(private val context: Context) : SQLiteOpenHelper(context, "classdesk-offline.db", null, 3) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("""CREATE TABLE pending_mutations (
             id TEXT PRIMARY KEY NOT NULL,
@@ -34,6 +35,7 @@ class OfflineStore(private val context: Context) : SQLiteOpenHelper(context, "cl
             payload_json TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'PENDING',
             last_error TEXT,
+            server_record_json TEXT,
             created_at INTEGER NOT NULL
         )""")
         db.execSQL("CREATE INDEX pending_mutations_status_created ON pending_mutations(status, created_at)")
@@ -41,6 +43,7 @@ class OfflineStore(private val context: Context) : SQLiteOpenHelper(context, "cl
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) db.execSQL("ALTER TABLE pending_mutations ADD COLUMN owner_username TEXT NOT NULL DEFAULT ''")
+        if (oldVersion < 3) db.execSQL("ALTER TABLE pending_mutations ADD COLUMN server_record_json TEXT")
         // Schema migrations are additive; never drop queued offline work.
     }
 
@@ -90,14 +93,14 @@ class OfflineStore(private val context: Context) : SQLiteOpenHelper(context, "cl
         val result = mutableListOf<OfflineQueueEntry>()
         readableDatabase.query(
             "pending_mutations",
-            arrayOf("id", "entity_id", "operation", "status", "last_error", "created_at"),
+            arrayOf("id", "entity_id", "operation", "status", "last_error", "created_at", "server_record_json"),
             "owner_username = ?",
             arrayOf(ownerUsername),
             null, null, "created_at DESC"
         ).use { cursor ->
             while (cursor.moveToNext()) result += OfflineQueueEntry(
                 cursor.getString(0), cursor.getString(1), cursor.getString(2),
-                cursor.getString(3), cursor.getString(4), cursor.getLong(5)
+                cursor.getString(3), cursor.getString(4), cursor.getLong(5), cursor.getString(6)
             )
         }
         return result
@@ -107,6 +110,32 @@ class OfflineStore(private val context: Context) : SQLiteOpenHelper(context, "cl
     fun mark(id: String, status: String, error: String?) {
         val values = ContentValues().apply { put("status", status); put("last_error", error) }
         writableDatabase.update("pending_mutations", values, "id = ?", arrayOf(id))
+    }
+
+    @Synchronized
+    fun markConflict(id: String, error: String, serverRecordJson: String?) {
+        val values = ContentValues().apply {
+            put("status", "CONFLICT")
+            put("last_error", error)
+            if (serverRecordJson == null) putNull("server_record_json") else put("server_record_json", serverRecordJson)
+        }
+        writableDatabase.update("pending_mutations", values, "id = ?", arrayOf(id))
+    }
+
+    @Synchronized
+    fun rebaseForRetry(id: String, latestVersion: Int) {
+        val values = ContentValues().apply {
+            put("base_version", latestVersion.coerceAtLeast(0))
+            put("status", "PENDING")
+            putNull("last_error")
+            putNull("server_record_json")
+        }
+        writableDatabase.update("pending_mutations", values, "id = ?", arrayOf(id))
+    }
+
+    @Synchronized
+    fun removeEntry(id: String) {
+        writableDatabase.delete("pending_mutations", "id = ?", arrayOf(id))
     }
 
     @Synchronized
