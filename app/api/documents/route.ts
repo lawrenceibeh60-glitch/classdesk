@@ -96,7 +96,15 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
   const doc = await db.document.findUnique({ where: { id }, select: { storageKey: true } });
   if (!doc) return NextResponse.json({ error: "Document not found" }, { status: 404 });
+  // Delete the original object first. If the storage provider rejects the
+  // request, keep the SQL row and its metadata so the administrator can retry.
+  if (doc.storageKey) {
+    try {
+      await deleteObject(doc.storageKey);
+    } catch {
+      return NextResponse.json({ error: "The original file could not be deleted from shared storage. The SQL record was kept; retry after checking storage connectivity." }, { status: 502 });
+    }
+  }
   await db.document.delete({ where: { id } });
-  if (doc.storageKey) await deleteObject(doc.storageKey).catch(() => undefined);
   return NextResponse.json({ ok: true });
 }
