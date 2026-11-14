@@ -32,7 +32,12 @@ class SessionCookieJar(context: Context) : CookieJar {
             .filter { it.expiresAt > System.currentTimeMillis() }.toList()
 
     fun saveUser(user: UserDto) {
-        preferences.edit().putString("cached_user", Gson().toJson(user)).apply()
+        val previous = loadUser()
+        val editor = preferences.edit()
+        if (previous != null && previous.username != user.username) {
+            preferences.all.keys.filter { it.startsWith("snapshot_") }.forEach { editor.remove(it) }
+        }
+        editor.putString("cached_user", Gson().toJson(user)).apply()
     }
 
     fun loadUser(): UserDto? = runCatching {
