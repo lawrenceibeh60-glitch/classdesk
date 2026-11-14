@@ -7,7 +7,7 @@ const pkg = JSON.parse(read("package.json"));
 const schema = read("prisma/schema.prisma");
 const migrationDirs = readdirSync(join(root, "prisma/migrations")).filter((name) => !name.startsWith(".") && statSync(join(root, "prisma/migrations", name)).isDirectory());
 const migrationSql = migrationDirs.map((name) => read(`prisma/migrations/${name}/migration.sql`)).join("\n");
-const requiredModels = ["AcademicRecord", "Document", "DocumentChunk", "Announcement", "AnnouncementVersion", "AnnouncementEvent", "SyncMutation", "Course", "LectureSession", "Assignment", "AttendanceSummary", "ClassConcern", "RateLimitBucket"];
+const requiredModels = ["AcademicRecord", "Document", "DocumentChunk", "Announcement", "AnnouncementVersion", "AnnouncementEvent", "SyncMutation", "Course", "LectureSession", "Assignment", "AttendanceSummary", "ClassConcern", "RateLimitBucket", "AiTask"];
 for (const model of requiredModels) assert.match(schema, new RegExp(`model\\s+${model}\\s*\\{`), `Missing Prisma model: ${model}`);
 for (const table of ["Course", "LectureSession", "Assignment", "AttendanceSummary", "ClassConcern", "AnnouncementVersion", "AnnouncementEvent", "RateLimitBucket", "AiTask"]) assert.ok(migrationSql.includes(`CREATE TABLE "${table}"`), `Missing SQL migration table: ${table}`);
 assert.match(migrationSql, /ALTER TABLE "AcademicRecord" ADD COLUMN "version" INTEGER NOT NULL DEFAULT 1/, "Missing optimistic record version migration");
