@@ -40,6 +40,7 @@ fun DocumentLibraryScreen(api: ClassDeskApi, isPrimaryAdmin: Boolean) {
     var topic by remember { mutableStateOf("") }
     var lectureDate by remember { mutableStateOf("") }
     var deleteTarget by remember { mutableStateOf<DocumentDto?>(null) }
+    var deleting by remember { mutableStateOf(false) }
 
     suspend fun reload() {
         loading = true
@@ -100,36 +101,44 @@ fun DocumentLibraryScreen(api: ClassDeskApi, isPrimaryAdmin: Boolean) {
 
     deleteTarget?.let { target ->
         AlertDialog(
-            onDismissRequest = { deleteTarget = null },
+            onDismissRequest = { if (!deleting) deleteTarget = null },
             title = { Text("Permanently delete document?") },
             text = { Text("This will remove ${target.title} from ClassDesk's database and shared object storage. This action cannot be undone.") },
             confirmButton = {
-                TextButton(onClick = {
+                TextButton(enabled = !deleting, onClick = {
+                    if (deleting) return@TextButton
                     scope.launch {
-                        val preview = api.avaTool(mapOf("action" to "preview_delete_document", "documentId" to target.id))
-                        if (!preview.isSuccessful) throw IllegalStateException(preview.body()?.get("error")?.toString() ?: "Could not verify the deletion target.")
-                        val previewDetails = preview.body()?.get("preview") as? Map<*, *>
-                            ?: throw IllegalStateException("The server did not return a deletion preview.")
-                        val originalInStorage = previewDetails["originalInSharedStorage"] == true
-                        val result = api.avaTool(mapOf(
-                            "action" to "delete_document",
-                            "documentId" to target.id,
-                            "confirmPermanent" to true,
-                            "confirmTitle" to target.title
-                        ))
-                        if (!result.isSuccessful) throw IllegalStateException(result.body()?.get("error")?.toString() ?: "Document deletion failed (HTTP ${result.code()}).")
-                        val deleted = result.body()?.get("deleted") as? Map<*, *>
-                            ?: throw IllegalStateException("Deletion could not be verified.")
-                        if (deleted["databaseRecord"] != true || (originalInStorage && deleted["sharedStorageObject"] != true)) {
-                            throw IllegalStateException("Deletion returned an incomplete verification result. Check the audit log.")
-                        }
-                        documents = documents.filterNot { it.id == target.id }
+                        deleting = true
                         error = null
-                        deleteTarget = null
+                        try {
+                            val preview = api.avaTool(mapOf("action" to "preview_delete_document", "documentId" to target.id))
+                            if (!preview.isSuccessful) throw IllegalStateException(preview.body()?.get("error")?.toString() ?: "Could not verify the deletion target.")
+                            val previewDetails = preview.body()?.get("preview") as? Map<*, *>
+                                ?: throw IllegalStateException("The server did not return a deletion preview.")
+                            val originalInStorage = previewDetails["originalInSharedStorage"] == true
+                            val result = api.avaTool(mapOf(
+                                "action" to "delete_document",
+                                "documentId" to target.id,
+                                "confirmPermanent" to true,
+                                "confirmTitle" to target.title
+                            ))
+                            if (!result.isSuccessful) throw IllegalStateException(result.body()?.get("error")?.toString() ?: "Document deletion failed (HTTP ${result.code()}).")
+                            val deleted = result.body()?.get("deleted") as? Map<*, *>
+                                ?: throw IllegalStateException("Deletion could not be verified.")
+                            if (deleted["databaseRecord"] != true || (originalInStorage && deleted["sharedStorageObject"] != true)) {
+                                throw IllegalStateException("Deletion returned an incomplete verification result. Check the audit log.")
+                            }
+                            documents = documents.filterNot { it.id == target.id }
+                            deleteTarget = null
+                        } catch (e: Exception) {
+                            error = e.message ?: "Document deletion failed. The document list has not been changed."
+                        } finally {
+                            deleting = false
+                        }
                     }
-                }) { Text("DELETE PERMANENTLY", color = Color(0xFFFF7D78)) }
+                }) { Text(if (deleting) "DELETING…" else "DELETE PERMANENTLY", color = Color(0xFFFF7D78)) }
             },
-            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("CANCEL") } }
+            dismissButton = { TextButton(enabled = !deleting, onClick = { deleteTarget = null }) { Text("CANCEL") } }
         )
     }
 
