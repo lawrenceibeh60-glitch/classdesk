@@ -98,7 +98,7 @@ export default function AIWorkspace({ initialKind = "announcement" }: { initialK
     onCommand: async (cmd) => {
       const A = () => avaRef.current!;
       const c = cmd.toLowerCase().replace(/[.!?,]+$/, "").trim();
-      const say = (t: string, ask = false) => A().speak(t, ask ? pick(FOLLOWUPS) : "", ask);
+      const say = (t: string, ask = false) => { if (A().listening) A().speak(t, ask ? pick(FOLLOWUPS) : "", ask); };
       const download = (href: string) => { const a = document.createElement("a"); a.href = href; a.download = ""; document.body.appendChild(a); a.click(); a.remove(); };
       const addRecord = async (type: string, title: string) => { const r = await fetch("/api/records", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type, title: title.slice(0, 180), content: "" }) }); return r.ok; };
       if (/^(stop|be quiet|quiet|shut up|cancel|stop talking|that's enough)$/.test(c)) { A().shutUp(); return; }
@@ -130,10 +130,10 @@ export default function AIWorkspace({ initialKind = "announcement" }: { initialK
     if (messages.length <= spokenCount.current) { spokenCount.current = messages.length; return; }
     spokenCount.current = messages.length;
     const last = messages[messages.length - 1];
-    if (voiceReply.current && last?.role === "assistant") { voiceReply.current = false; ava.speak(last.content, pick(FOLLOWUPS), true); }
+    if (voiceReply.current && last?.role === "assistant") { voiceReply.current = false; if (ava.listening) ava.speak(last.content, pick(FOLLOWUPS), true); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages]);
-  useEffect(() => { if (error && voiceReply.current) { voiceReply.current = false; ava.speak(error); } }, [error]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (error && voiceReply.current) { voiceReply.current = false; if (ava.listening) ava.speak(error); } }, [error]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const h = (e: KeyboardEvent) => { if (e.altKey && e.key.toLowerCase() === "a") { e.preventDefault(); setVoicePanelOpen(open => { if (open) { avaRef.current?.stop(); return false; } avaRef.current?.toggle(); return true; }); } }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, []);
   const send = () => void ask();
   return <SectionShell bare title="AI Workspace" description="A document-aware assistant for academic coordination, class communication and study support."><div className="workspace">
