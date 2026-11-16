@@ -9,7 +9,7 @@ Native Android client workspace for the existing ClassDesk service.
 - EncryptedSharedPreferences-backed session cookies, offline profile and read-only snapshots.
 - Android Keystore AES-GCM encryption for queued offline mutation payloads; queued changes are bound to the account that created them.
 - SQLite outbox and WorkManager network-constrained sync foundation.
-- Native Jetpack Compose text chat for Ava, connected to the same authenticated ClassDesk AI endpoint as the website. The Tools shortcut opens the existing native document and administration utilities.
+- Native Jetpack Compose text chat for Ava, connected to the same authenticated ClassDesk AI endpoint as the website with voice mode disabled. The chat preserves confirmation-protected actions; the Tools shortcut opens the existing native document and administration utilities.
 
 ## Configure the API
 
