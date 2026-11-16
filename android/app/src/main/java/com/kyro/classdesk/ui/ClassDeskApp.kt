@@ -1,6 +1,8 @@
 package com.kyro.classdesk.ui
 
 import android.Manifest
+import androidx.biometric.BiometricManager
+import androidx.fragment.app.FragmentActivity
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -55,11 +57,15 @@ fun ClassDeskApp(initialDestination: String? = null) {
     var error by remember { mutableStateOf<String?>(null) }
     var summary by remember { mutableStateOf<SummaryDto?>(null) }
     var upcoming by remember { mutableStateOf<List<AssignmentDto>>(emptyList()) }
+    var biometricUnlocked by remember { mutableStateOf(true) }
+    var justAuthenticated by remember { mutableStateOf(false) }
+    val securityPrefs = remember { context.getSharedPreferences("classdesk_app_security", android.content.Context.MODE_PRIVATE) }
 
     suspend fun refreshSession() {
         val secureStore = ApiClient.cookies(context)
         fun restoreOfflineSnapshot() {
             user = secureStore.loadUser()
+            biometricUnlocked = !(user?.role == "CLASS_REP" && securityPrefs.getBoolean("biometric_enabled", false))
             summary = secureStore.loadSnapshot("summary")?.let { runCatching { Gson().fromJson(it, SummaryDto::class.java) }.getOrNull() }
             upcoming = secureStore.loadSnapshot("upcoming")?.let { runCatching { Gson().fromJson(it, Array<AssignmentDto>::class.java)?.toList() }.getOrNull() }.orEmpty()
             if (user != null) error = "OFFLINE MODE / Showing the last securely saved overview. Changes are paused until reconnection."
@@ -68,6 +74,9 @@ fun ClassDeskApp(initialDestination: String? = null) {
             val response = api.session()
             if (response.isSuccessful) {
                 user = response.body()?.user
+                biometricUnlocked = !(user?.role == "CLASS_REP" &&
+                    securityPrefs.getBoolean("biometric_enabled", false) && !justAuthenticated)
+                justAuthenticated = false
                 if (user != null) {
                     secureStore.saveUser(user!!)
                     ClassDeskSyncScheduler.schedule(context)
@@ -106,7 +115,18 @@ fun ClassDeskApp(initialDestination: String? = null) {
                     error = null
                     try {
                         val response = api.login(LoginRequest(username.trim(), password))
-                        if (response.isSuccessful && response.body()?.ok == true) refreshSession()
+                        if (response.isSuccessful && response.body()?.ok == true) {
+                            val signedInUser = response.body()?.user
+                            if (signedInUser?.role == "CLASS_REP") {
+                                val authenticators = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+                                    BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                                else BiometricManager.Authenticators.BIOMETRIC_STRONG
+                                val available = BiometricManager.from(context).canAuthenticate(authenticators) == BiometricManager.BIOMETRIC_SUCCESS
+                                securityPrefs.edit().putBoolean("biometric_enabled", available).apply()
+                            }
+                            justAuthenticated = true
+                            refreshSession()
+                        }
                         else {
                             error = response.body()?.error ?: "Sign-in failed. Check your details."
                             loading = false
@@ -116,6 +136,19 @@ fun ClassDeskApp(initialDestination: String? = null) {
                         loading = false
                     }
                 }
+            }
+        )
+        user != null && user!!.role == "CLASS_REP" && !biometricUnlocked -> BiometricLockScreen(
+            activity = context as? FragmentActivity,
+            onUnlocked = { biometricUnlocked = true },
+            onPasswordFallback = {
+                ClassDeskSyncScheduler.cancel(context)
+                ApiClient.cookies(context).clear()
+                securityPrefs.edit().putBoolean("biometric_enabled", false).apply()
+                user = null
+                biometricUnlocked = true
+                summary = null
+                upcoming = emptyList()
             }
         )
         else -> DashboardScreen(
@@ -1026,7 +1059,7 @@ private fun DashboardScreen(initialDestination: String?, user: UserDto, api: Cla
                     )
                 }
             } else {
-                AvaVoiceScreen(api)
+                AvaChatScreen(api) { selected = "Ava Tools" }
             }
         }
     }
