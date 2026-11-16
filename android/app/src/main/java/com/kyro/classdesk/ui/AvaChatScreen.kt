@@ -20,6 +20,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyro.classdesk.data.ChatHistoryItem
+import com.kyro.classdesk.data.AvaActionConfirmationDto
 import com.kyro.classdesk.data.ChatRequest
 import com.kyro.classdesk.data.ClassDeskApi
 import kotlinx.coroutines.launch
@@ -36,6 +37,7 @@ fun AvaChatScreen(api: ClassDeskApi, onOpenTools: () -> Unit) {
     var draft by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var pendingDelete by remember { mutableStateOf<AvaActionConfirmationDto?>(null) }
 
     Column(
         Modifier.fillMaxWidth().background(Color(0xFF0A1019)).padding(horizontal = 14.dp, vertical = 12.dp),
@@ -109,9 +111,7 @@ fun AvaChatScreen(api: ClassDeskApi, onOpenTools: () -> Unit) {
                                 val answer = response.body()?.answer
                                 if (response.isSuccessful && !answer.isNullOrBlank()) {
                                     messages = messages + AvaChatMessage("assistant", answer)
-                                    response.body()?.actionConfirmation?.let {
-                                        messages = messages + AvaChatMessage("assistant", "I found “${it.title}”. This action needs the authorised administrator confirmation flow before anything is deleted.")
-                                    }
+                                    pendingDelete = response.body()?.actionConfirmation
                                 } else {
                                     error = response.body()?.error ?: "Ava could not complete that request (HTTP ${response.code()})."
                                 }
@@ -143,9 +143,7 @@ fun AvaChatScreen(api: ClassDeskApi, onOpenTools: () -> Unit) {
                                 val answer = response.body()?.answer
                                 if (response.isSuccessful && !answer.isNullOrBlank()) {
                                     messages = messages + AvaChatMessage("assistant", answer)
-                                    response.body()?.actionConfirmation?.let {
-                                        messages = messages + AvaChatMessage("assistant", "I found “${it.title}”. This action needs the authorised administrator confirmation flow before anything is deleted.")
-                                    }
+                                    pendingDelete = response.body()?.actionConfirmation
                                 } else error = response.body()?.error ?: "Ava could not complete that request (HTTP ${response.code()})."
                             } catch (e: Exception) {
                                 error = e.message ?: "Could not reach Ava. Check your connection and try again."
@@ -158,5 +156,44 @@ fun AvaChatScreen(api: ClassDeskApi, onOpenTools: () -> Unit) {
             ) { Icon(Icons.Default.Send, contentDescription = "Send message") }
         }
         Text("Ava uses the same ClassDesk AI endpoint as the website. Open Tools for the native document and admin utilities available to your account.", color = Color(0xFF91A4B8), fontSize = 10.sp)
+    }
+    pendingDelete?.let { action ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("Confirm permanent deletion") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(action.title, fontWeight = FontWeight.Bold)
+                    Text(action.filename, color = Color(0xFF91A4B8))
+                    Text("This removes the database record, extracted text, indexed chunks" + if (action.originalInSharedStorage) " and original shared-storage file." else ".")
+                    Text("This action cannot be undone.", color = Color(0xFFFF7D78))
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        busy = true
+                        try {
+                            val result = api.avaTool(mapOf(
+                                "action" to "delete_document",
+                                "documentId" to action.documentId,
+                                "confirmPermanent" to true,
+                                "confirmTitle" to action.title
+                            ))
+                            val deleted = result.body()?.get("deleted") as? Map<*, *>
+                            if (!result.isSuccessful || deleted?.get("databaseRecord") != true ||
+                                (action.originalInSharedStorage && deleted["sharedStorageObject"] != true)) {
+                                throw IllegalStateException(result.body()?.get("error")?.toString() ?: "Deletion could not be verified (HTTP ${result.code()}).")
+                            }
+                            messages = messages + AvaChatMessage("assistant", "Verified: ${action.title} was deleted from ClassDesk" + if (action.originalInSharedStorage) " and shared storage." else ".")
+                            pendingDelete = null
+                        } catch (e: Exception) {
+                            error = e.message ?: "Permanent deletion failed."
+                        } finally { busy = false }
+                    }
+                }) { Text("DELETE PERMANENTLY", color = Color(0xFFFF7D78)) }
+            },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("CANCEL") } }
+        )
     }
 }
