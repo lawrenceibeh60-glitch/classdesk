@@ -44,9 +44,9 @@ Open the `android/` folder in Android Studio, allow Gradle sync, install the SDK
 
 ## Release-readiness work still required
 
-1. **CI verification passed on the current branch** at commit `b1b7cfdc71f84b8c20009ed7c5d52a80362dc0de`: Android Kotlin compilation and unit tests passed; web source verification, Prisma checks, TypeScript, lint and production build passed.
-2. Complete physical-device acceptance testing for sign-in, both staff roles, Ava text chat and tool access, notifications, file upload/download, backup/restore, offline queue replay, account switching and logout. CI success does not replace this device testing.
-3. Confirm the production API origin and configure release signing credentials securely outside the repository.
-4. Build and inspect the APK only after the owner authorizes the build.
+1. Run the full ClassDesk CI suite: web source verification, Prisma validation, TypeScript, lint, production build, Android Kotlin compilation and unit tests.
+2. The CI pipeline builds and uploads a debug APK only after both the web validation and Android verification jobs pass on the fix branch.
+3. Complete physical-device acceptance testing for sign-in, both staff roles, Ava text chat and tool access, biometric/device-credential unlock, notifications, file upload/download, backup/restore, offline queue replay, account switching and logout. CI success does not replace this device testing.
+4. Confirm the production API origin and configure release signing credentials securely outside the repository.
 
-The Android verification workflow compiles the app and runs available unit tests; it does not package or publish an APK. The separate APK workflow is manual-only. No production deployment, merge to `main`, production database mutation or APK release is authorized by this development branch.
+No production deployment or merge to `main` is included in this change. The CI APK is a debug test artifact, not a signed production release.
