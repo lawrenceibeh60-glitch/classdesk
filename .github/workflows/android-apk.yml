@@ -12,6 +12,7 @@ on:
     branches: [main]
     paths:
       - "android/**"
+      - "apk/**"
       - ".github/workflows/android-apk.yml"
 
 permissions:
@@ -67,10 +68,16 @@ jobs:
           CLASSDESK_API_BASE_URL: ${{ inputs.api_base_url || 'https://afit-classdesk.vercel.app/' }}
         run: gradle assembleDebug --stacktrace
 
+      - name: Stage APK in apk directory
+        shell: bash
+        run: |
+          mkdir -p apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk apk/AFIT-ClassDesk-debug.apk
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: AFIT-ClassDesk-debug-apk
-          path: android/app/build/outputs/apk/debug/*.apk
+          path: apk/AFIT-ClassDesk-debug.apk
           if-no-files-found: error
           retention-days: 7
