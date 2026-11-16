@@ -5,7 +5,7 @@ import android.content.Intent
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -13,7 +13,7 @@ import androidx.compose.ui.graphics.Color
 import com.kyro.classdesk.ui.ClassDeskApp
 import com.kyro.classdesk.data.ClassDeskNotifications
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private var notificationDestination by mutableStateOf<String?>(null)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
