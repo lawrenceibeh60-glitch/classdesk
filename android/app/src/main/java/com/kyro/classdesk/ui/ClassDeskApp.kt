@@ -4,6 +4,7 @@ import android.Manifest
 import androidx.biometric.BiometricManager
 import androidx.fragment.app.FragmentActivity
 import android.content.pm.PackageManager
+import android.content.ContextWrapper
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -60,6 +61,13 @@ fun ClassDeskApp(initialDestination: String? = null) {
     var biometricUnlocked by remember { mutableStateOf(true) }
     var justAuthenticated by remember { mutableStateOf(false) }
     val securityPrefs = remember { context.getSharedPreferences("classdesk_app_security", android.content.Context.MODE_PRIVATE) }
+    val hostActivity = remember(context) {
+        var current: android.content.Context? = context
+        while (current != null && current !is FragmentActivity) {
+            current = (current as? ContextWrapper)?.baseContext
+        }
+        current as? FragmentActivity
+    }
 
     suspend fun refreshSession() {
         val secureStore = ApiClient.cookies(context)
@@ -139,7 +147,7 @@ fun ClassDeskApp(initialDestination: String? = null) {
             }
         )
         user != null && user!!.role == "CLASS_REP" && !biometricUnlocked -> BiometricLockScreen(
-            activity = context as? FragmentActivity,
+            activity = hostActivity,
             onUnlocked = { biometricUnlocked = true },
             onPasswordFallback = {
                 ClassDeskSyncScheduler.cancel(context)
