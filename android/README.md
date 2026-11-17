@@ -9,7 +9,7 @@ Native Android client workspace for the existing ClassDesk service.
 - EncryptedSharedPreferences-backed session cookies, offline profile and read-only snapshots.
 - Android Keystore AES-GCM encryption for queued offline mutation payloads; queued changes are bound to the account that created them.
 - SQLite outbox and WorkManager network-constrained sync foundation.
-- Native SpeechRecognizer and TextToSpeech for Ava; on-device speech recognition is preferred when Android and an installed language pack support it, with the platform recognition service as a fallback. Microphone permission is requested only after the user taps Activate.
+- Native Jetpack Compose text chat for Ava, connected to the same authenticated ClassDesk AI endpoint as the website with voice mode disabled. The chat preserves confirmation-protected actions; the Tools shortcut opens the existing native document and administration utilities.
 
 ## Configure the API
 
@@ -31,12 +31,12 @@ Open the `android/` folder in Android Studio, allow Gradle sync, install the SDK
 
 - Native sign-in and session restoration against the shared ClassDesk API.
 - Encrypted persistence for the session cookie and signed-in profile.
+- Class Representative Android sessions can be unlocked with the phone's strong biometric or device screen lock after the first authorised password sign-in. This gate is Android-only; website authentication is unchanged. Password sign-in remains available as a fallback.
 - Command-centre overview, course register, assignments, lectures, attendance, concerns, announcements and calendar/timetable records.
 - Catch-up Centre, Coverage, Class Records and account/system diagnostics.
 - Native document library with system file selection, upload/indexing, download/save and primary-account deletion controls.
 - JSON and ZIP backup export, plus confirmation-protected restore using the shared server endpoints.
-- Ava voice interface using Android's native SpeechRecognizer (on-device when available, platform service fallback), xKiro-backed AI chat, ElevenLabs spoken responses when configured, and Android TextToSpeech fallback.
-- Ava is push-to-talk: each voice request requires a fresh tap. It does not automatically reopen the microphone after responding or after leaving the voice screen.
+- Ava text chat using the shared xKiro-backed AI endpoint, with the native Tools screen available directly from the chat.
 - Encrypted local snapshots for the overview and academic modules; cached content is read-only while offline.
 - SQLite offline mutation queue with Android Keystore encryption, account-bound ownership, manual sync, cloud-vs-local conflict resolution with version rebasing, rejected/corrupt item discard controls, and WorkManager retry/synchronisation for supported academic, announcement and calendar mutations.
 - Local notifications for newly observed announcements, assignments, timetable records, attendance and concern updates. Notification polling is periodic WorkManager work, not real-time push delivery.
@@ -44,9 +44,9 @@ Open the `android/` folder in Android Studio, allow Gradle sync, install the SDK
 
 ## Release-readiness work still required
 
-1. **CI verification passed on the current branch** at commit `b1b7cfdc71f84b8c20009ed7c5d52a80362dc0de`: Android Kotlin compilation and unit tests passed; web source verification, Prisma checks, TypeScript, lint and production build passed.
-2. Complete physical-device acceptance testing for sign-in, both staff roles, Ava microphone permission and one-tap-per-request behavior, notifications, file upload/download, backup/restore, offline queue replay, account switching and logout. CI success does not replace this device testing.
-3. Confirm the production API origin and configure release signing credentials securely outside the repository.
-4. Build and inspect the APK only after the owner authorizes the build.
+1. Run the full ClassDesk CI suite: web source verification, Prisma validation, TypeScript, lint, production build, Android Kotlin compilation and unit tests.
+2. The CI pipeline builds and uploads a debug APK only after both the web validation and Android verification jobs pass on the fix branch.
+3. Complete physical-device acceptance testing for sign-in, both staff roles, Ava text chat and tool access, biometric/device-credential unlock, notifications, file upload/download, backup/restore, offline queue replay, account switching and logout. CI success does not replace this device testing.
+4. Confirm the production API origin and configure release signing credentials securely outside the repository.
 
-The Android verification workflow compiles the app and runs available unit tests; it does not package or publish an APK. The separate APK workflow is manual-only. No production deployment, merge to `main`, production database mutation or APK release is authorized by this development branch.
+No production deployment or merge to `main` is included in this change. The CI APK is a debug test artifact, not a signed production release.

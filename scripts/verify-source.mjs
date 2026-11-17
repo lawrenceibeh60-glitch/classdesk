@@ -83,17 +83,20 @@ assert.match(avaSource, /setSupported\(hasBrowserRec\)/, "Website Ava must use b
 assert.match(avaSource, /SpeechRecognition\?: RecCtor; webkitSpeechRecognition\?: RecCtor/, "Website Ava must support standard and WebKit browser speech recognition");
 assert.ok(!avaSource.includes("MISTRAL_API_KEY") && !avaSource.includes("/api/voice/transcribe"), "Website Ava must not depend on paid server-side speech transcription");
 assert.ok(!avaSource.includes("cleanupRef"), "Website Ava must not retain the obsolete cloud microphone stream path");
-const androidVoiceSource = read("android/app/src/main/java/com/kyro/classdesk/ui/AvaVoiceScreen.kt");
-assert.match(androidVoiceSource, /SpeechRecognizer\.createOnDeviceSpeechRecognizer/, "Android Ava must prefer native on-device speech recognition when available");
-assert.match(androidVoiceSource, /SpeechRecognizer\.createSpeechRecognizer/, "Android Ava must fall back to the Android platform speech recognizer");
-assert.ok(androidVoiceSource.includes('AvaRecognitionLanguageProfile("English (Nigeria)", listOf("en-NG", "en-GB", "en-US", "en", null))'), "English speech recognition must fall back from Nigerian to British, American, general and device-default language");
-assert.ok(androidVoiceSource.includes('AvaRecognitionLanguageProfile("Hausa"'), "Ava must offer a Hausa recognition profile");
-assert.ok(androidVoiceSource.includes('AvaRecognitionLanguageProfile("Yoruba"'), "Ava must offer a Yoruba recognition profile");
-assert.ok(androidVoiceSource.includes('AvaRecognitionLanguageProfile("Igbo"'), "Ava must offer an Igbo recognition profile");
-assert.ok(androidVoiceSource.includes("ERROR_LANGUAGE_NOT_SUPPORTED") && androidVoiceSource.includes("recognizer?.startListening(buildAvaRecognitionIntent(nextLocale))"), "Android Ava must automatically try the next locale when the recognizer reports an unsupported language");
-assert.ok(androidVoiceSource.includes("usingPlatformFallback") && androidVoiceSource.includes("SpeechRecognizer.createSpeechRecognizer(context)"), "Android Ava must fall back from unsupported on-device language packs to the platform speech service");
-assert.ok(androidVoiceSource.includes("RECOGNITION LANGUAGE") && androidVoiceSource.includes("DropdownMenu"), "Android Ava must expose a selectable speech recognition language");
-assert.match(androidVoiceSource, /permission\.launch\(Manifest\.permission\.RECORD_AUDIO\)/, "Android microphone permission must only be requested after the user activates voice mode");
+const androidChatSource = read("android/app/src/main/java/com/kyro/classdesk/ui/AvaChatScreen.kt");
+assert.match(androidChatSource, /api\.chat\(ChatRequest\([\s\S]*voice = false/, "Android Ava must use the shared text-chat API without enabling voice mode");
+assert.match(androidChatSource, /api\.avaTool\(/, "Android Ava chat must retain access to authenticated tool actions");
+assert.match(androidChatSource, /pendingDelete\?\.let/, "Android Ava chat must show an explicit confirmation before permanent document deletion");
+assert.match(read("android/app/src/main/java/com/kyro/classdesk/ui/ClassDeskApp.kt"), /AvaChatScreen\(api\)/, "Android navigation must open the native Ava text chat");
+assert.match(read("android/app/src/main/AndroidManifest.xml"), /uses-permission android:name="android\.permission\.INTERNET"/, "Android app must retain network access for shared ClassDesk APIs");
+assert.ok(!read("android/app/src/main/AndroidManifest.xml").includes("RECORD_AUDIO"), "Android text chat must not request microphone permission");
+assert.ok(!existsSync(join(root, "android/app/src/main/java/com/kyro/classdesk/ui/AvaVoiceScreen.kt")), "Android voice chat source must be removed");
+const biometricSource = read("android/app/src/main/java/com/kyro/classdesk/ui/BiometricLockScreen.kt");
+assert.match(biometricSource, /BiometricPrompt\(/, "Android Class Rep lock must use the native Android biometric prompt");
+assert.match(biometricSource, /DEVICE_CREDENTIAL/, "Android Class Rep lock must support the phone's device credential");
+assert.match(read("android/app/src/main/java/com/kyro/classdesk/ui/ClassDeskApp.kt"), /user!!\.role == "CLASS_REP" && !biometricUnlocked/, "Only Class Rep Android sessions must be gated by device authentication");
+assert.match(read("android/app/build.gradle.kts"), /androidx\.biometric:biometric/, "Android biometric support dependency must be installed");
+assert.match(read("android/app/src/main/java/com/kyro/classdesk/MainActivity.kt"), /FragmentActivity/, "Android activity must host the native biometric prompt");
 assert.match(avaSource, /setTimeout\(\(\) => \{ if \(wantRef\.current\) speak\("Ava is ready\. Go ahead\."\); \}, 300\)/, "Ava must not speak a delayed startup prompt after voice mode has been stopped");
 
 const healthRoute = read("app/api/health/route.ts");
@@ -165,7 +168,7 @@ assert.ok(read("components/storage-management.tsx").includes("Privileged action 
 assert.ok(read("app/api/ai/chat/route.ts").includes("actionConfirmation"), "Ava chat must return a confirmation preview before document deletion");
 assert.ok(read("app/api/ai/tools/route.ts").includes("confirmPermanent:") === false, "The server must require an explicit permanent-deletion confirmation flag from the client");
 assert.ok(read("app/api/ai/tools/route.ts").includes("body?.confirmPermanent !== true"), "The document deletion tool must reject missing confirmation");
-assert.ok(read("android/app/src/main/java/com/kyro/classdesk/ui/AvaVoiceScreen.kt").includes("pendingDelete?.let"), "Android Ava voice must show a deletion confirmation dialog");
+assert.ok(read("android/app/src/main/java/com/kyro/classdesk/ui/AvaChatScreen.kt").includes("pendingDelete?.let"), "Android Ava text chat must show a deletion confirmation dialog");
 assert.ok(read("components/ai-workspace.tsx").includes("PERMANENT DELETION CONFIRMATION"), "Web Ava chat must show a deletion confirmation card");
 
 assert.ok(read("android/app/src/main/java/com/kyro/classdesk/ui/AvaToolsScreen.kt").includes("SQL SELECT CONSOLE"), "Android must expose the Ava read-only SQL console");
